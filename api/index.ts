@@ -3,6 +3,7 @@ import { Hono } from 'hono';
 import { getAuth } from './auth';
 import { serveAvatar } from './avatars';
 import { withRequest } from './context';
+import { forCache, fromCache } from './harness/cache';
 import { daily as harnessDaily, runJob, startRegistrySync, type Job } from './harness/jobs';
 import { harnessApi } from './harness/routes';
 
@@ -61,11 +62,11 @@ async function page(request: Request, env: Env, ctx: ExecutionContext): Promise<
   const cache = request.method === 'GET' ? caches.default : null;
   const key = new Request(request.url, { method: 'GET' });
   const hit = await cache?.match(key);
-  if (hit) return hit;
+  if (hit) return fromCache(hit);
   const rendered = await handle(request, env, ctx);
   const res = new Response(rendered.body, rendered);
   for (const [k, v] of Object.entries(PAGE_HEADERS)) res.headers.set(k, v);
-  if (cache && res.status === 200 && /\bpublic\b/.test(res.headers.get('Cache-Control') ?? '')) ctx.waitUntil(cache.put(key, res.clone()));
+  if (cache && res.status === 200 && /\bpublic\b/.test(res.headers.get('Cache-Control') ?? '')) ctx.waitUntil(cache.put(key, forCache(res)));
   return res;
 }
 

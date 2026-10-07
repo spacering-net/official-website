@@ -1,6 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context, Next } from 'hono';
 import { etag } from 'hono/etag';
+import { forCache, fromCache } from './cache';
 import { facetCounts, getItem, getPublisher, getVersion, getVersions, KINDS, listItems, listTags, readmeKey, SORTS } from './catalog';
 import { LIMITS } from './limits';
 import * as S from './schemas';
@@ -35,11 +36,11 @@ const shared = async (c: C, next: Next) => {
   const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
   const key = new Request(c.req.url, { method: 'GET' });
   const hit = c.req.method === 'GET' ? await cache?.match(key) : undefined;
-  if (hit) return new Response(hit.body, hit);
+  if (hit) return fromCache(hit);
   await next();
   if (c.res.status === 200) {
     if (!c.res.headers.has('Cache-Control')) c.res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
-    if (cache && c.req.method === 'GET') c.executionCtx.waitUntil(cache.put(key, c.res.clone()));
+    if (cache && c.req.method === 'GET') c.executionCtx.waitUntil(cache.put(key, forCache(c.res)));
   }
 };
 harnessApi.use('*', async (c, next) => {
