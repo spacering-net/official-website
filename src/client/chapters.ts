@@ -149,7 +149,7 @@ export class Chapters {
       c.mode = 'out';
       c.t = 0;
     }
-    // while the scan runs, the masked content gets its own layer (see global.css)
+    // while the scan runs, the masked content gets its own layer (see home.css)
     c.el.classList.add('is-scanning');
   }
 

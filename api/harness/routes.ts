@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context, Next } from 'hono';
 import { etag } from 'hono/etag';
-import { forCache, fromCache } from './cache';
+import { cacheKey, edgeCache, forCache, fromCache } from './cache';
 import { facetCounts, getItem, getPublisher, getVersion, getVersions, KINDS, listItems, listTags, readmeKey, SORTS } from './catalog';
 import { LIMITS } from './limits';
 import * as S from './schemas';
@@ -33,8 +33,8 @@ harnessApi.use('*', async (c, next) => {
  * a 304. Anyone may read them from any site (no credentials involved).
  */
 const shared = async (c: C, next: Next) => {
-  const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
-  const key = new Request(c.req.url, { method: 'GET' });
+  const cache = edgeCache();
+  const key = cacheKey(c.req.url, c.env.CF_VERSION_METADATA?.id);
   const hit = c.req.method === 'GET' ? await cache?.match(key) : undefined;
   if (hit) return fromCache(hit);
   await next();

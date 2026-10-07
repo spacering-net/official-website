@@ -1,0 +1,11 @@
+---
+/** The not-found page for addresses under /zh/ (see ../404.astro). */
+import Page from '../../layouts/Page.astro';
+import NotFound from '../../components/NotFound.astro';
+import { dicts } from '../../i18n';
+
+const t = dicts.zh;
+---
+<Page lang="zh" title={t.notFound.title} description={t.notFound.lede} paths={{ en: '/', zh: '/zh/' }} noindex>
+  <NotFound t={t} />
+</Page>

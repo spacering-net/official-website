@@ -121,6 +121,14 @@ export interface Dict {
     privacy: string;
     terms: string;
   };
+  /** the page for an address with nothing behind it */
+  notFound: {
+    title: string;
+    heading: string;
+    lede: string;
+    home: string;
+    harness: string;
+  };
   menu: {
     label: string;
     destinations: string;
@@ -310,6 +318,13 @@ const en: Dict = {
     footer: 'SpaceRing · spacering.net',
     privacy: 'Privacy',
     terms: 'Terms',
+  },
+  notFound: {
+    title: 'Not found · SpaceRing',
+    heading: 'This page is not in the ring.',
+    lede: 'The address may be mistyped, or what was here has moved on. The ring is still where you left it.',
+    home: 'Back to the ring',
+    harness: 'Browse Harness',
   },
   menu: {
     label: 'Site menu',
@@ -508,6 +523,13 @@ const zh: Dict = {
     privacy: '隐私政策',
     terms: '用户协议',
   },
+  notFound: {
+    title: '页面不存在 · SpaceRing',
+    heading: '这一页不在戒指里。',
+    lede: '可能是地址输错了，也可能这里的内容已经搬走。戒指还在原处。',
+    home: '回到戒指',
+    harness: '逛逛 Harness',
+  },
   menu: {
     label: '站点菜单',
     destinations: '产品',
@@ -532,3 +554,10 @@ export const dicts: Record<Lang, Dict> = { en, zh };
 
 /** Chapter anchors, in scroll order. Index 0 is the hero, the last is the finale. */
 export const CHAPTER_IDS = ['top', 'space', 'assistant', 'harness', 'relay', 'signet', 'codeg', 'open-source'] as const;
+
+/**
+ * Products with pages of their own, under each language's path. The HUD links
+ * to them from every page; the others are chapters of the homepage until they
+ * ship.
+ */
+export const PRODUCT_PAGES = { harness: 'harness/' } as const;

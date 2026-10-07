@@ -42,16 +42,16 @@ async function open(url, viewport = { width: 1440, height: 900 }) {
   return { ctx, page, errors };
 }
 
-// 1. from the HUD, with the mouse, mid-page
+// 1. from the bottom left, with the mouse, mid-page
 {
   const { ctx, page, errors } = await open('/zh/#harness');
   const before = await page.evaluate(() => document.querySelector('[data-tel="clock"]').textContent);
-  await page.click('.hud .lang-switch');
+  await page.click('.hud-foot [data-lang-switch]');
   await page.waitForLoadState('load');
   await page.waitForTimeout(200);
   const a = await page.evaluate(ARRIVAL);
   report(a.url === '/#harness' && a.crossFade && !a.intro && a.shown === 'harness' && a.chapter === '3' && a.clock >= before && !errors.length,
-    'HUD switch keeps the chapter', JSON.stringify({ ...a, before, errors }));
+    'corner switch keeps the chapter', JSON.stringify({ ...a, before, errors }));
   // a reload afterwards is a fresh visit again
   await page.reload({ waitUntil: 'load' });
   // the first frame can land a moment after the load event
@@ -65,7 +65,7 @@ async function open(url, viewport = { width: 1440, height: 900 }) {
 // 2. from the keyboard: focus comes back to the switch
 {
   const { ctx, page } = await open('/zh/');
-  await page.focus('.hud .lang-switch');
+  await page.focus('.hud-foot [data-lang-switch]');
   await page.keyboard.press('Enter');
   await page.waitForLoadState('load');
   await page.waitForTimeout(200);
@@ -129,7 +129,7 @@ else {
   await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 60, maxWidth: 480, maxHeight: 300 });
   await page.waitForTimeout(400);
   const clickedAt = n;
-  await page.click('.hud .lang-switch');
+  await page.click('.hud-foot [data-lang-switch]');
   await page.waitForTimeout(1800);
   filming = false;
   await cdp.send('Page.stopScreencast').catch(() => {});

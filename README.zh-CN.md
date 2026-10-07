@@ -28,7 +28,7 @@ Harness 的导入按计划任务运行。本地手动触发（队列在开发服
 | 中英文案、产品名、示例助手的名字 | `src/i18n/index.ts` |
 | 各幕的投影示意 | `src/components/holo/` |
 | 仓库、文档地址，统计兜底值 | `src/config.ts` |
-| 色板、字号、间距 | `src/styles/global.css` 顶部变量 |
+| 色板、字号、间距 | `src/styles/site.css` 顶部变量 |
 | 戒指尺寸、材质与戒身脉络 | `src/client/scene/ring.ts` |
 | 星环粒子 | `src/client/scene/disk.ts` |
 | 开场节奏 | `src/client/intro.ts` |
@@ -37,6 +37,9 @@ Harness 的导入按计划任务运行。本地手动触发（队列在开发服
 | 数据库表结构 | `db/migrations/` 和 Harness 的 `db/harness/`（只增不改；推送前先运行 `pnpm db:migrate:remote`） |
 | Harness 的导入、检查、搜索和接口 | `api/harness/`（接口的数据结构在 `api/harness/schemas.ts`，发布在 `/api/harness/v1/openapi.json`） |
 | Harness 的页面和文案 | `src/pages/[...lang]/harness/`、`src/components/harness/`、`src/i18n/harness.ts` |
+| 首页以外所有页面的外壳（HUD、菜单、登录、页脚） | `src/layouts/Page.astro`、`src/client/page.ts` |
+| 有独立页面的产品（HUD 直接链接过去；其余仍是首页的章节） | `src/i18n/index.ts` 里的 `PRODUCT_PAGES` |
+| 404 页，分语言（`404.html`、`zh/404.html`；Harness 里不存在的地址也用它） | `src/components/NotFound.astro`、`src/pages/404.astro`、`src/pages/zh/404.astro` |
 | 戒身内壁的刻字 | `src/client/scene/ring.ts` 的 `inscribe()`，`src/client/account.ts` |
 
 Harness 规则检查的具体规则放在数据库里，不在本仓库。新建的数据库里没有规则，只做内置的检查。
@@ -59,6 +62,7 @@ pnpm qa:jump    # 跨幕跳转只投射起点和终点
 pnpm qa:switch  # 语言切换接力：同一幕、不重播开场、画面不闪
 pnpm qa:menu    # 矮屏菜单可滚动、背景锁定、Esc 与焦点归还；展开时场景暂停、不用实时模糊
 pnpm qa:fit     # 各尺寸下面板是否完整落在 HUD 与屏幕底边之间
+pnpm qa:pages   # 首页以外的页面：共用的 HUD、菜单与登录，滚动时吸顶的部分，Harness 的页内搜索与筛选
 pnpm qa:perf    # 帧时间（1 倍与 2 倍像素比）
 pnpm og         # 重新生成分享图，之后转成 public/og.jpg 与 og-zh.jpg
 ```

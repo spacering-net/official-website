@@ -1,0 +1,206 @@
+---
+/**
+ * An address with nothing behind it: a node that has drifted off its orbit,
+ * and the ways back (the ring, Harness, or a search of it).
+ */
+import Icon from './Icon.astro';
+import { harnessDicts } from '../i18n/harness';
+import { PRODUCT_PAGES, type Dict } from '../i18n';
+
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const h = harnessDicts[t.lang];
+const nf = t.notFound;
+const harness = `${t.path}${PRODUCT_PAGES.harness}`;
+// the orbit as in the logo: b/a = cos 30°, tilted 30°; the node's place on it, and where it has drifted to
+const A = 150;
+const B = +(A * Math.cos(Math.PI / 6)).toFixed(1);
+const at = (theta: number) => {
+  const x = A * Math.cos(theta);
+  const y = B * Math.sin(theta);
+  const c = Math.cos(-Math.PI / 6);
+  const s = Math.sin(-Math.PI / 6);
+  return { x: +(x * c - y * s).toFixed(1), y: +(x * s + y * c).toFixed(1) };
+};
+const slot = at((20 * Math.PI) / 180);
+const node = { x: +(slot.x * 1.24).toFixed(1), y: +(slot.y * 1.24 - 26).toFixed(1) };
+---
+<section class="lost">
+  <div class="lost__figure">
+    <svg class="lost__orbit" viewBox="-210 -150 420 300" aria-hidden="true">
+      <g transform="rotate(-30)">
+        <ellipse rx={A} ry={B}></ellipse>
+        <ellipse class="lost__inner" rx={A * 0.62} ry={+(B * 0.62).toFixed(1)}></ellipse>
+      </g>
+      <circle class="lost__slot" cx={slot.x} cy={slot.y} r="6"></circle>
+      <line class="lost__trail" x1={slot.x} y1={slot.y} x2={node.x} y2={node.y}></line>
+      <circle class="lost__node" cx={node.x} cy={node.y} r="4.5"></circle>
+    </svg>
+    <p class="lost__code" aria-hidden="true">404</p>
+  </div>
+  <h1>{nf.heading}</h1>
+  <p class="lost__lede">{nf.lede}</p>
+  <div class="lost__actions">
+    <a class="btn btn--primary" href={t.path}>{nf.home}<Icon name="arrow" /></a>
+    <a class="btn btn--ghost" href={harness}>{nf.harness}</a>
+  </div>
+  <form class="lost__search" action={harness} method="get" role="search">
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+      <circle cx="8.6" cy="8.6" r="5.6"></circle>
+      <path d="M12.8 12.8l4 4"></path>
+    </svg>
+    <label class="sr-only" for="lost-q">{h.search.label}</label>
+    <input id="lost-q" name="q" type="search" placeholder={h.search.placeholder} maxlength="200" autocomplete="off" spellcheck="false" enterkeyhint="search" />
+    <button class="sr-only" type="submit">{h.search.submit}</button>
+  </form>
+</section>
+
+<style>
+  .lost {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100svh - var(--hud-h) - 160px);
+    padding: var(--s-6) var(--edge) var(--s-7);
+    text-align: center;
+  }
+
+  .lost__figure {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: min(30rem, 88vw);
+    aspect-ratio: 420 / 300;
+  }
+
+  .lost__orbit {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .lost__orbit ellipse {
+    fill: none;
+    stroke: rgb(236 234 244 / 0.16);
+    stroke-width: 1;
+    stroke-dasharray: 14 3 2 3;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .lost__orbit .lost__inner {
+    stroke: rgb(236 234 244 / 0.08);
+  }
+
+  .lost__slot {
+    fill: var(--void);
+    stroke: var(--corona-40);
+    stroke-width: 1;
+    stroke-dasharray: 2 2;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .lost__trail {
+    stroke: rgb(255 217 160 / 0.35);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .lost__node {
+    fill: var(--bead-hot);
+    filter: drop-shadow(0 0 8px var(--bead-glow));
+    animation: drift 7s ease-in-out infinite;
+  }
+
+  @keyframes drift {
+    50% {
+      translate: 5px -6px;
+    }
+  }
+
+  .lost__code {
+    position: relative;
+    font-size: clamp(88px, 14vw, 168px);
+    font-weight: 200;
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: transparent;
+    background: linear-gradient(180deg, var(--corona) 30%, rgb(236 234 244 / 0.25));
+    -webkit-background-clip: text;
+    background-clip: text;
+    font-variant-numeric: tabular-nums;
+  }
+
+  h1 {
+    margin-top: var(--s-4);
+    font-size: clamp(24px, 3vw, 34px);
+    font-weight: 300;
+    line-height: 1.25;
+    color: var(--corona);
+    text-wrap: balance;
+  }
+
+  .lost__lede {
+    max-width: 30rem;
+    margin-top: var(--s-4);
+    color: var(--corona-64);
+    text-wrap: pretty;
+  }
+
+  .lost__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--s-4);
+    margin-top: var(--s-6);
+  }
+
+  .lost__search {
+    position: relative;
+    width: min(26rem, 100%);
+    margin-top: var(--s-5);
+  }
+
+  .lost__search svg {
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    width: 17px;
+    height: 17px;
+    translate: 0 -50%;
+    color: var(--graphite);
+    pointer-events: none;
+  }
+
+  .lost__search input {
+    width: 100%;
+    height: 44px;
+    padding: 0 18px 0 42px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    background: rgb(236 234 244 / 0.04);
+    color: var(--corona);
+    font: inherit;
+    font-size: 15px;
+    transition:
+      border-color 0.25s,
+      background-color 0.25s,
+      box-shadow 0.25s;
+  }
+
+  .lost__search input::placeholder {
+    color: var(--graphite);
+  }
+
+  .lost__search input:focus {
+    outline: none;
+    border-color: rgb(255 217 160 / 0.6);
+    background: rgb(236 234 244 / 0.06);
+    box-shadow: 0 0 0 4px rgb(255 217 160 / 0.1);
+  }
+</style>

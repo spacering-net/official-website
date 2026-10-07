@@ -1,9 +1,12 @@
 ---
 /**
- * An item: what it is and who publishes it, how to install it, what it needs
- * (declared beside detected), what the checks found, its description, files
- * and versions.
+ * An item: what it is and who publishes it; beside it, how to install it,
+ * what it needs at a glance and its details, staying in view; below, its
+ * description, what it needs (declared beside detected), what the checks
+ * found, its files and versions, with a bar to move between them.
  */
+import Copy from './Copy.astro';
+import Monogram from './Monogram.astro';
 import { harnessDicts, pick } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
 import type { ItemDetail, VersionSummary } from '../../lib/harness';
@@ -43,454 +46,1316 @@ const launch = (install.packages ?? []).map((p) =>
         : `${p.registryType}: ${p.identifier}${p.version ? ` ${p.version}` : ''}`,
 );
 const remotes = ((install.server?.remotes as { url?: string; type?: string }[] | undefined) ?? []).filter((r) => r.url);
+const codeg = `codeg://harness/install?ref=${encodeURIComponent(item.ref)}`;
+const publisherPage = `${h.base}${item.publisher.handle}`;
+
+// files by folder, the top level first
+const folders = new Map<string, typeof install.files>();
+for (const f of install.files) {
+  const dir = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : '';
+  folders.set(dir, [...(folders.get(dir) ?? []), f]);
+}
+const dirs = [...folders.keys()].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
+const totalSize = install.files.reduce((s, f) => s + f.size, 0);
+const fewFiles = install.files.length <= 24;
+
+const sections = [
+  { id: 'readme', label: t.description, show: !!readme || !!install.source },
+  { id: 'server', label: t.server, show: !!install.server },
+  { id: 'permissions', label: t.permissions, show: true },
+  { id: 'checks', label: t.checks, show: true },
+  { id: 'files', label: t.files, show: install.files.length > 0 },
+  { id: 'versions', label: t.versions, show: versions.length > 0 },
+].filter((s) => s.show);
+// a description that opens with the item's own title says it once, in the page's heading
+const opening = readme ? /^\s*<h1[^>]*>(.*?)<\/h1>\s*/s.exec(readme) : null;
+const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim().toLowerCase();
+const body = readme && opening && [title, item.name].some((x) => plain(opening[1]) === x.toLowerCase()) ? readme.slice(opening[0].length) : readme;
+const needs = {
+  runs: detected.runsCode,
+  hosts: detected.network.length,
+  secrets: detected.secrets.length,
+};
 ---
-<nav class="crumbs mono" aria-label="Breadcrumb">
-  <a href={h.base}>Harness</a> / <a href={`${h.base}${item.publisher.handle}`}>{item.publisher.handle}</a> / <span>{item.name}</span>
-</nav>
+<div class="hx item">
+  <div class="layout">
+    <div class="top">
+      <nav class="crumbs" aria-label="Breadcrumb">
+        <a href={h.base}>Harness</a>
+        <span aria-hidden="true">/</span>
+        <a href={publisherPage}>{item.publisher.handle}</a>
+        <span aria-hidden="true">/</span>
+        <span aria-current="page">{item.name}</span>
+      </nav>
 
-<header class="head">
-  <p class="badges">
-    <span class="badge kind">{h.kind[item.kind]}</span>
-    <span class={`badge risk-${item.risk}`}>{t.risk[item.risk]}</span>
-    {item.status === 'listed' && <span class="badge listed">{t.listed}</span>}
-    {item.publisher.unclaimed && <span class="badge">{h.card.unclaimed}</span>}
-  </p>
-  <h1>{title}</h1>
-  {summary && <p class="lede">{summary}</p>}
-  <p class="by">
-    {t.by} <a href={`${h.base}${item.publisher.handle}`}>{item.publisher.name}</a>
-    <span class="mono muted">{item.ref}</span>
-  </p>
-</header>
+      <header class="head">
+        <p class="head__badges">
+          <span class="badge badge--kind">{h.kind[item.kind]}</span>
+          <span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{t.risk[item.risk]}</span>
+          {item.status === 'listed' && <span class="badge badge--listed">{t.listed}</span>}
+          {item.publisher.unclaimed && <span class="badge">{h.card.unclaimed}</span>}
+        </p>
+        <h1>{title}</h1>
+        {summary && (
+          <div class="head__summary" data-clamp>
+            <p>{summary}</p>
+            <button class="head__more" type="button" data-clamp-toggle data-less={t.collapse} hidden>{t.expand}</button>
+          </div>
+        )}
+        <p class="head__by">
+          <a class="head__pub" href={publisherPage}>
+            <Monogram handle={item.publisher.handle} size={24} />
+            <span>{item.publisher.name}</span>
+          </a>
+          <span class="head__ref">
+            <code>{item.ref}</code>
+            <Copy lang={lang} text={item.ref} />
+          </span>
+          {item.repoStars !== null && item.repoStars > 0 && <span class="head__meta" title={t.stars}>★ {compact(item.repoStars)}</span>}
+          <span class="head__meta">{t.updated} {h.date(item.latest.publishedAt)}</span>
+        </p>
+      </header>
 
-{item.status === 'listed' && (
-  <p class="notice">
-    {t.listedNote} {item.listedReasons.map((r) => t.reasons[r] ?? r).join(lang === 'zh' ? '；' : '; ')}
-  </p>
-)}
-
-<div class="layout">
-  <div class="main">
-    <section>
-      <h2>{t.install}</h2>
-      <p class="actions">
-        <a class="button" href={`codeg://harness/install?ref=${encodeURIComponent(item.ref)}`}>{t.openInCodeg}</a>
-        {install.archive && <a class="button quiet" href={install.archive.url} download>{t.download} · {size(install.archive.size)}</a>}
-      </p>
-      {launch.length > 0 && <pre class="code">{launch.join('\n')}</pre>}
-      {remotes.length > 0 && <pre class="code">{remotes.map((r) => `${r.type ?? 'remote'}  ${r.url}`).join('\n')}</pre>}
-      {install.source && (
-        <p class="muted small">
-          {t.notHosted} <a href={sourceTree} rel="nofollow ugc noopener" target="_blank">{t.commit} {install.source.commit.slice(0, 7)}</a>
+      {item.status === 'listed' && (
+        <p class="notice">
+          {t.listedNote} {item.listedReasons.map((r) => t.reasons[r] ?? r).join(lang === 'zh' ? '；' : '; ')}
         </p>
       )}
-      {install.files.length > 0 && <p class="muted small">{t.codegNote}</p>}
-    </section>
+    </div>
 
-    <section>
-      <h2>{t.permissions}</h2>
-      <table class="perms">
-        <thead>
-          <tr><th></th><th>{t.declared}</th><th>{t.detected}</th></tr>
-        </thead>
-        <tbody>
+    <div class="main">
+      {sections.length > 1 && (
+        <nav class="toc" aria-label={t.toc} data-toc>
+          {sections.map((s) => (
+            <a href={`#${s.id}`}>{s.label}</a>
+          ))}
+        </nav>
+      )}
+
+      {sections.some((s) => s.id === 'readme') && (
+        <section class="section" id="readme" data-section>
+          <h2 class="section__title">{t.description}</h2>
+          {readme ? (
+            <div class="readme" set:html={body} />
+          ) : (
+            <p class="elsewhere">
+              {t.readmeElsewhere}
+              {sourceTree && <a href={sourceTree} rel="nofollow ugc noopener" target="_blank">{item.install.source?.repository} ↗</a>}
+            </p>
+          )}
+        </section>
+      )}
+
+      {install.server && (
+        <section class="section" id="server" data-section>
+          <h2 class="section__title">{t.server}</h2>
+          <div class="json">
+            <Copy lang={lang} text={JSON.stringify(install.server, null, 2)} />
+            <pre><code>{JSON.stringify(install.server, null, 2)}</code></pre>
+          </div>
+        </section>
+      )}
+
+      <section class="section" id="permissions" data-section>
+        <h2 class="section__title">{t.permissions}</h2>
+        <div class="perms" role="table" aria-label={t.permissions}>
+          <div class="perms__row perms__row--head" role="row">
+            <span role="columnheader"></span>
+            <span role="columnheader">{t.declared}</span>
+            <span role="columnheader">{t.detected}</span>
+          </div>
           {perms.map((k) => {
             const d = declared[k];
             const found = detected[k];
             const extra = d ? found.filter((x) => !d.includes(x)) : [];
             return (
-              <tr>
-                <th scope="row">{t.perms[k]}</th>
-                <td class="mono">{d === undefined ? <span class="muted">—</span> : d.length ? d.join(', ') : <span class="muted">{t.nothing}</span>}</td>
-                <td class="mono">
-                  {found.length ? found.map((x, i) => <span class={extra.includes(x) ? 'differs' : undefined}>{i ? ', ' : ''}{x}</span>) : <span class="muted">{t.nothing}</span>}
-                </td>
-              </tr>
+              <div class:list={['perms__row', found.length > 0 && 'perms__row--some']} role="row">
+                <span class="perms__name" role="rowheader">{t.perms[k]}</span>
+                <span class="perms__values" role="cell">
+                  {d === undefined ? <span class="muted">—</span> : d.length ? d.map((x) => <code>{x}</code>) : <span class="muted">{t.nothing}</span>}
+                </span>
+                <span class="perms__values" role="cell">
+                  {found.length ? found.map((x) => <code class:list={[extra.includes(x) && 'differs']}>{x}</code>) : <span class="muted">{t.nothing}</span>}
+                </span>
+              </div>
             );
           })}
-        </tbody>
-      </table>
-    </section>
+        </div>
+      </section>
 
-    <section>
-      <h2>{t.checks}</h2>
-      <p>
-        <span class={`badge risk-${item.risk}`}>{t.risk[item.risk]}</span> {t.riskNote[item.risk]}
-      </p>
-      <p class="muted small">{item.reviewed ? t.reviewed : t.notReviewed} · {t.modelOff}</p>
-      {notable.length > 0 && (
-        <ul class="findings">
-          {notable.map((f) => (
-            <li>
-              <span class={`badge risk-${f.severity}`}>{t.risk[f.severity]}</span> {findingName(f)} <span class="mono muted">{place(f)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {minor.length > 0 && (
-        <details class="minor">
-          <summary class="small">{t.minorFindings(minor.length)}</summary>
+      <section class="section" id="checks" data-section>
+        <h2 class="section__title">{t.checks}</h2>
+        <div class={`verdict verdict--${item.risk}`}>
+          <span class={`risk-dot risk-dot--${item.risk}`}></span>
+          <div>
+            <p class="verdict__title">{t.risk[item.risk]} · {t.riskNote[item.risk]}</p>
+            <p class="verdict__note">{item.reviewed ? t.reviewed : t.notReviewed} · {t.modelOff}</p>
+          </div>
+        </div>
+        {notable.length > 0 && (
           <ul class="findings">
-            {minor.map((f) => (
+            {notable.map((f) => (
               <li>
-                {findingName(f)} <span class="mono muted">{place(f)}</span>
+                <span class={`badge badge--risk-${f.severity}`}>{t.risk[f.severity]}</span>
+                <span>{findingName(f)}</span>
+                <code>{place(f)}</code>
               </li>
             ))}
           </ul>
-        </details>
-      )}
-      {item.checks.secrets > 0 && <p class="muted small">{t.secretsFound(item.checks.secrets)}</p>}
-      {item.checks.dropped.length > 0 && (
-        <p class="muted small">
-          {t.dropped}: <span class="mono">{item.checks.dropped.map((d) => d.path).join(', ')}</span>
-        </p>
-      )}
-    </section>
-
-    {readme && (
-      <section>
-        <h2>{t.description}</h2>
-        <div class="readme" set:html={readme} />
+        )}
+        {minor.length > 0 && (
+          <details class="minor">
+            <summary>{t.minorFindings(minor.length)}</summary>
+            <ul class="findings findings--minor">
+              {minor.map((f) => (
+                <li>
+                  <span>{findingName(f)}</span>
+                  <code>{place(f)}</code>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {item.checks.secrets > 0 && <p class="small muted">{t.secretsFound(item.checks.secrets)}</p>}
+        {item.checks.dropped.length > 0 && (
+          <p class="small muted">
+            {t.dropped}: <code>{item.checks.dropped.map((d) => d.path).join(', ')}</code>
+          </p>
+        )}
       </section>
-    )}
 
-    {install.server && (
-      <section>
-        <h2>{t.server}</h2>
-        <pre class="code json">{JSON.stringify(install.server, null, 2)}</pre>
-      </section>
-    )}
+      {install.files.length > 0 && (
+        <section class="section" id="files" data-section>
+          <h2 class="section__title">
+            {t.files}
+            <span class="section__aside">{t.filesTotal(install.files.length, size(totalSize))}</span>
+          </h2>
+          <div class="tree">
+            {dirs.map((dir) =>
+              dir === '' ? (
+                <ul class="tree__files">
+                  {folders.get('')!.map((f) => (
+                    <li>
+                      <span class="tree__name">{f.path}{f.executable && <span class="tree__x" title="executable">x</span>}</span>
+                      <span class="tree__size">{size(f.size)}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <details class="tree__dir" open={fewFiles}>
+                  <summary>
+                    <span class="tree__name">{dir}/</span>
+                    <span class="tree__size">{folders.get(dir)!.length}</span>
+                  </summary>
+                  <ul class="tree__files">
+                    {folders.get(dir)!.map((f) => (
+                      <li>
+                        <span class="tree__name">{f.path.slice(dir.length + 1)}{f.executable && <span class="tree__x" title="executable">x</span>}</span>
+                        <span class="tree__size">{size(f.size)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ),
+            )}
+          </div>
+          {install.files.length > 0 && !install.archive && install.source && <p class="small muted">{t.notHosted}</p>}
+        </section>
+      )}
 
-    {install.files.length > 0 && (
-      <section>
-        <h2>{t.files}</h2>
-        <details open={install.files.length <= 12}>
-          <summary class="mono">{t.filesCount(install.files.length)}</summary>
-          <ul class="files mono">
-            {install.files.map((f) => (
-              <li>
-                <span>{f.path}</span>
-                <span class="muted">{size(f.size)}</span>
+      {versions.length > 0 && (
+        <section class="section" id="versions" data-section>
+          <h2 class="section__title">{t.versions}</h2>
+          <ol class="versions">
+            {versions.slice(0, 20).map((v) => (
+              <li class:list={[v.revision === item.latest.revision && 'is-latest']}>
+                <span class="versions__rev">#{v.revision}</span>
+                <span class="versions__v">{v.version ?? '—'}</span>
+                {v.revision === item.latest.revision && <span class="badge badge--kind">{t.current}</span>}
+                <span class="versions__date">{h.date(v.publishedAt)}</span>
               </li>
             ))}
+          </ol>
+        </section>
+      )}
+    </div>
+
+    <aside class="side">
+      <div class="side__inner">
+        <section class="panel install" data-install aria-labelledby="install-title">
+          <h2 class="eyebrow" id="install-title">{t.install}</h2>
+          <div class="install__actions">
+            <a class="btn btn--primary" href={codeg}>
+              {t.openInCodeg}
+              <svg class="btn__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+            </a>
+            {install.archive && (
+              <a class="btn btn--ghost" href={install.archive.url} download>
+                {t.download}
+                <span class="install__size">{size(install.archive.size)}</span>
+              </a>
+            )}
+          </div>
+          {launch.map((cmd) => (
+            <div class="cmd">
+              <code>{cmd}</code>
+              <Copy lang={lang} text={cmd} />
+            </div>
+          ))}
+          {remotes.map((r) => (
+            <div class="cmd">
+              <code>{r.url}</code>
+              <Copy lang={lang} text={r.url!} />
+            </div>
+          ))}
+          <p class="install__note">
+            {install.source ? (
+              <>
+                {t.notHosted}{' '}
+                <a href={sourceTree} rel="nofollow ugc noopener" target="_blank">{t.commit} {install.source.commit.slice(0, 7)} ↗</a>
+              </>
+            ) : install.files.length > 0 ? (
+              t.codegNote
+            ) : null}
+          </p>
+        </section>
+
+        <section class="panel glance" aria-labelledby="glance-title">
+          <h2 class="eyebrow" id="glance-title">{t.safety}</h2>
+          <ul>
+            <li>
+              <span>{t.checks}</span>
+              <span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{t.risk[item.risk]}</span>
+            </li>
+            <li>
+              <span>{t.perms.runsCode}</span>
+              <code>{needs.runs.length ? needs.runs.join(', ') : t.nothing}</code>
+            </li>
+            <li>
+              <span>{t.perms.network}</span>
+              <code>{needs.hosts ? t.hosts(needs.hosts) : t.nothing}</code>
+            </li>
+            <li>
+              <span>{t.perms.secrets}</span>
+              <code>{needs.secrets ? t.credentials(needs.secrets) : t.nothing}</code>
+            </li>
           </ul>
-        </details>
-      </section>
-    )}
+          <a class="glance__more" href="#permissions">{t.permissions} →</a>
+        </section>
+
+        <section class="panel facts" aria-labelledby="facts-title">
+          <h2 class="eyebrow" id="facts-title">{t.facts}</h2>
+          <dl>
+            {item.latest.version && (
+              <div>
+                <dt>{t.version}</dt>
+                <dd><code>{item.latest.version}</code></dd>
+              </div>
+            )}
+            <div>
+              <dt>{t.revision}</dt>
+              <dd><code>#{item.latest.revision}</code></dd>
+            </div>
+            <div>
+              <dt>{t.license}</dt>
+              <dd>{item.license ? <code>{item.license}</code> : <span class="muted">{t.noLicense}</span>}</dd>
+            </div>
+            <div>
+              <dt>{t.runtime}</dt>
+              <dd>{h.runtime.names[item.runtime] ?? item.runtime}</dd>
+            </div>
+            <div>
+              <dt>{t.source}</dt>
+              <dd>{item.sourceUrl ? <a href={item.sourceUrl} rel="nofollow ugc noopener" target="_blank">{t.sources[item.source]} ↗</a> : t.sources[item.source]}</dd>
+            </div>
+            {item.repositoryUrl && (
+              <div>
+                <dt>{t.repository}</dt>
+                <dd><a href={item.repositoryUrl} rel="nofollow ugc noopener" target="_blank">{item.repositoryUrl.replace(/^https:\/\/(www\.)?(github\.com\/)?/, '')} ↗</a></dd>
+              </div>
+            )}
+            {item.websiteUrl && (
+              <div>
+                <dt>{t.website}</dt>
+                <dd><a href={item.websiteUrl} rel="nofollow ugc noopener" target="_blank">{item.websiteUrl.replace(/^https:\/\/(www\.)?/, '')} ↗</a></dd>
+              </div>
+            )}
+          </dl>
+        </section>
+
+        <a class="panel publisher" href={publisherPage}>
+          <Monogram handle={item.publisher.handle} size={34} />
+          <span class="publisher__text">
+            <span class="publisher__name">{item.publisher.name}</span>
+            <span class="publisher__all">{t.publisherAll} →</span>
+          </span>
+        </a>
+      </div>
+    </aside>
   </div>
 
-  <aside class="side">
-    <dl>
-      {item.latest.version && (
-        <>
-          <dt>{t.version}</dt>
-          <dd class="mono">{item.latest.version}</dd>
-        </>
-      )}
-      <dt>{t.revision}</dt>
-      <dd class="mono">{item.latest.revision}</dd>
-      <dt>{t.updated}</dt>
-      <dd>{h.date(item.latest.publishedAt)}</dd>
-      <dt>{t.license}</dt>
-      <dd class="mono">{item.license ?? <span class="muted">{t.noLicense}</span>}</dd>
-      <dt>{t.runtime}</dt>
-      <dd>{h.runtime.names[item.runtime] ?? item.runtime}</dd>
-      <dt>{t.source}</dt>
-      <dd>
-        {item.sourceUrl ? <a href={item.sourceUrl} rel="nofollow ugc noopener" target="_blank">{t.sources[item.source]}</a> : t.sources[item.source]}
-      </dd>
-      {item.repositoryUrl && (
-        <>
-          <dt>{t.repository}</dt>
-          <dd class="mono">
-            <a href={item.repositoryUrl} rel="nofollow ugc noopener" target="_blank">{item.repositoryUrl.replace(/^https:\/\/(www\.)?(github\.com\/)?/, '')}</a>
-            {item.repoStars !== null && <span class="muted"> · ★ {compact(item.repoStars)}</span>}
-          </dd>
-        </>
-      )}
-      {item.websiteUrl && (
-        <>
-          <dt>{t.website}</dt>
-          <dd class="mono"><a href={item.websiteUrl} rel="nofollow ugc noopener" target="_blank">{item.websiteUrl.replace(/^https:\/\/(www\.)?/, '')}</a></dd>
-        </>
-      )}
-    </dl>
-    {versions.length > 0 && (
-      <>
-        <h2>{t.versions}</h2>
-        <ol class="versions mono">
-          {versions.slice(0, 12).map((v) => (
-            <li>
-              <span>#{v.revision}{v.version ? ` · ${v.version}` : ''}</span>
-              <span class="muted">{h.date(v.publishedAt)}</span>
-            </li>
-          ))}
-        </ol>
-      </>
-    )}
-  </aside>
+  <div class="dock" data-dock hidden>
+    <span class="dock__title">{title}</span>
+    <a class="btn btn--primary" href={codeg}>{t.openInCodeg}</a>
+  </div>
 </div>
 
 <style>
+  .item {
+    --toc-h: 52px;
+    padding-top: var(--s-5);
+  }
+
   .crumbs {
-    margin: 0 0 21px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
     color: var(--graphite);
   }
 
   .crumbs a {
-    color: var(--dim);
-    text-decoration: none;
+    color: var(--corona-64);
+    transition: color 0.2s;
   }
 
-  .head h1 {
-    margin: 13px 0 8px;
-    font-size: clamp(30px, 5vw, 44px);
-    font-weight: 300;
-    overflow-wrap: anywhere;
+  .crumbs a:hover {
+    color: var(--corona);
   }
 
-  .badges {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin: 0;
+  /* ------------------------------------------------------------------ head */
+
+  .head {
+    max-width: 58rem;
+    margin-top: var(--s-5);
   }
 
-  .lede {
-    max-width: 46rem;
-    margin: 0 0 13px;
-    font-size: 18px;
-    color: var(--dim);
-  }
-
-  .by {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 13px;
-    align-items: baseline;
-    margin: 0;
-    color: var(--graphite);
-  }
-
-  .notice {
-    margin: 21px 0 0;
-    padding: 13px 16px;
-    border: 1px solid rgb(154 223 255 / 0.25);
-    border-radius: 10px;
-    color: var(--dim);
-    font-size: 14.5px;
-  }
-
-  .layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 17rem;
-    gap: 34px 55px;
-    margin-top: 34px;
-  }
-
-  .layout > * {
+  .top {
+    grid-column: 1;
+    grid-row: 1;
     min-width: 0;
   }
 
-  section + section {
-    margin-top: 34px;
+  .head__badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
-  h2 {
-    margin: 0 0 13px;
-    font-size: 13px;
-    font-family: var(--mono);
-    letter-spacing: 0.18em;
+  h1 {
+    margin-top: var(--s-4);
+    font-size: clamp(32px, 4.4vw, 54px);
+    font-weight: 300;
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+  }
+
+  .head__summary {
+    margin-top: var(--s-4);
+  }
+
+  .head__summary p {
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--corona-64);
+  }
+
+  .head__summary.is-clamped p {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .head__more {
+    margin-top: var(--s-2);
+    font-size: 13.5px;
+    color: var(--bead);
+  }
+
+  .head__more:hover {
+    color: var(--bead-hot);
+  }
+
+  .head__by {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-3) var(--s-5);
+    margin-top: var(--s-5);
+    font-size: 14px;
+    color: var(--graphite);
+  }
+
+  .head__pub {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    color: var(--corona);
+    transition: color 0.2s;
+  }
+
+  .head__pub:hover {
+    color: var(--bead-hot);
+  }
+
+  .head__ref {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .head__ref code,
+  .head__meta {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+  }
+
+  .notice {
+    max-width: 58rem;
+    margin-top: var(--s-5);
+    padding: var(--s-4) var(--s-5);
+    border: 1px solid rgb(154 223 255 / 0.25);
+    border-radius: 13px;
+    background: rgb(154 223 255 / 0.04);
+    font-size: 14px;
+    color: var(--corona-64);
+  }
+
+  /* ---------------------------------------------------------------- layout */
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    grid-template-rows: auto 1fr;
+    column-gap: var(--s-7);
+  }
+
+  .main {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    margin-top: var(--s-6);
+  }
+
+  /* beside the head and the content, from the top of the page */
+  .side {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    min-width: 0;
+  }
+
+  .side__inner > * {
+    min-width: 0;
+  }
+
+  .side__inner {
+    position: sticky;
+    top: calc(var(--hud-h) + var(--s-5));
+    display: grid;
+    gap: var(--s-4);
+    max-height: calc(100dvh - var(--hud-h) - var(--s-6));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  /* the bar of sections, under the HUD */
+  .toc {
+    position: sticky;
+    top: var(--hud-h);
+    z-index: 10;
+    display: flex;
+    gap: var(--s-5);
+    height: var(--toc-h);
+    align-items: stretch;
+    overflow-x: auto;
+    background: rgb(5 5 7 / 0.86);
+    border-bottom: 1px solid var(--hairline);
+    -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    backdrop-filter: blur(18px) saturate(1.3);
+    scrollbar-width: none;
+  }
+
+  .toc::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toc a {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: none;
+    font-size: 14.5px;
+    color: var(--corona-64);
+    transition: color 0.2s;
+  }
+
+  .toc a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--bead);
+    box-shadow: 0 0 8px var(--bead-glow);
+    scale: 0 1;
+    transition: scale 0.35s var(--ease-out);
+  }
+
+  .toc a:hover {
+    color: var(--corona);
+  }
+
+  .toc a[aria-current] {
+    color: var(--bead);
+  }
+
+  .toc a[aria-current]::after {
+    scale: 1 1;
+  }
+
+  /* -------------------------------------------------------------- sections */
+
+  .section {
+    padding: var(--s-6) 0;
+    scroll-margin-top: calc(var(--hud-h) + var(--toc-h));
+  }
+
+  .section + .section {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .section__title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-4);
+    margin-bottom: var(--s-5);
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    font-weight: 400;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--bead);
   }
 
-  .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 0 0 13px;
-  }
-
-  .button {
-    display: inline-block;
-    padding: 9px 18px;
-    border: 1px solid rgb(255 217 160 / 0.5);
-    border-radius: 10px;
-    color: var(--bead);
-    text-decoration: none;
-  }
-
-  .button:hover {
-    background: rgb(255 217 160 / 0.08);
-  }
-
-  .button.quiet {
-    border-color: var(--line);
-    color: var(--dim);
+  .section__aside {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: none;
+    color: var(--graphite);
   }
 
   .small {
+    margin-top: var(--s-4);
     font-size: 13.5px;
   }
 
-  .code {
-    margin: 0 0 13px;
-    padding: 13px 16px;
-    overflow-x: auto;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: rgb(236 234 244 / 0.03);
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.86em;
+  }
+
+  .elsewhere {
+    display: grid;
+    gap: var(--s-3);
+    justify-items: start;
+    color: var(--corona-64);
+  }
+
+  .elsewhere a {
+    color: var(--bead);
+  }
+
+  /* the description, rendered from its markdown */
+  .readme {
+    max-width: 48rem;
+    font-size: 15.5px;
+    line-height: 1.75;
+    color: var(--corona-80);
+    overflow-wrap: anywhere;
+  }
+
+  .readme :global(> :first-child) {
+    margin-top: 0;
+  }
+
+  .readme :global(h1),
+  .readme :global(h2),
+  .readme :global(h3),
+  .readme :global(h4) {
+    margin: 1.8em 0 0.6em;
+    font-weight: 400;
+    line-height: 1.3;
     color: var(--corona);
   }
 
-  .json {
-    max-height: 28rem;
+  .readme :global(h1) {
+    font-size: 1.6em;
+    font-weight: 300;
   }
 
-  .perms {
-    width: 100%;
+  .readme :global(h2) {
+    font-size: 1.3em;
+  }
+
+  .readme :global(h3) {
+    font-size: 1.1em;
+  }
+
+  .readme :global(p),
+  .readme :global(ul),
+  .readme :global(ol),
+  .readme :global(pre),
+  .readme :global(table),
+  .readme :global(blockquote) {
+    margin: 0 0 1em;
+  }
+
+  .readme :global(ul),
+  .readme :global(ol) {
+    padding-left: 1.4em;
+  }
+
+  .readme :global(ul) {
+    list-style: disc;
+  }
+
+  .readme :global(ol) {
+    list-style: decimal;
+  }
+
+  .readme :global(li) {
+    margin: 0.3em 0;
+  }
+
+  .readme :global(li::marker) {
+    color: var(--graphite);
+  }
+
+  .readme :global(a) {
+    color: var(--bead);
+    text-decoration: underline;
+    text-decoration-color: rgb(255 217 160 / 0.35);
+    text-underline-offset: 3px;
+  }
+
+  .readme :global(a:hover) {
+    text-decoration-color: var(--bead);
+  }
+
+  .readme :global(strong) {
+    font-weight: 500;
+    color: var(--corona);
+  }
+
+  .readme :global(code) {
+    padding: 0.12em 0.36em;
+    border-radius: 5px;
+    background: rgb(236 234 244 / 0.07);
+    font-size: 0.84em;
+    color: var(--corona);
+  }
+
+  .readme :global(pre) {
+    padding: var(--s-4) var(--s-5);
+    overflow-x: auto;
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    background: rgb(0 0 0 / 0.35);
+    line-height: 1.6;
+  }
+
+  .readme :global(pre code) {
+    padding: 0;
+    background: none;
+    font-size: 12.5px;
+  }
+
+  .readme :global(blockquote) {
+    padding: 0.2em 0 0.2em 1em;
+    border-left: 2px solid rgb(255 217 160 / 0.4);
+    color: var(--corona-64);
+  }
+
+  .readme :global(table) {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
     border-collapse: collapse;
     font-size: 14px;
   }
 
-  .perms th,
-  .perms td {
-    padding: 8px 8px 8px 0;
-    border-bottom: 1px solid var(--line);
+  .readme :global(th),
+  .readme :global(td) {
+    padding: 7px 12px;
+    border: 1px solid var(--hairline);
     text-align: left;
     vertical-align: top;
-    overflow-wrap: anywhere;
   }
 
-  .perms thead th {
-    font-family: var(--mono);
+  .readme :global(th) {
+    font-weight: 500;
+    color: var(--corona);
+    background: rgb(236 234 244 / 0.03);
+  }
+
+  .readme :global(hr) {
+    margin: 2em 0;
+    border: 0;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .json {
+    position: relative;
+  }
+
+  .json :global(.copy) {
+    position: absolute;
+    top: var(--s-3);
+    right: var(--s-3);
+    background: rgb(5 5 7 / 0.8);
+  }
+
+  .json pre {
+    max-height: 30rem;
+    padding: var(--s-4) var(--s-5);
+    overflow: auto;
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    background: rgb(0 0 0 / 0.35);
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--corona-80);
+  }
+
+  /* what it needs: declared beside detected */
+  .perms {
+    display: grid;
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    overflow: hidden;
+  }
+
+  .perms__row {
+    display: grid;
+    grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--s-4);
+    padding: 11px var(--s-5);
+    font-size: 14px;
+  }
+
+  .perms__row + .perms__row {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .perms__row--head {
+    background: rgb(236 234 244 / 0.03);
+    font-family: var(--f-mono);
     font-size: 11px;
-    font-weight: 400;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--graphite);
   }
 
-  .perms tbody th {
-    width: 11rem;
-    font-weight: 400;
-    color: var(--dim);
+  .perms__name {
+    color: var(--corona-64);
   }
 
-  .differs {
-    color: var(--bead);
+  .perms__row--some .perms__name {
+    color: var(--corona);
+  }
+
+  .perms__values {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .perms__values code {
+    padding: 1px 7px;
+    border-radius: 5px;
+    background: rgb(236 234 244 / 0.06);
+    font-size: 12px;
+    color: var(--corona-80);
+    overflow-wrap: anywhere;
+  }
+
+  .perms__values code.differs {
+    color: var(--bead-hot);
+    background: rgb(255 217 160 / 0.1);
+    box-shadow: inset 0 0 0 1px rgb(255 217 160 / 0.35);
+  }
+
+  /* what the checks found */
+  .verdict {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--s-4);
+    padding: var(--s-4) var(--s-5);
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+  }
+
+  .verdict .risk-dot {
+    margin-top: 9px;
+  }
+
+  .verdict--medium {
+    border-color: rgb(255 217 160 / 0.35);
+    background: rgb(255 217 160 / 0.04);
+  }
+
+  .verdict--high {
+    border-color: rgb(255 111 134 / 0.4);
+    background: rgb(255 111 134 / 0.05);
+  }
+
+  .verdict__title {
+    color: var(--corona);
+  }
+
+  .verdict__note {
+    margin-top: 2px;
+    font-size: 13.5px;
+    color: var(--graphite);
   }
 
   .findings {
     display: grid;
-    gap: 6px;
-    margin: 13px 0;
-    padding: 0;
-    list-style: none;
-    font-size: 14.5px;
-  }
-
-  .minor .findings {
-    font-size: 13.5px;
-    color: var(--dim);
-  }
-
-  .readme {
-    max-width: 46rem;
-    overflow-wrap: anywhere;
-  }
-
-  .readme :global(h1),
-  .readme :global(h2),
-  .readme :global(h3) {
-    margin: 1.4em 0 0.5em;
-    font-family: inherit;
-    font-size: 1.15em;
-    letter-spacing: 0;
-    text-transform: none;
-    color: var(--corona);
-  }
-
-  .readme :global(pre) {
-    padding: 13px 16px;
-    overflow-x: auto;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    font-size: 13px;
-  }
-
-  .readme :global(code) {
-    font-family: var(--mono);
-    font-size: 0.875em;
-  }
-
-  .readme :global(table) {
-    display: block;
-    overflow-x: auto;
-    border-collapse: collapse;
-  }
-
-  .readme :global(td),
-  .readme :global(th) {
-    padding: 4px 10px;
-    border: 1px solid var(--line);
-  }
-
-  .files {
-    margin: 13px 0 0;
-    padding: 0;
-    list-style: none;
-  }
-
-  .files li,
-  .versions li {
-    display: flex;
-    justify-content: space-between;
-    gap: 13px;
-    padding: 4px 0;
-    border-bottom: 1px solid var(--line);
-    overflow-wrap: anywhere;
-  }
-
-  summary {
-    cursor: pointer;
-    color: var(--dim);
-  }
-
-  .side dl {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 8px 16px;
-    margin: 0 0 34px;
+    gap: 1px;
+    margin-top: var(--s-4);
     font-size: 14px;
   }
 
-  .side dt {
+  .findings li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-4);
+    padding: 9px 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .findings code {
+    font-size: 12px;
     color: var(--graphite);
   }
 
-  .side dd {
-    margin: 0;
-    overflow-wrap: anywhere;
+  .findings--minor {
+    color: var(--corona-64);
+    font-size: 13.5px;
   }
 
-  .versions {
-    margin: 0;
-    padding: 0;
+  .minor {
+    margin-top: var(--s-4);
+  }
+
+  .minor summary,
+  .tree__dir summary {
+    cursor: pointer;
     list-style: none;
   }
 
-  @media (max-width: 860px) {
+  .minor summary::-webkit-details-marker,
+  .tree__dir summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .minor summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    font-size: 13.5px;
+    color: var(--corona-64);
+  }
+
+  .minor summary::before,
+  .tree__dir summary::before {
+    content: '';
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    rotate: -45deg;
+    transition: rotate 0.25s var(--ease-out);
+  }
+
+  .minor[open] summary::before,
+  .tree__dir[open] summary::before {
+    rotate: 45deg;
+  }
+
+  .minor summary:hover,
+  .tree__dir summary:hover {
+    color: var(--corona);
+  }
+
+  /* files, by folder */
+  .tree {
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    overflow: hidden;
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+  }
+
+  .tree__dir + .tree__dir,
+  .tree__files + .tree__dir {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .tree__dir summary {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    padding: 10px var(--s-5);
+    color: var(--corona-80);
+    background: rgb(236 234 244 / 0.02);
+  }
+
+  .tree__dir summary .tree__name {
+    flex: 1;
+  }
+
+  .tree__files li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-4);
+    padding: 7px var(--s-5);
+    color: var(--corona-64);
+  }
+
+  .tree__dir .tree__files li {
+    padding-left: calc(var(--s-5) + var(--s-5));
+  }
+
+  .tree__files li + li {
+    border-top: 1px solid rgb(236 234 244 / 0.05);
+  }
+
+  .tree__name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .tree__x {
+    margin-left: var(--s-3);
+    padding: 0 5px;
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--bead);
+    background: rgb(255 217 160 / 0.1);
+  }
+
+  .tree__size {
+    flex: none;
+    color: var(--graphite);
+  }
+
+  .versions {
+    display: grid;
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+
+  .versions li {
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+    padding: 10px var(--s-5);
+  }
+
+  .versions li + li {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .versions__rev,
+  .versions__v,
+  .versions__date {
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+  }
+
+  .versions__rev {
+    color: var(--graphite);
+  }
+
+  .versions__v {
+    color: var(--corona);
+  }
+
+  .versions__date {
+    margin-left: auto;
+    color: var(--graphite);
+  }
+
+  /* ------------------------------------------------------------- the side */
+
+  .panel {
+    padding: var(--s-5);
+  }
+
+  .panel h2 {
+    margin-bottom: var(--s-4);
+  }
+
+  .install__actions {
+    display: grid;
+    gap: var(--s-3);
+  }
+
+  .install__actions .btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .install__size {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--graphite);
+  }
+
+  .install .cmd {
+    margin-top: var(--s-3);
+  }
+
+  .install__note {
+    margin-top: var(--s-4);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--graphite);
+  }
+
+  .install__note:empty {
+    display: none;
+  }
+
+  .install__note a {
+    color: var(--corona-64);
+  }
+
+  .install__note a:hover {
+    color: var(--bead-hot);
+  }
+
+  .glance ul {
+    display: grid;
+    gap: var(--s-3);
+    font-size: 13.5px;
+  }
+
+  .glance li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-4);
+    color: var(--corona-64);
+  }
+
+  .glance li code {
+    min-width: 0;
+    font-size: 12px;
+    color: var(--corona);
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .glance__more {
+    display: inline-block;
+    margin-top: var(--s-4);
+    font-size: 13px;
+    color: var(--bead);
+  }
+
+  .glance__more:hover {
+    color: var(--bead-hot);
+  }
+
+  .facts dl {
+    display: grid;
+    gap: var(--s-3);
+    font-size: 13.5px;
+  }
+
+  .facts dl div {
+    display: grid;
+    grid-template-columns: 5.5em minmax(0, 1fr);
+    gap: var(--s-4);
+  }
+
+  .facts dt {
+    color: var(--graphite);
+  }
+
+  .facts dd {
+    margin: 0;
+    color: var(--corona-80);
+    overflow-wrap: anywhere;
+  }
+
+  .facts dd code {
+    font-size: 12px;
+  }
+
+  .facts a {
+    color: var(--corona);
+    transition: color 0.2s;
+  }
+
+  .facts a:hover {
+    color: var(--bead-hot);
+  }
+
+  .publisher {
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+    transition: border-color 0.3s;
+  }
+
+  .publisher:hover {
+    border-color: rgb(255 217 160 / 0.38);
+  }
+
+  .publisher__text {
+    display: grid;
+    min-width: 0;
+  }
+
+  .publisher__name {
+    color: var(--corona);
+    overflow-wrap: anywhere;
+  }
+
+  .publisher__all {
+    font-size: 12.5px;
+    color: var(--graphite);
+  }
+
+  .publisher:hover .publisher__all {
+    color: var(--bead);
+  }
+
+  /* the call to install, kept at hand on small screens once the panel scrolls away */
+  .dock {
+    display: none;
+  }
+
+  /* --------------------------------------------------------------- smaller */
+
+  @media (max-width: 1100px) {
     .layout {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: none;
     }
 
-    .side {
+    /* the side's panels join the page: installing after the head, the details after the content */
+    .side,
+    .side__inner {
+      display: contents;
+    }
+
+    .top,
+    .main {
+      grid-column: auto;
+      grid-row: auto;
+    }
+
+    .top {
+      order: -3;
+    }
+
+    .install {
+      order: -2;
+      margin-top: var(--s-6);
+    }
+
+    .glance {
       order: -1;
+      margin-top: var(--s-4);
+    }
+
+    .facts,
+    .publisher {
+      order: 1;
+      margin-top: var(--s-4);
+    }
+
+    .main {
+      margin-top: var(--s-4);
+    }
+
+    /* the page ends above the dock */
+    :global(body:has(.dock:not([hidden]))) {
+      padding-bottom: 72px;
+    }
+
+    .dock:not([hidden]) {
+      position: fixed;
+      inset: auto 0 0;
+      z-index: 25;
+      display: flex;
+      align-items: center;
+      gap: var(--s-4);
+      padding: var(--s-3) var(--edge) calc(var(--s-3) + env(safe-area-inset-bottom));
+      background: rgb(5 5 7 / 0.9);
+      border-top: 1px solid var(--hairline);
+      -webkit-backdrop-filter: blur(18px) saturate(1.3);
+      backdrop-filter: blur(18px) saturate(1.3);
+      animation: dock-in 0.35s var(--ease-out);
+    }
+
+    .dock__title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 14px;
+      color: var(--corona-80);
+    }
+
+    @keyframes dock-in {
+      from {
+        translate: 0 100%;
+      }
+    }
+  }
+
+  @media (max-width: 760px) {
+    .head__summary p {
+      font-size: 15.5px;
+    }
+
+    .perms__row {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      padding: 10px var(--s-4);
+    }
+
+    .perms__name {
+      grid-column: 1 / -1;
+    }
+
+    .perms__row--head span:first-child {
+      display: none;
+    }
+
+    .section {
+      padding: var(--s-5) 0;
     }
   }
 </style>

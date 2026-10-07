@@ -1,0 +1,66 @@
+---
+/**
+ * The site's two languages, always in the same order: this page's is lit, the
+ * other links to this page in it. The choice is remembered for the homepage
+ * (sr-lang); from the homepage, the other one takes over its scene (main.ts).
+ */
+import { dicts, type Dict, type Lang } from '../i18n';
+
+interface Props {
+  t: Dict;
+  /** this page in the other language (by default, that language's homepage) */
+  href?: string;
+  class?: string;
+}
+const { t, href, class: className } = Astro.props;
+const other = dicts[t.lang === 'en' ? 'zh' : 'en'];
+// each language by its own name, which is what the switch to it says
+const langs: { lang: Lang; name: string }[] = [
+  { lang: 'en', name: dicts.zh.nav.langSwitch },
+  { lang: 'zh', name: dicts.en.nav.langSwitch },
+];
+---
+<p class:list={['langs', className]}>
+  {langs.map(({ lang, name }, i) => (
+    <>
+      {i > 0 && <span class="langs__sep" aria-hidden="true">/</span>}
+      {lang === t.lang ? (
+        <span class="langs__this" aria-hidden="true">{name}</span>
+      ) : (
+        <a class="langs__to" href={href ?? other.path} hreflang={other.htmlLang} lang={other.htmlLang} aria-label={t.nav.langSwitchLabel} data-lang-switch={lang}>{name}</a>
+      )}
+    </>
+  ))}
+</p>
+
+<style>
+  .langs {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7em;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    /* the same height in both languages, whichever face draws 中文 */
+    line-height: 18px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
+  .langs__this {
+    color: var(--corona);
+  }
+
+  .langs__sep {
+    color: var(--graphite);
+  }
+
+  .langs__to {
+    padding: var(--s-3) 0;
+    color: var(--corona-64);
+    transition: color 0.3s;
+  }
+
+  .langs__to:hover {
+    color: var(--corona);
+  }
+</style>

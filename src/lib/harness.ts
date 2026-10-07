@@ -78,6 +78,22 @@ export async function loadItem(publisher: string, name: string): Promise<{ item:
 
 export const loadPublisher = (handle: string): Promise<PublisherInfo | null> => getPublisher(env.HARNESS_DB, handle);
 
+/** A publisher's items on the shelves per kind (`kind:skill`, ...) and in all (`all`), as the facets count the catalog. */
+export async function loadPublisherKinds(handle: string): Promise<Record<string, number>> {
+  const { results } = await env.HARNESS_DB.prepare(
+    `SELECT i.kind, COUNT(*) AS n FROM items i JOIN publishers p ON p.id = i.publisher_id
+      WHERE p.handle = ?1 AND i.status = 'public' AND i.visibility = 'public' GROUP BY i.kind`,
+  )
+    .bind(handle.toLowerCase())
+    .all<{ kind: string; n: number }>();
+  const counts: Record<string, number> = { all: 0 };
+  for (const r of results) {
+    counts[`kind:${r.kind}`] = r.n;
+    counts.all += r.n;
+  }
+  return counts;
+}
+
 /** Items per sitemap shard; each is listed in both languages, under the 50,000 addresses a sitemap may hold. */
 export const SITEMAP_SHARD = 20_000;
 

@@ -3,7 +3,7 @@ import { Hono } from 'hono';
 import { getAuth } from './auth';
 import { serveAvatar } from './avatars';
 import { withRequest } from './context';
-import { forCache, fromCache } from './harness/cache';
+import { cacheKey, edgeCache, forCache, fromCache } from './harness/cache';
 import { daily as harnessDaily, runJob, startRegistrySync, type Job } from './harness/jobs';
 import { harnessApi } from './harness/routes';
 
@@ -45,13 +45,44 @@ api.onError((err, c) => {
 });
 
 // Pages rendered on demand show content from packages (descriptions, checked
-// and rendered safe): they run no script of ours either, so allow none at all.
+// and rendered safe). Scripts may come only from this site and never inline:
+// the site's own bundles (the HUD, the account dialog, Harness's browsing).
+// Package files are served as attachments, as octet streams, with nosniff,
+// so none of them can run as a script here.
 const PAGE_HEADERS = {
   'Content-Security-Policy':
-    "default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
+
+/**
+ * The pages rendered on demand: the addresses wrangler.jsonc sends to the
+ * script first (run_worker_first). Only `astro dev` asks, as it renders every
+ * page through the script: the others go out as their files do, without the
+ * headers above (the homepage starts from an inline script).
+ */
+const ON_DEMAND = /^\/(?:zh\/)?harness(?:\/|$)|^\/sitemap(?:\.xml$|-harness-)/;
+
+/**
+ * The site's not-found page for this address, in its language: the nearest
+ * 404.html up its path, as Cloudflare serves for addresses that are not files.
+ * In development there are no files yet, and Astro renders it.
+ */
+async function notFound(request: Request, env: Env, ctx: ExecutionContext): Promise<Response | null> {
+  const file = await env.ASSETS.fetch(new Request(request.url, { method: 'GET' }));
+  if (file.status === 404 && file.headers.get('Content-Type')?.startsWith('text/html')) return file;
+  const zh = /^\/zh(?:\/|$)/.test(new URL(request.url).pathname);
+  const rendered = await handle(new Request(new URL(zh ? '/zh/404' : '/404', request.url)), env, ctx);
+  return rendered.ok ? new Response(rendered.body, { status: 404, headers: rendered.headers }) : null;
+}
+
+/** Astro's answer, or for an address with nothing behind it the site's not-found page. */
+async function render(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const rendered = await handle(request, env, ctx);
+  if (rendered.status !== 404 || (request.method !== 'GET' && request.method !== 'HEAD')) return rendered;
+  return (await notFound(request, env, ctx)) ?? rendered;
+}
 
 /**
  * A page rendered on demand (Harness, the sitemap). The same for every
@@ -59,11 +90,11 @@ const PAGE_HEADERS = {
  * location for its s-maxage (the Cache API) and served from there.
  */
 async function page(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const cache = request.method === 'GET' ? caches.default : null;
-  const key = new Request(request.url, { method: 'GET' });
+  const cache = request.method === 'GET' ? edgeCache() : undefined;
+  const key = cacheKey(request.url, env.CF_VERSION_METADATA?.id);
   const hit = await cache?.match(key);
   if (hit) return fromCache(hit);
-  const rendered = await handle(request, env, ctx);
+  const rendered = await render(request, env, ctx);
   const res = new Response(rendered.body, rendered);
   for (const [k, v] of Object.entries(PAGE_HEADERS)) res.headers.set(k, v);
   if (cache && res.status === 200 && /\bpublic\b/.test(res.headers.get('Cache-Control') ?? '')) ctx.waitUntil(cache.put(key, forCache(res)));
@@ -74,10 +105,11 @@ export default {
   fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
     // Static pages never reach the script. What does (run_worker_first) is
-    // the API, or a page rendered on demand, which Astro renders; it serves
-    // files and the 404 page for anything else.
-    if (pathname !== '/api' && !pathname.startsWith('/api/')) return page(request, env, ctx);
-    return withRequest(ctx, () => api.fetch(request, env, ctx));
+    // the API, or a page rendered on demand; and a request that is not a
+    // navigation, for an address with nothing behind it.
+    if (pathname === '/api' || pathname.startsWith('/api/')) return withRequest(ctx, () => api.fetch(request, env, ctx));
+    if (import.meta.env?.DEV && !ON_DEMAND.test(pathname)) return render(request, env, ctx);
+    return page(request, env, ctx);
   },
 
   /**

@@ -7,6 +7,27 @@
  */
 const STORED = 'X-Stored-Cache-Control';
 
+/**
+ * This Cloudflare location's cache. None in development (astro dev), where
+ * pages change with every edit and a copy kept from before would hide it.
+ */
+export function edgeCache(): Cache | undefined {
+  if (import.meta.env?.DEV) return undefined;
+  return (globalThis as { caches?: { default?: Cache } }).caches?.default;
+}
+
+/**
+ * Where a response for `url` is kept: per deployment (`version`, from the
+ * version metadata binding). A page names the scripts and styles of the build
+ * that rendered it, and a new deployment serves only its own, so a page kept
+ * from the last one would load without them.
+ */
+export function cacheKey(url: string, version: string | undefined): Request {
+  const key = new URL(url);
+  if (version) key.searchParams.set('__deployment', version);
+  return new Request(key, { method: 'GET' });
+}
+
 /** The copy of `res` to put in the cache. */
 export function forCache(res: Response): Response {
   const copy = new Response(res.clone().body, res);

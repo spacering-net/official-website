@@ -1,8 +1,16 @@
-import type Lenis from 'lenis';
+/**
+ * What stops the page from scrolling while the menu or a dialog is open:
+ * Lenis on the homepage, a class on the other pages.
+ */
+export interface ScrollLock {
+  stop(): void;
+  start(): void;
+}
 
 interface MenuOptions {
-  lenis: Lenis;
-  goTo: (index: number, immediate?: boolean, moveFocus?: boolean) => void;
+  scroll: ScrollLock;
+  /** the homepage's chapters; elsewhere destinations are plain links */
+  goTo?: (index: number, immediate?: boolean, moveFocus?: boolean) => void;
   reduceMotion: boolean;
 }
 
@@ -14,7 +22,7 @@ const SIN30 = 0.5;
  * the left; on the right an orbit chart in the logo's construction language,
  * where each project is a node on its own orbit.
  */
-export function initMenu({ lenis, goTo, reduceMotion }: MenuOptions) {
+export function initMenu({ scroll, goTo, reduceMotion }: MenuOptions) {
   const menu = document.querySelector<HTMLElement>('[data-menu]');
   const opener = document.querySelector<HTMLButtonElement>('[data-menu-open]');
   if (!menu || !opener)
@@ -74,7 +82,7 @@ export function initMenu({ lenis, goTo, reduceMotion }: MenuOptions) {
       menu.classList.add('is-open');
       root.classList.add('menu-open');
       setInert(true);
-      lenis.stop();
+      scroll.stop();
       last = 0;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(loop);
@@ -94,7 +102,7 @@ export function initMenu({ lenis, goTo, reduceMotion }: MenuOptions) {
       if (!next) {
         root.classList.remove('menu-open');
         cancelAnimationFrame(raf);
-        lenis.start();
+        scroll.start();
         setInert(false);
         opener.focus({ preventScroll: true });
         after?.();
@@ -125,17 +133,19 @@ export function initMenu({ lenis, goTo, reduceMotion }: MenuOptions) {
     }
   });
 
-  menu.querySelectorAll<HTMLElement>('[data-goto]').forEach((link) => {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const index = Number(link.dataset.goto);
-      const href = link.getAttribute('href');
-      setOpen(false, () => {
-        goTo(index, false, true);
-        if (href?.startsWith('#')) history.replaceState(null, '', href);
+  if (goTo) {
+    menu.querySelectorAll<HTMLElement>('[data-goto]').forEach((link) => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const index = Number(link.dataset.goto);
+        const href = link.getAttribute('href');
+        setOpen(false, () => {
+          goTo(index, false, true);
+          if (href?.startsWith('#')) history.replaceState(null, '', href);
+        });
       });
     });
-  });
+  }
 
   // Hovering a destination lights its orbit, node and label in the chart.
   const lit = (key: string | null) => {

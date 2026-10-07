@@ -79,7 +79,7 @@ console.log('nav lit per chapter:', lit.join(' '), '| links land on', lands.join
 await page.click('.dial__item[data-goto="3"]', { force: true });
 await page.waitForTimeout(2800);
 await page.addInitScript(() => addEventListener('pagereveal', (e) => (window.__vt = !!e.viewTransition)));
-await page.click('.hud .lang-switch');
+await page.click('.hud-foot [data-lang-switch]');
 await page.waitForLoadState('load');
 await page.waitForTimeout(150);
 const arrived = await page.evaluate(() => ({

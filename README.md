@@ -28,7 +28,7 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | Copy in both languages, product names, the sample assistant's name | `src/i18n/index.ts` |
 | The projected previews in each chapter | `src/components/holo/` |
 | Repository and docs links, fallback stats | `src/config.ts` |
-| Palette, type sizes, spacing | the variables at the top of `src/styles/global.css` |
+| Palette, type sizes, spacing | the variables at the top of `src/styles/site.css` |
 | Ring size, materials and the veins on the band | `src/client/scene/ring.ts` |
 | The particle disk around the ring | `src/client/scene/disk.ts` |
 | Intro timing | `src/client/intro.ts` |
@@ -37,6 +37,9 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | Database schema | `db/migrations/` and Harness's `db/harness/` (add new files only; do not edit existing migrations; run `pnpm db:migrate:remote` before pushing) |
 | Harness: imports, checks, search and the API | `api/harness/` (the API's shapes: `api/harness/schemas.ts`, published at `/api/harness/v1/openapi.json`) |
 | Harness pages and their copy | `src/pages/[...lang]/harness/`, `src/components/harness/`, `src/i18n/harness.ts` |
+| The frame of every page but the homepage (HUD, menu, sign-in, footer) | `src/layouts/Page.astro`, `src/client/page.ts` |
+| Products with pages of their own (the HUD links to them; the rest are homepage chapters) | `PRODUCT_PAGES` in `src/i18n/index.ts` |
+| The not-found page, per language (`404.html`, `zh/404.html`; also for Harness addresses with nothing behind them) | `src/components/NotFound.astro`, `src/pages/404.astro`, `src/pages/zh/404.astro` |
 | The engraving inside the band | `inscribe()` in `src/client/scene/ring.ts`, `src/client/account.ts` |
 
 Harness's rule checks take their patterns from the database, not from this repository; a fresh database has none and relies on the built-in checks.
@@ -59,6 +62,7 @@ pnpm qa:jump    # jumps across several chapters project only the start and end c
 pnpm qa:switch  # language switch hand-over: same chapter, no intro replay, no flash
 pnpm qa:menu    # menu on short screens: scrolls, locks the page, Esc and focus return; pauses the scene, no live blur
 pnpm qa:fit     # panels fit between the HUD and the bottom edge at every size
+pnpm qa:pages   # the other pages: shared HUD, menu and sign-in, what sticks while scrolling, Harness's in-place search and filters
 pnpm qa:perf    # frame times at 1x and 2x pixel ratio
 pnpm og         # re-renders the share images; then convert them to public/og.jpg and og-zh.jpg
 ```

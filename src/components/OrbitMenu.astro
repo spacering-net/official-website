@@ -1,15 +1,25 @@
 ---
 import Logo from './Logo.astro';
 import AccountButton from './AccountButton.astro';
-import { dicts, CHAPTER_IDS, type Dict } from '../i18n';
+import { dicts, CHAPTER_IDS, PRODUCT_PAGES, type Dict } from '../i18n';
 import { SITE } from '../config';
 import { MARK_BAND, MARK_CRESCENT } from './mark';
 
 interface Props {
   t: Dict;
+  /**
+   * Any page but the homepage: this page in the other language. Destinations
+   * then open a product's own pages, or the homepage at its chapter.
+   */
+  page?: { alternate: string };
 }
-const { t } = Astro.props;
+const { t, page } = Astro.props;
 const other = dicts[t.lang === 'en' ? 'zh' : 'en'];
+const destination = (key: string) => {
+  if (!page) return `#${key}`;
+  const own = PRODUCT_PAGES[key as keyof typeof PRODUCT_PAGES];
+  return own ? `${t.path}${own}` : `${t.path}#${key}`;
+};
 const COS30 = Math.cos(Math.PI / 6);
 const K = Math.sqrt((1 + Math.sqrt(5)) / 2); // √φ
 // One orbit per product, in page order; radii grow by √φ.
@@ -49,7 +59,7 @@ const github = t.menu.external[1];
       <ol class="orbit-menu__list">
         {orbits.map((item, i) => (
           <li class="menu-item-in" style={`--i:${i}`}>
-            <a class="menu-link" href={`#${item.key}`} data-goto={item.goto} data-node={item.key}>
+            <a class="menu-link" href={destination(item.key)} data-goto={page ? undefined : item.goto} data-node={item.key}>
               <span class="menu-link__name">{item.name}</span>
               <span class:list={['status', item.status === 'live' && 'status--live']}>{t.status[item.status]}</span>
               <span class="menu-link__desc">{item.desc}</span>
@@ -91,6 +101,6 @@ const github = t.menu.external[1];
   <div class="orbit-menu__foot mono">
     <span>spacering.net</span>
     <AccountButton t={t} />
-    <a class="lang-switch" href={other.path} hreflang={other.htmlLang} lang={other.htmlLang} data-lang-switch={other.lang}>{t.nav.langSwitch}</a>
+    <a class="lang-switch" href={page?.alternate ?? other.path} hreflang={other.htmlLang} lang={other.htmlLang} data-lang-switch={other.lang}>{t.nav.langSwitch}</a>
   </div>
 </div>

@@ -1,4 +1,4 @@
-import type Lenis from 'lenis';
+import type { ScrollLock } from './menu';
 
 /** What the page knows about the signed-in user (GET /api/me). */
 export interface Me {
@@ -8,13 +8,16 @@ export interface Me {
 }
 
 interface AccountOptions {
-  lenis: Lenis;
+  scroll: ScrollLock;
   menu: { isOpen(): boolean; closeNow(after?: () => void): void };
   /** Whether the page may scroll again once the dialog closes (not during the intro or under the menu). */
   scrollable: () => boolean;
-  /** The ring number to engrave, or null; `fresh` right after signing in. */
-  onRing: (number: number | null, fresh: boolean) => void;
+  /** The ring number to engrave on the homepage's band, or null; `fresh` right after signing in. */
+  onRing?: (number: number | null, fresh: boolean) => void;
 }
+
+/** This page's address with a flag added to its query, for the providers to send the visitor back to. */
+const backTo = (flag: string) => `${location.pathname}${location.search ? `${location.search}&` : '?'}${flag}${location.hash}`;
 
 /**
  * The last signed-in user, kept so a returning visitor's band is engraved on
@@ -57,7 +60,7 @@ async function fetchMe(): Promise<Me | null | undefined> {
  * Sign-in (GitHub, Google) and the signed-in card. Providers redirect back to
  * the page the visitor left, with ?signed-in or ?sign-in-error.
  */
-export function initAccount({ lenis, menu, scrollable, onRing }: AccountOptions) {
+export function initAccount({ scroll, menu, scrollable, onRing }: AccountOptions) {
   const dialog = document.querySelector<HTMLDialogElement>('[data-account-dialog]');
   const openers = [...document.querySelectorAll<HTMLButtonElement>('[data-account-open]')];
   if (!dialog) return;
@@ -106,7 +109,7 @@ export function initAccount({ lenis, menu, scrollable, onRing }: AccountOptions)
     me = next;
     writeHint(next);
     render();
-    if (changed || fresh) onRing(next?.number ?? null, fresh);
+    if (changed || fresh) onRing?.(next?.number ?? null, fresh);
   };
 
   const open = (failed = false) => {
@@ -115,14 +118,14 @@ export function initAccount({ lenis, menu, scrollable, onRing }: AccountOptions)
     const show = () => {
       render();
       dialog.showModal();
-      lenis.stop();
+      scroll.stop();
     };
     if (menu.isOpen()) menu.closeNow(show);
     else show();
   };
 
   dialog.addEventListener('close', () => {
-    if (scrollable()) lenis.start();
+    if (scrollable()) scroll.start();
   });
   // a click on the veil around the card closes it
   dialog.addEventListener('click', (e) => {
@@ -137,17 +140,13 @@ export function initAccount({ lenis, menu, scrollable, onRing }: AccountOptions)
       const label = button.querySelector('span');
       const text = label?.textContent ?? '';
       if (label) label.textContent = button.dataset.busy ?? text;
-      const here = location.pathname;
       try {
         const res = await fetch('/api/auth/sign-in/social', {
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            provider: button.dataset.provider,
-            callbackURL: `${here}?signed-in${location.hash}`,
-            errorCallbackURL: `${here}?sign-in-error`,
-          }),
+          // back to this very page, with its query (a search, a filter) and fragment
+          body: JSON.stringify({ provider: button.dataset.provider, callbackURL: backTo('signed-in'), errorCallbackURL: backTo('sign-in-error') }),
         });
         const data = (await res.json().catch(() => null)) as { url?: string } | null;
         if (res.ok && data?.url) {

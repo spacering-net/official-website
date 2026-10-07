@@ -1,0 +1,200 @@
+---
+/**
+ * The catalog's filters: where items run and what they are about, each with
+ * how many are on the shelves. Plain links; the same in the sidebar and, on
+ * small screens, in the filter sheet.
+ */
+import { harnessDicts } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+import { withQuery, type BrowseState, type TagInfo } from '../../lib/harness';
+
+interface Props {
+  lang: Lang;
+  path: string;
+  state: BrowseState;
+  tags: TagInfo[];
+  counts: Record<string, number>;
+}
+const { lang, path, state, tags, counts } = Astro.props;
+const h = harnessDicts[lang];
+const n = (v: number) => v.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en');
+const runtimes = Object.entries(counts)
+  .filter(([k, v]) => k.startsWith('runtime:') && v > 0)
+  .map(([k, v]) => ({ id: k.slice('runtime:'.length), n: v }))
+  .sort((a, b) => b.n - a.n);
+const used = tags.filter((t) => t.count > 0).sort((a, b) => b.count - a.count);
+// the most used first; the rest fold away, unless one of them is the chosen tag
+const SHOWN = 16;
+const shown = used.slice(0, SHOWN);
+const folded = used.slice(SHOWN);
+const open = folded.some((t) => t.id === state.tag);
+---
+<div class="filters">
+  {runtimes.length > 1 && (
+    <section class="filters__group">
+      <h2 class="eyebrow">{h.runtime.label}</h2>
+      <ul class="facets">
+        <li>
+          <a class="facet" href={withQuery(path, state, { runtime: undefined })} aria-current={!state.runtime ? 'true' : undefined}>
+            <span>{h.runtime.any}</span>
+          </a>
+        </li>
+        {runtimes.map((r) => (
+          <li>
+            <a class="facet" href={withQuery(path, state, { runtime: r.id })} aria-current={state.runtime === r.id ? 'true' : undefined}>
+              <span>{h.runtime.names[r.id] ?? r.id}</span>
+              <span class="facet__n">{n(r.n)}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+  {used.length > 0 && (
+    <section class="filters__group">
+      <h2 class="eyebrow">{h.tags.label}</h2>
+      <p class="tags">
+        <a class="chip" href={withQuery(path, state, { tag: undefined })} aria-current={!state.tag ? 'true' : undefined}>{h.tags.all}</a>
+        {shown.map((t) => (
+          <a class="chip" href={withQuery(path, state, { tag: t.id })} aria-current={state.tag === t.id ? 'true' : undefined}>
+            {t.name[lang]}
+            <span class="chip__n">{n(t.count)}</span>
+          </a>
+        ))}
+      </p>
+      {folded.length > 0 && (
+        <details class="tags__more" open={open}>
+          <summary>{h.browse.allTags(used.length)}</summary>
+          <p class="tags">
+            {folded.map((t) => (
+              <a class="chip" href={withQuery(path, state, { tag: t.id })} aria-current={state.tag === t.id ? 'true' : undefined}>
+                {t.name[lang]}
+                <span class="chip__n">{n(t.count)}</span>
+              </a>
+            ))}
+          </p>
+        </details>
+      )}
+    </section>
+  )}
+</div>
+
+<style>
+  .filters {
+    display: grid;
+    gap: var(--s-6);
+  }
+
+  .filters__group h2 {
+    margin-bottom: var(--s-3);
+  }
+
+  .facets {
+    display: grid;
+    gap: 1px;
+  }
+
+  .facet {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--s-4);
+    padding: 7px var(--s-3) 7px var(--s-4);
+    border-radius: 8px;
+    font-size: 14.5px;
+    color: var(--corona-64);
+    transition:
+      color 0.2s,
+      background-color 0.2s;
+  }
+
+  .facet::before {
+    content: '';
+    position: absolute;
+    left: 3px;
+    top: 50%;
+    width: 4px;
+    height: 4px;
+    margin-top: -2px;
+    border-radius: 50%;
+    background: transparent;
+    transition: background-color 0.2s;
+  }
+
+  .facet:hover {
+    color: var(--corona);
+    background: rgb(236 234 244 / 0.04);
+  }
+
+  .facet[aria-current] {
+    color: var(--bead-hot);
+    background: rgb(255 217 160 / 0.06);
+  }
+
+  .facet[aria-current]::before {
+    background: var(--bead);
+    box-shadow: 0 0 6px var(--bead-glow);
+  }
+
+  .facet__n {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--graphite);
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .tags .chip {
+    height: 28px;
+    padding: 0 11px;
+    font-size: 13px;
+  }
+
+  .tags__more {
+    margin-top: var(--s-3);
+  }
+
+  .tags__more summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--s-2) 0;
+    font-size: 13px;
+    color: var(--corona-64);
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .tags__more summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .tags__more summary::after {
+    content: '';
+    width: 6px;
+    height: 6px;
+    margin-top: -3px;
+    border-right: 1px solid currentColor;
+    border-bottom: 1px solid currentColor;
+    rotate: 45deg;
+    transition: rotate 0.25s var(--ease-out);
+  }
+
+  .tags__more[open] summary::after {
+    rotate: 225deg;
+    margin-top: 3px;
+  }
+
+  .tags__more summary:hover {
+    color: var(--corona);
+  }
+
+  .tags__more .tags {
+    margin-top: var(--s-3);
+  }
+</style>

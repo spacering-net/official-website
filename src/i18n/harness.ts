@@ -23,6 +23,24 @@ export interface HarnessDict {
   tags: { label: string; all: string };
   more: string;
   first: string;
+  browse: {
+    eyebrow: string;
+    shelves: string;
+    kindsLabel: string;
+    filters: string;
+    done: string;
+    clear: string;
+    remove: (what: string) => string;
+    /** how many items a listing has, when it is known */
+    total: (n: number) => string;
+    loading: string;
+    /** `{n}`: how many */
+    loaded: string;
+    end: string;
+    allTags: (n: number) => string;
+    about: { title: string; text: string; api: string };
+  };
+  copy: { label: string; done: string };
   card: { stars: string; unclaimed: string; listed: string };
   item: {
     by: string;
@@ -66,8 +84,21 @@ export interface HarnessDict {
     listed: string;
     listedNote: string;
     reasons: Record<string, string>;
+    toc: string;
+    expand: string;
+    collapse: string;
+    readmeElsewhere: string;
+    publisherAll: string;
+    facts: string;
+    safety: string;
+    hosts: (n: number) => string;
+    credentials: (n: number) => string;
+    topLevel: string;
+    filesTotal: (n: number, size: string) => string;
+    current: string;
+    stars: string;
   };
-  publisher: { items: (n: number) => string; github: string; domain: string; unclaimed: string };
+  publisher: { items: (n: number) => string; github: string; domain: string; unclaimed: string; label: string };
   footer: { privacy: string; terms: string };
   date: (iso: string) => string;
 }
@@ -107,6 +138,26 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     tags: { label: 'Tags', all: 'All tags' },
     more: 'More',
     first: 'Back to the start',
+    browse: {
+      eyebrow: 'harness · market',
+      shelves: 'On the shelves',
+      kindsLabel: 'Kinds',
+      filters: 'Filters',
+      done: 'Done',
+      clear: 'Clear filters',
+      remove: (what) => `Remove ${what}`,
+      total: (n) => `${n.toLocaleString('en')} item${n === 1 ? '' : 's'}`,
+      loading: 'Loading…',
+      loaded: '{n} more loaded',
+      end: 'That is everything.',
+      allTags: (n) => `All ${n} tags`,
+      about: {
+        title: 'About Harness',
+        text: 'Imported from the official MCP Registry and curated skill repositories. Every version is checked for its format, leaked credentials and risky commands before it is listed.',
+        api: 'Read-only API',
+      },
+    },
+    copy: { label: 'Copy', done: 'Copied' },
     card: { stars: 'GitHub stars', unclaimed: 'Unclaimed', listed: 'Listed only' },
     item: {
       by: 'by',
@@ -186,12 +237,26 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         secrets: 'credentials were found in it',
         format: 'its package has format errors',
       },
+      toc: 'On this page',
+      expand: 'Show all',
+      collapse: 'Show less',
+      readmeElsewhere: 'Its license does not let Harness keep a copy, so its description is read at the source.',
+      publisherAll: 'Everything from this publisher',
+      facts: 'Details',
+      safety: 'At a glance',
+      hosts: (n) => `${n} host${n === 1 ? '' : 's'}`,
+      credentials: (n) => `${n} credential${n === 1 ? '' : 's'}`,
+      topLevel: 'Top level',
+      filesTotal: (n, size) => `${n} file${n === 1 ? '' : 's'} · ${size}`,
+      current: 'latest',
+      stars: 'GitHub stars',
     },
     publisher: {
       items: (n) => `${n.toLocaleString('en')} on the shelves`,
       github: 'GitHub account',
       domain: 'Domain',
       unclaimed: 'Imported from public sources. Its owner can claim it by signing in.',
+      label: 'Publisher',
     },
     footer: { privacy: 'Privacy Policy', terms: 'Terms of Service' },
     date: (iso) => new Date(iso).toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }),
@@ -225,6 +290,26 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     tags: { label: '标签', all: '全部标签' },
     more: '更多',
     first: '回到开头',
+    browse: {
+      eyebrow: 'Harness · 综合市场',
+      shelves: '已上架',
+      kindsLabel: '类别',
+      filters: '筛选',
+      done: '完成',
+      clear: '清除筛选',
+      remove: (what) => `去掉「${what}」`,
+      total: (n) => `共 ${n.toLocaleString('zh-CN')} 项`,
+      loading: '加载中…',
+      loaded: '又加载了 {n} 项',
+      end: '已经全部列出。',
+      allTags: (n) => `全部 ${n} 个标签`,
+      about: {
+        title: '关于 Harness',
+        text: '收录自官方 MCP 注册表和精选技能仓库。每个版本上架前都检查过格式、泄露的凭据和有风险的命令。',
+        api: '只读 API',
+      },
+    },
+    copy: { label: '复制', done: '已复制' },
     card: { stars: 'GitHub 星标', unclaimed: '未认领', listed: '仅收录' },
     item: {
       by: '发布者',
@@ -304,12 +389,26 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         secrets: '里面发现了凭据',
         format: '包的格式有错误',
       },
+      toc: '本页内容',
+      expand: '展开全部',
+      collapse: '收起',
+      readmeElsewhere: '它的许可证不允许 Harness 保存副本，说明请到来源查看。',
+      publisherAll: '这个发布者的全部条目',
+      facts: '详情',
+      safety: '安全概要',
+      hosts: (n) => `${n} 个主机`,
+      credentials: (n) => `${n} 项凭据`,
+      topLevel: '顶层',
+      filesTotal: (n, size) => `${n} 个文件 · ${size}`,
+      current: '最新',
+      stars: 'GitHub 星标',
     },
     publisher: {
       items: (n) => `${n.toLocaleString('zh-CN')} 项上架`,
       github: 'GitHub 账号',
       domain: '域名',
       unclaimed: '收录自公开来源。所有者登录后即可认领。',
+      label: '发布者',
     },
     footer: { privacy: '隐私政策', terms: '用户协议' },
     date: (iso) => new Date(iso).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }),

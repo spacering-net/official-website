@@ -1,0 +1,219 @@
+/* ==========================================================================
+   Harness: what its pages share, on top of site.css. The browse, item and
+   publisher layouts keep their own styles in their components.
+   ========================================================================== */
+
+/* the width of a Harness page, inside the site's frame (layouts/Page.astro);
+   what sticks while the page scrolls sits under the HUD (var(--hud-h)) */
+.hx {
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 var(--edge);
+}
+
+/* a small uppercase label, in the HUD's voice */
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--graphite);
+}
+
+.code-text {
+  font-family: var(--f-mono);
+  font-size: 0.82em;
+  letter-spacing: 0.01em;
+}
+
+.muted {
+  color: var(--graphite);
+}
+
+/* frosted panes, as on the homepage but quieter */
+.panel {
+  border: 1px solid var(--hairline);
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, rgb(236 234 244 / 0.035), rgb(236 234 244 / 0.012)),
+    var(--void);
+}
+
+/* ------------------------------------------------------------------ badges */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: var(--corona-64);
+  white-space: nowrap;
+}
+
+.badge--kind {
+  color: var(--bead);
+  border-color: rgb(255 217 160 / 0.32);
+  background: rgb(255 217 160 / 0.05);
+}
+
+.badge--risk-low {
+  color: var(--corona-64);
+}
+
+.badge--risk-medium {
+  color: var(--bead);
+  border-color: rgb(255 217 160 / 0.5);
+}
+
+.badge--risk-high {
+  color: var(--prominence);
+  border-color: rgb(255 111 134 / 0.5);
+  background: rgb(255 111 134 / 0.06);
+}
+
+.badge--listed {
+  color: var(--ion);
+  border-color: rgb(154 223 255 / 0.35);
+}
+
+/* a dot before a risk level, in its colour */
+.risk-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--graphite);
+}
+
+.risk-dot--medium {
+  background: var(--bead);
+  box-shadow: 0 0 6px rgb(255 217 160 / 0.6);
+}
+
+.risk-dot--high {
+  background: var(--prominence);
+  box-shadow: 0 0 6px rgb(255 111 134 / 0.7);
+}
+
+/* ------------------------------------------------------------------- chips */
+
+/* filters, tags and tabs: pills that light up when chosen */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  height: 32px;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--corona-64);
+  white-space: nowrap;
+  transition:
+    color 0.25s,
+    border-color 0.25s,
+    background-color 0.25s;
+}
+
+.chip:hover {
+  color: var(--corona);
+  border-color: var(--hairline-strong);
+}
+
+.chip[aria-current] {
+  color: var(--bead-hot);
+  border-color: rgb(255 217 160 / 0.5);
+  background: rgb(255 217 160 / 0.07);
+}
+
+.chip__n {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--graphite);
+}
+
+.chip[aria-current] .chip__n {
+  color: rgb(255 217 160 / 0.75);
+}
+
+/* ------------------------------------------------------------- copy button */
+
+.copy {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 8px;
+  color: var(--graphite);
+  transition:
+    color 0.2s,
+    background-color 0.2s;
+}
+
+.copy:hover {
+  color: var(--corona);
+  background: rgb(236 234 244 / 0.06);
+}
+
+/* until a script can copy */
+.copy[hidden] {
+  display: none;
+}
+
+.copy svg {
+  width: 15px;
+  height: 15px;
+}
+
+.copy .copy__done {
+  display: none;
+}
+
+.copy.is-done {
+  color: var(--bead);
+}
+
+.copy.is-done .copy__idle {
+  display: none;
+}
+
+.copy.is-done .copy__done {
+  display: block;
+}
+
+/* a command or an address, on one line, with its copy button */
+.cmd {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.35);
+}
+
+.cmd code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  color: var(--corona);
+  scrollbar-width: none;
+}
+
+.cmd code::-webkit-scrollbar {
+  display: none;
+}

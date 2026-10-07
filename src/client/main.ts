@@ -163,10 +163,10 @@ function boot() {
   };
 
   // ------------------------------------------------------------- interaction
-  const menu = initMenu({ lenis, goTo, reduceMotion });
+  const menu = initMenu({ scroll: lenis, goTo, reduceMotion });
   initScramble(document, root.dataset.scramble || '');
   initAccount({
-    lenis,
+    scroll: lenis,
     menu,
     scrollable: () => intro.done && !menu.isOpen(),
     onRing: (number, fresh) => stage?.setInscription(number === null ? null : `SRN ${number}`, fresh && !reduceMotion),
@@ -336,7 +336,7 @@ function boot() {
   // --------------------------------------------------------------- hand-over
   // Arriving from the other language: the chapter that was on screen is
   // already projected and settled, the HUD is in place, and the old page stays
-  // on screen (see `vt-hold` in global.css) until this one has drawn itself.
+  // on screen (see `vt-hold` in Base.astro) until this one has drawn itself.
   let reveal: (() => void) | null = null;
   if (handoff) {
     lenis.scrollTo(startAt * chapters.unit, { immediate: true, force: true });
@@ -360,7 +360,7 @@ function boot() {
       refocus = (handoff.keyboard ? menuEl?.querySelector<HTMLElement>('[data-lang-switch]') : menuEl) ?? null;
       menu.openNow(refocus);
     } else if (handoff.keyboard) {
-      refocus = document.querySelector<HTMLElement>('.hud [data-lang-switch]');
+      refocus = document.querySelector<HTMLElement>('.hud-foot [data-lang-switch]');
       refocus?.focus({ preventScroll: true });
     }
     // Text set in a fallback face would reflow when the web fonts arrive, so

@@ -15,43 +15,202 @@ const { list, tags, counts } = await loadBrowse(state);
 cacheable(Astro.response.headers);
 const paths = { en: withQuery('/harness/', state, { cursor: state.cursor }), zh: withQuery('/zh/harness/', state, { cursor: state.cursor }) };
 const filtered = !!(state.q || state.cursor || state.runtime || state.tag || state.sort !== 'popular');
+const n = (v: number) => v.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en');
+// what is on the shelves, by kind, largest first
+const shares = (['skill', 'mcp', 'prompt', 'assistant', 'connector'] as const)
+  .map((k) => ({ k, n: counts[`kind:${k}`] ?? 0 }))
+  .filter((s) => s.n > 0)
+  .sort((a, b) => b.n - a.n);
+const all = counts.all ?? 0;
 ---
 <Layout lang={lang} title={state.q ? `${state.q} · Harness` : `Harness · SpaceRing`} description={h.description} paths={paths} noindex={filtered}>
-  <section class="hero">
-    <h1>Harness</h1>
-    <p class="kicker">{h.kicker}</p>
-    <p class="lede">{h.lede}</p>
-    {counts.all !== undefined && <p class="count mono">{h.count(counts.all)}</p>}
+  <section class="hx intro">
+    <div class="intro__text">
+      <p class="eyebrow">{h.browse.eyebrow}</p>
+      <h1>Harness</h1>
+      <p class="intro__kicker">{h.kicker}</p>
+      <p class="intro__lede">{h.lede}</p>
+    </div>
+    {all > 0 && (
+      <div class="intro__stats">
+        <p class="intro__total">
+          <span class="eyebrow">{h.browse.shelves}</span>
+          <b>{n(all)}</b>
+        </p>
+        <p class="intro__bar" aria-hidden="true">
+          {shares.map((s, i) => <span class={`intro__seg intro__seg--${i}`} style={`flex:${s.n}`}></span>)}
+        </p>
+        <ul class="intro__kinds">
+          {shares.map((s, i) => (
+            <li>
+              <span class={`intro__dot intro__seg--${i}`}></span>
+              {h.kinds[s.k]}
+              <span class="intro__n">{n(s.n)}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+    <svg class="intro__orbits" viewBox="-300 -170 600 340" aria-hidden="true">
+      <g transform="rotate(-30)">
+        <ellipse rx="250" ry="216.5"></ellipse>
+        <ellipse rx="186" ry="161"></ellipse>
+        <ellipse rx="128" ry="110.9"></ellipse>
+      </g>
+      <circle class="intro__node" r="3.4">
+        <animateMotion dur="80s" repeatCount="indefinite" path="M216.5 -125 A250 216.5 -30 1 1 216.4 -125.1 Z"></animateMotion>
+      </circle>
+    </svg>
   </section>
   <Browse lang={lang} path={h.base} state={state} list={list} tags={tags} counts={counts} catalog />
 </Layout>
 
 <style>
-  .hero {
-    margin: 13px 0 34px;
+  .intro {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 24rem);
+    align-items: end;
+    gap: var(--s-6) var(--s-7);
+    padding-top: var(--s-6);
+    padding-bottom: var(--s-6);
+    overflow: hidden;
   }
 
-  .hero h1 {
-    margin: 0;
-    font-size: clamp(38px, 7vw, 64px);
+  .intro__text {
+    position: relative;
+    z-index: 1;
+  }
+
+  h1 {
+    margin-top: var(--s-4);
+    font-size: clamp(44px, 6vw, 76px);
     font-weight: 300;
-    letter-spacing: -0.01em;
+    line-height: 0.96;
+    letter-spacing: -0.025em;
   }
 
-  .kicker {
-    margin: 8px 0 0;
-    font-size: clamp(18px, 2.4vw, 22px);
+  .intro__kicker {
+    margin-top: var(--s-4);
+    font-size: clamp(18px, 1.6vw, 22px);
     color: var(--corona);
   }
 
-  .lede {
-    max-width: 40rem;
-    margin: 8px 0 0;
-    color: var(--dim);
+  .intro__lede {
+    max-width: 38rem;
+    margin-top: var(--s-3);
+    color: var(--corona-64);
   }
 
-  .count {
-    margin: 13px 0 0;
-    color: var(--bead);
+  .intro__stats {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: var(--s-4);
+  }
+
+  .intro__total {
+    display: grid;
+    gap: var(--s-2);
+  }
+
+  .intro__total b {
+    font-family: var(--f-mono);
+    font-size: clamp(34px, 3.4vw, 46px);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    line-height: 1;
+    color: var(--corona);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .intro__bar {
+    display: flex;
+    gap: 3px;
+    height: 6px;
+  }
+
+  .intro__seg {
+    border-radius: 3px;
+    background: var(--corona-40);
+  }
+
+  .intro__seg--0 {
+    background: var(--bead);
+    box-shadow: 0 0 10px rgb(255 217 160 / 0.35);
+  }
+
+  .intro__seg--1 {
+    background: var(--ion);
+  }
+
+  .intro__seg--2 {
+    background: var(--prominence);
+  }
+
+  .intro__kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-5);
+    font-size: 13.5px;
+    color: var(--corona-64);
+  }
+
+  .intro__kinds li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+  }
+
+  .intro__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .intro__n {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--corona);
+  }
+
+  /* the logo's construction: orbits with b/a = cos30°, tilted 30° */
+  .intro__orbits {
+    position: absolute;
+    right: -6rem;
+    top: 50%;
+    width: min(56rem, 70vw);
+    translate: 0 -50%;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .intro__orbits ellipse {
+    fill: none;
+    stroke: rgb(236 234 244 / 0.07);
+    stroke-width: 1;
+    stroke-dasharray: 14 3 2 3;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .intro__node {
+    fill: var(--bead-hot);
+    filter: drop-shadow(0 0 6px var(--bead-glow));
+  }
+
+  @media (max-width: 860px) {
+    .intro {
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      gap: var(--s-5);
+      padding-top: var(--s-5);
+      padding-bottom: var(--s-5);
+    }
+
+    .intro__orbits {
+      right: -40%;
+      width: 130vw;
+      opacity: 0.7;
+    }
   }
 </style>

@@ -1,42 +1,52 @@
 ---
 import Logo from './Logo.astro';
 import AccountButton from './AccountButton.astro';
-import { dicts, CHAPTER_IDS, type Dict } from '../i18n';
+import { CHAPTER_IDS, PRODUCT_PAGES, type Dict } from '../i18n';
 
 interface Props {
   t: Dict;
+  /**
+   * Any page but the homepage, and the product whose pages these are (its
+   * link is marked as the current page). Links then lead to the homepage's
+   * chapters instead of scrolling to them.
+   */
+  page?: { current?: keyof typeof PRODUCT_PAGES };
 }
-const { t } = Astro.props;
-const other = dicts[t.lang === 'en' ? 'zh' : 'en'];
+const { t, page } = Astro.props;
 // Each link lights the rail while any chapter in its range is projected. Space,
-// the assistant and Harness have links of their own (Harness's opens the
-// marketplace itself); the ring covers the hero and the rest of its products;
+// the assistant and Harness have links of their own (a product with pages of
+// its own opens them); the ring covers the hero and the rest of its products;
 // open source covers Codeg and the finale, and leads to the finale.
-const own = (['space', 'assistant', 'harness'] as const).map((key) => ({
-  key,
-  at: CHAPTER_IDS.indexOf(key),
-  page: key === 'harness' ? `${t.path}harness/` : null,
-}));
+const own = (['space', 'assistant', 'harness'] as const).map((key) => ({ key, at: CHAPTER_IDS.indexOf(key) }));
 const codeg = CHAPTER_IDS.indexOf('codeg');
 const last = CHAPTER_IDS.length - 1;
 const ring = [...Array(codeg).keys()].filter((i) => !own.some((p) => p.at === i)).join(',');
+/** where a link goes: a product's own pages, a chapter on this page, or a chapter on the homepage */
+const link = (key: string, at: number) => {
+  const own = PRODUCT_PAGES[key as keyof typeof PRODUCT_PAGES];
+  if (own) return { href: `${t.path}${own}`, current: page?.current === key ? 'page' : undefined };
+  if (page) return { href: at === 0 ? t.path : `${t.path}#${key}` };
+  return { href: `#${key}`, goto: at };
+};
+const nav = [
+  { label: t.nav.ring, range: ring, ...link(CHAPTER_IDS[0], 0) },
+  ...own.map(({ key, at }) => ({ label: t.nav[key], range: `${at}`, ...link(key, at) })),
+  { label: t.nav.openSource, range: `${codeg}-${last}`, ...link(CHAPTER_IDS[last], last) },
+];
 ---
-<header class="hud">
-  <a class="brand" href={t.path} aria-label={t.nav.home} data-goto="0">
+<header class:list={['hud', page && 'hud--page']}>
+  <a class="brand" href={t.path} aria-label={t.nav.home} data-goto={page ? undefined : '0'}>
     <Logo class="brand__mark" />
     <span class="brand__word" aria-hidden="true">SpaceRing</span>
   </a>
   <div class="hud__right">
     <nav class="nav" aria-label={t.nav.label}>
-      <a class="nav__link" href={`#${CHAPTER_IDS[0]}`} data-goto="0" data-range={ring} data-scramble>{t.nav.ring}</a>
-      {own.map(({ key, at, page }) => (
-        <a class="nav__link" href={page ?? `#${key}`} data-goto={page ? undefined : at} data-range={`${at}`} data-scramble>{t.nav[key]}</a>
+      {nav.map((n) => (
+        <a class="nav__link" href={n.href} data-goto={n.goto} data-range={n.range} aria-current={n.current} data-scramble>{n.label}</a>
       ))}
-      <a class="nav__link" href={`#${CHAPTER_IDS[last]}`} data-goto={last} data-range={`${codeg}-${last}`} data-scramble>{t.nav.openSource}</a>
       <svg class="nav__rail" aria-hidden="true"><path d=""></path></svg>
       <span class="nav__dot" aria-hidden="true"></span>
     </nav>
-    <a class="lang-switch" href={other.path} hreflang={other.htmlLang} lang={other.htmlLang} aria-label={t.nav.langSwitchLabel} data-lang-switch={other.lang}>{t.nav.langSwitch}</a>
     <AccountButton t={t} />
     <button class="menu-btn" type="button" aria-expanded="false" aria-controls="orbit-menu" aria-label={t.nav.openMenu} data-menu-open>
       <svg viewBox="0 0 20 20" aria-hidden="true">

@@ -1,0 +1,36 @@
+---
+/**
+ * A publisher's mark until publishers have pictures: the first letter of its
+ * handle in a ring, tinted from the handle so the same publisher always looks
+ * the same.
+ */
+interface Props {
+  handle: string;
+  size?: number;
+}
+const { handle, size = 22 } = Astro.props;
+const TINTS = ['var(--bead)', 'var(--ion)', 'var(--corona)', '#c9b6ff', '#9fe3c1', 'var(--prominence)'];
+let hash = 0;
+for (const ch of handle) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+const tint = TINTS[hash % TINTS.length];
+const letter = ([...handle].find((c) => /[\p{L}\p{N}]/u.test(c)) ?? '?').toUpperCase();
+---
+<span class="mono-gram" style={`--tint:${tint};--size:${size}px`} aria-hidden="true">{letter}</span>
+
+<style>
+  .mono-gram {
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--tint) 45%, transparent);
+    background: color-mix(in srgb, var(--tint) 10%, transparent);
+    font-family: var(--f-mono);
+    font-size: calc(var(--size) * 0.46);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--tint);
+  }
+</style>

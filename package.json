@@ -21,6 +21,7 @@
     "qa:fit": "node scripts/check-fit.mjs",
     "qa:jump": "node scripts/check-jump.mjs",
     "qa:switch": "node scripts/check-switch.mjs",
+    "qa:pages": "node scripts/check-pages.mjs",
     "qa:perf": "node scripts/perf.mjs",
     "og": "node scripts/og.mjs"
   },

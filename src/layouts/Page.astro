@@ -1,0 +1,82 @@
+---
+/**
+ * Every page but the homepage: Harness, the policies, and the product pages
+ * to come. The same HUD, orbit menu and account dialog as the homepage, around
+ * the page's own content, with no scene and no intro. Each page has a twin in
+ * the other language.
+ */
+import '@fontsource-variable/jost';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
+import '../styles/site.css';
+import Hud from '../components/Hud.astro';
+import OrbitMenu from '../components/OrbitMenu.astro';
+import Account from '../components/Account.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import { SITE } from '../config';
+import { dicts, PRODUCT_PAGES, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  /** this page in each language, with its query */
+  paths: Record<Lang, string>;
+  /** search results and later pages are not for search engines */
+  noindex?: boolean;
+  /** the product these pages belong to: its link in the HUD is marked */
+  current?: keyof typeof PRODUCT_PAGES;
+}
+const { lang, title, description, paths, noindex, current } = Astro.props;
+const t = dicts[lang];
+const other = lang === 'en' ? 'zh' : 'en';
+const canonical = `${SITE.url}${paths[lang]}`;
+const skip = lang === 'en' ? 'Skip to content' : '跳到正文';
+---
+<!doctype html>
+<html lang={t.htmlLang} data-scramble={t.scramble}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <link rel="alternate" hreflang="en" href={`${SITE.url}${paths.en}`} />
+    <link rel="alternate" hreflang="zh-CN" href={`${SITE.url}${paths.zh}`} />
+    <link rel="alternate" hreflang="x-default" href={`${SITE.url}${paths.en}`} />
+    <meta name="theme-color" content="#050507" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SpaceRing" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={`${SITE.url}/${lang === 'zh' ? 'og-zh' : 'og'}.jpg`} />
+    <meta property="og:locale" content={lang === 'zh' ? 'zh_CN' : 'en_US'} />
+    <meta name="twitter:card" content="summary_large_image" />
+    {/* from one of these pages to the next, the HUD stays put and the page cross-fades */}
+    <style is:inline>
+      @view-transition { navigation: auto; }
+      ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.28s; }
+    </style>
+    {/* without scripts the menu and the account dialog cannot open; the HUD's links still work */}
+    <noscript><style>[data-menu-open], [data-account-open] { display: none; }</style></noscript>
+    <slot name="head" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">{skip}</a>
+    <Hud t={t} page={{ current }} />
+    <OrbitMenu t={t} page={{ alternate: paths[other] }} />
+    <Account t={t} />
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+    <SiteFooter t={t} alternate={paths[other]} />
+    <script>
+      import '../client/page';
+    </script>
+  </body>
+</html>

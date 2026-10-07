@@ -1,7 +1,8 @@
 /**
  * The HUD's orbit rail: a shallow arc under the nav links. A node slides
  * along it to the hovered link, and rests on the link whose `data-range`
- * covers the current chapter. A range is a list of spans, e.g. `0-2,4-5`.
+ * covers the current chapter (on the other pages, on the link to the page
+ * itself). A range is a list of spans, e.g. `0-2,4-5`.
  */
 export function initNavRail() {
   const nav = document.querySelector<HTMLElement>('.nav');
@@ -13,7 +14,7 @@ export function initNavRail() {
   const PAD = 13;
   const DEPTH = 18;
   let width = 0;
-  let current: HTMLAnchorElement | null = null;
+  let current = links.find((l) => l.getAttribute('aria-current') === 'page') ?? null;
   let hovering: HTMLAnchorElement | null = null;
 
   const curveY = (t: number) => (1 - t) * (1 - t) * 2 + 2 * (1 - t) * t * DEPTH + t * t * 2;

@@ -1,10 +1,14 @@
 ---
 /**
- * Browsing and search: kind tabs, sort, runtimes and tags, a page of items
- * and a link to the next. Plain links and one form, so it all works without
- * scripts. Used by the Harness home page and by publisher pages (`path`).
+ * Browsing and search, for the Harness home page and publisher pages (`path`).
+ * A bar that stays under the HUD (search and kinds), a sidebar that stays
+ * beside the results (the catalog's filters, or what the page puts in the
+ * `side` slot), and the results with their count, order, the filters in use,
+ * and more to load. Plain links and one form: client/harness.ts swaps the
+ * `data-region` parts in place instead of loading the page again.
  */
 import ItemCard from './ItemCard.astro';
+import Filters from './Filters.astro';
 import { harnessDicts } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
 import { withQuery, type BrowseState, type ItemList, type TagInfo } from '../../lib/harness';
@@ -16,235 +20,594 @@ interface Props {
   state: BrowseState;
   list: ItemList;
   tags: TagInfo[];
+  /** items per kind (and runtime and tag, for the catalog), and in all under `all` */
   counts: Record<string, number>;
-  /** counts and kinds come from the whole catalog; a publisher page has its own list only */
+  /** the whole catalog, with its filters; a publisher page lists its own items only */
   catalog: boolean;
 }
 const { lang, path, state, list, tags, counts, catalog } = Astro.props;
 const h = harnessDicts[lang];
+const n = (v: number) => v.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en');
 const tagMap = new Map(tags.map((t) => [t.id, t]));
-// kinds with nothing in them yet are left out, once the facets have been counted at all
-const counted = Object.keys(counts).some((k) => k.startsWith('kind:'));
 const kinds = (['all', 'skill', 'mcp', 'prompt', 'assistant', 'connector'] as const).filter(
-  (k) => k === 'all' || !catalog || !counted || (counts[`kind:${k}`] ?? 0) > 0 || state.kind === k,
+  (k) => k === 'all' || (counts[`kind:${k}`] ?? 0) > 0 || state.kind === k,
 );
-const runtimes = Object.entries(counts)
-  .filter(([k, n]) => k.startsWith('runtime:') && n > 0)
-  .map(([k, n]) => ({ id: k.slice('runtime:'.length), n }))
-  .sort((a, b) => b.n - a.n);
-const topTags = tags.filter((t) => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 18);
-if (state.tag && !topTags.some((t) => t.id === state.tag) && tagMap.has(state.tag)) topTags.push(tagMap.get(state.tag)!);
+// how many there are, when the counts say: no filter, or one
+const dims = [state.kind && `kind:${state.kind}`, state.runtime && `runtime:${state.runtime}`, state.tag && `tag:${state.tag}`].filter((d): d is string => !!d);
+const total = dims.length === 0 ? counts.all : dims.length === 1 ? counts[dims[0]] : undefined;
+const active = [
+  state.runtime && { label: h.runtime.names[state.runtime] ?? state.runtime, href: withQuery(path, state, { runtime: undefined }) },
+  state.tag && { label: tagMap.get(state.tag)?.name[lang] ?? state.tag, href: withQuery(path, state, { tag: undefined }) },
+].filter((a): a is { label: string; href: string } => !!a);
+const filtered = active.length;
 ---
-<form class="search" action={path} method="get" role="search">
-  <label class="visually-hidden" for="harness-q">{h.search.label}</label>
-  <input id="harness-q" name="q" type="search" value={state.q} placeholder={h.search.placeholder} maxlength="200" autocomplete="off" />
-  {state.kind && <input type="hidden" name="kind" value={state.kind} />}
-  <button type="submit">{h.search.submit}</button>
-</form>
+<div class:list={['browse', catalog ? 'browse--catalog' : 'browse--own']} data-browse data-loaded={h.browse.loaded}>
+  <div class="browse__bar">
+    <div class="hx browse__bar-inner">
+    <form class="search" action={path} method="get" role="search" data-search>
+      <svg class="search__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true">
+        <circle cx="8.6" cy="8.6" r="5.6"></circle>
+        <path d="M12.8 12.8l4 4"></path>
+      </svg>
+      <label class="sr-only" for="harness-q">{h.search.label}</label>
+      <input id="harness-q" name="q" type="search" value={state.q} placeholder={h.search.placeholder} maxlength="200" autocomplete="off" spellcheck="false" enterkeyhint="search" />
+      <kbd class="search__key" aria-hidden="true">/</kbd>
+      <span data-region="query">
+        {state.kind && <input type="hidden" name="kind" value={state.kind} />}
+        {state.runtime && <input type="hidden" name="runtime" value={state.runtime} />}
+        {state.tag && <input type="hidden" name="tag" value={state.tag} />}
+      </span>
+      <button class="sr-only" type="submit">{h.search.submit}</button>
+    </form>
+    <nav class="kinds" aria-label={h.browse.kindsLabel} data-region="kinds">
+      {kinds.map((k) => {
+        const value = k === 'all' ? undefined : k;
+        const c = counts[k === 'all' ? 'all' : `kind:${k}`];
+        return (
+          <a class="chip" href={withQuery(path, state, { kind: value })} aria-current={state.kind === value ? 'page' : undefined}>
+            {h.kinds[k]}
+            {c !== undefined && <span class="chip__n">{n(c)}</span>}
+          </a>
+        );
+      })}
+    </nav>
+    {catalog && (
+      <button class="chip browse__filters" type="button" data-sheet-open aria-controls="harness-sheet" aria-haspopup="dialog">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4.5h11M4.5 8h7M6.5 11.5h3"></path></svg>
+        <span class="browse__filters-label">{h.browse.filters}</span>
+        <span class="chip__n" data-region="filtered">{filtered > 0 ? filtered : ''}</span>
+      </button>
+    )}
+    </div>
+  </div>
 
-<nav class="kinds" aria-label={h.search.label}>
-  {kinds.map((k) => {
-    const value = k === 'all' ? undefined : k;
-    const n = catalog ? counts[k === 'all' ? 'all' : `kind:${k}`] : undefined;
-    return (
-      <a href={withQuery(path, state, { kind: value })} aria-current={state.kind === value ? 'page' : undefined}>
-        {h.kinds[k]}
-        {n !== undefined && <span class="mono">{n.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en')}</span>}
-      </a>
-    );
-  })}
-</nav>
+  <div class="hx browse__body">
+    <aside class="browse__side" aria-label={catalog ? h.browse.filters : undefined}>
+      <div class="browse__side-inner" data-region="side">
+        <slot name="side">
+          {catalog && <Filters lang={lang} path={path} state={state} tags={tags} counts={counts} />}
+        </slot>
+        {catalog && (
+          <section class="about">
+            <h2 class="eyebrow">{h.browse.about.title}</h2>
+            <p>{h.browse.about.text}</p>
+            <a href="/api/harness/v1/openapi.json">{h.browse.about.api} <span aria-hidden="true">↗</span></a>
+          </section>
+        )}
+      </div>
+    </aside>
 
-<div class="filters">
-  {!state.q && (
-    <p class="filter">
-      <span class="filter__label mono">{h.sort.label}</span>
-      {(['popular', 'new', 'updated'] as const).map((s) => (
-        <a href={withQuery(path, state, { sort: s === 'popular' ? undefined : s })} aria-current={state.sort === s ? 'true' : undefined}>
-          {h.sort[s]}
-        </a>
-      ))}
-    </p>
+    <section class="browse__results" data-region="results" aria-label={h.search.label} tabindex="-1">
+      <div class="results__head">
+        <p class="results__count">
+          {state.q ? (
+            <>
+              {h.search.results(list.approxTotal ?? list.items.length, state.q)}
+              <a href={withQuery(path, state, { q: undefined })}>{h.search.clear}</a>
+            </>
+          ) : total !== undefined ? (
+            h.browse.total(total)
+          ) : null}
+        </p>
+        {!state.q && (
+          <nav class="sort" aria-label={h.sort.label}>
+            {(['popular', 'new', 'updated'] as const).map((s) => (
+              <a href={withQuery(path, state, { sort: s === 'popular' ? undefined : s })} aria-current={state.sort === s ? 'true' : undefined}>{h.sort[s]}</a>
+            ))}
+          </nav>
+        )}
+      </div>
+
+      {active.length > 0 && (
+        <p class="active">
+          {active.map((a) => (
+            <a class="chip active__chip" href={a.href} aria-label={h.browse.remove(a.label)}>
+              {a.label}
+              <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true"><path d="M3.5 3.5l5 5M8.5 3.5l-5 5"></path></svg>
+            </a>
+          ))}
+          {active.length > 1 && <a class="active__clear" href={withQuery(path, state, { runtime: undefined, tag: undefined })}>{h.browse.clear}</a>}
+        </p>
+      )}
+
+      {list.items.length ? (
+        <ul class="grid" data-grid>
+          {list.items.map((item) => <ItemCard item={item} lang={lang} tags={tagMap} />)}
+        </ul>
+      ) : (
+        <div class="empty">
+          <svg viewBox="0 0 120 80" fill="none" aria-hidden="true">
+            <ellipse cx="60" cy="40" rx="52" ry="22" transform="rotate(-12 60 40)" stroke="currentColor" stroke-dasharray="14 3 2 3"></ellipse>
+            <circle cx="60" cy="40" r="9" stroke="currentColor"></circle>
+          </svg>
+          <p>{h.search.none}</p>
+          {state.q && <p class="muted">{h.search.noneHint}</p>}
+        </div>
+      )}
+
+      <nav class="pager" data-pager>
+        {list.next && (
+          <a class="btn btn--ghost pager__more" href={withQuery(path, state, { cursor: list.next })} rel="next" data-more data-busy={h.browse.loading}>
+            {h.more}
+            <svg class="btn__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3v10M4 9l4 4 4-4"></path></svg>
+          </a>
+        )}
+        {!list.next && list.items.length > 0 && <p class="pager__end muted">{h.browse.end}</p>}
+        {state.cursor && <a class="pager__first" href={withQuery(path, state, {})}>{h.first}</a>}
+      </nav>
+    </section>
+  </div>
+
+  {catalog && (
+    <dialog class="sheet" id="harness-sheet" aria-label={h.browse.filters} data-sheet>
+      <div class="sheet__head">
+        <h2 class="eyebrow">{h.browse.filters}</h2>
+        <button class="btn btn--primary sheet__done" type="button" data-sheet-close>{h.browse.done}</button>
+      </div>
+      <div class="sheet__body" data-region="sheet">
+        <Filters lang={lang} path={path} state={state} tags={tags} counts={counts} />
+      </div>
+    </dialog>
   )}
-  {catalog && runtimes.length > 1 && (
-    <p class="filter">
-      <span class="filter__label mono">{h.runtime.label}</span>
-      <a href={withQuery(path, state, { runtime: undefined })} aria-current={!state.runtime ? 'true' : undefined}>{h.runtime.any}</a>
-      {runtimes.map((r) => (
-        <a href={withQuery(path, state, { runtime: r.id })} aria-current={state.runtime === r.id ? 'true' : undefined}>
-          {h.runtime.names[r.id] ?? r.id}
-        </a>
-      ))}
-    </p>
-  )}
-  {catalog && topTags.length > 0 && (
-    <p class="filter tags">
-      <span class="filter__label mono">{h.tags.label}</span>
-      <a href={withQuery(path, state, { tag: undefined })} aria-current={!state.tag ? 'true' : undefined}>{h.tags.all}</a>
-      {topTags.map((t) => (
-        <a href={withQuery(path, state, { tag: t.id })} aria-current={state.tag === t.id ? 'true' : undefined}>
-          {t.name[lang]}
-        </a>
-      ))}
-    </p>
-  )}
+  <p class="sr-only" role="status" aria-live="polite" data-announce></p>
 </div>
 
-{state.q && (
-  <p class="summary">
-    {h.search.results(list.approxTotal ?? list.items.length, state.q)} · <a href={withQuery(path, state, { q: undefined })}>{h.search.clear}</a>
-  </p>
-)}
-
-{list.items.length ? (
-  <ul class="grid">
-    {list.items.map((item) => <ItemCard item={item} lang={lang} tags={tagMap} />)}
-  </ul>
-) : (
-  <div class="empty">
-    <p>{h.search.none}</p>
-    {state.q && <p class="muted">{h.search.noneHint}</p>}
-  </div>
-)}
-
-{(list.next || state.cursor) && (
-  <nav class="pages">
-    {state.cursor && <a href={withQuery(path, state, {})}>{h.first}</a>}
-    {list.next && <a class="next" href={withQuery(path, state, { cursor: list.next })} rel="next">{h.more} →</a>}
-  </nav>
-)}
-
 <style>
-  .search {
+  .browse {
+    --bar-h: 64px;
+    --side-w: 15.5rem;
+  }
+
+  /* --------------------------------------------------------------- the bar */
+
+  .browse__bar {
+    position: sticky;
+    /* stuck, its top line lies on the HUD's */
+    top: calc(var(--hud-h) - 1px);
+    z-index: 20;
+    background: rgb(5 5 7 / 0.86);
+    border-block: 1px solid var(--hairline);
+    -webkit-backdrop-filter: blur(18px) saturate(1.3);
+    backdrop-filter: blur(18px) saturate(1.3);
+  }
+
+  .browse__bar-inner {
     display: flex;
-    gap: 8px;
-    margin: 0 0 21px;
+    align-items: center;
+    gap: var(--s-4);
+    min-height: var(--bar-h);
+    padding-block: var(--s-3);
+  }
+
+  .search {
+    position: relative;
+    flex: 1 1 26rem;
+    max-width: 38rem;
+    min-width: 0;
+  }
+
+  .search__icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    width: 17px;
+    height: 17px;
+    translate: 0 -50%;
+    color: var(--graphite);
+    pointer-events: none;
   }
 
   .search input {
-    flex: 1;
-    min-width: 0;
-    padding: 12px 16px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: rgb(236 234 244 / 0.03);
+    width: 100%;
+    height: 42px;
+    padding: 0 42px 0 42px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    background: rgb(236 234 244 / 0.04);
     color: var(--corona);
     font: inherit;
-    font-size: 16px;
+    font-size: 15px;
+    transition:
+      border-color 0.25s,
+      background-color 0.25s,
+      box-shadow 0.25s;
   }
 
   .search input::placeholder {
     color: var(--graphite);
   }
 
-  .search button {
-    padding: 0 21px;
-    border: 1px solid rgb(255 217 160 / 0.4);
-    border-radius: 10px;
-    background: transparent;
-    color: var(--bead);
-    font: inherit;
-    cursor: pointer;
+  .search input:hover {
+    border-color: rgb(236 234 244 / 0.3);
   }
 
-  .search button:hover {
-    background: rgb(255 217 160 / 0.08);
+  .search input:focus {
+    outline: none;
+    border-color: rgb(255 217 160 / 0.6);
+    background: rgb(236 234 244 / 0.06);
+    box-shadow: 0 0 0 4px rgb(255 217 160 / 0.1);
+  }
+
+  .search input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+  }
+
+  .search__key {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    translate: 0 -50%;
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 6px;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--graphite);
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .search:focus-within .search__key {
+    opacity: 0;
   }
 
   .kinds {
     display: flex;
-    flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 13px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
-  .kinds a,
-  .filter a {
-    color: var(--dim);
-    text-decoration: none;
+  .kinds::-webkit-scrollbar {
+    display: none;
   }
 
-  .kinds a {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 8px;
-    padding: 6px 14px;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    font-size: 14.5px;
+  .browse__filters {
+    display: none;
+    flex: none;
   }
 
-  .kinds a .mono {
+  .browse__filters svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  /* ------------------------------------------------------- side and results */
+
+  .browse__body {
+    display: grid;
+    grid-template-columns: var(--side-w) minmax(0, 1fr);
+    gap: var(--s-6) var(--s-7);
+    margin-top: var(--s-6);
+  }
+
+  .browse__side-inner {
+    position: sticky;
+    top: calc(var(--hud-h) + var(--bar-h) + var(--s-5));
+    max-height: calc(100dvh - var(--hud-h) - var(--bar-h) - var(--s-6));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: var(--s-5);
+    scrollbar-width: thin;
+  }
+
+  .about {
+    margin-top: var(--s-6);
+    padding-top: var(--s-5);
+    border-top: 1px solid var(--hairline);
+    font-size: 13px;
+    line-height: 1.65;
     color: var(--graphite);
   }
 
-  .kinds a:hover,
-  .filter a:hover {
-    color: var(--corona);
+  .about p {
+    margin: var(--s-3) 0;
   }
 
-  .kinds a[aria-current] {
-    border-color: rgb(255 217 160 / 0.5);
-    color: var(--bead);
+  .about a {
+    color: var(--corona-64);
+    transition: color 0.2s;
   }
 
-  .filters {
-    display: grid;
-    gap: 8px;
-    margin-bottom: 21px;
+  .about a:hover {
+    color: var(--bead-hot);
   }
 
-  .filter {
+  .results__head {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 4px 13px;
-    margin: 0;
-    font-size: 14px;
+    justify-content: space-between;
+    gap: var(--s-3) var(--s-5);
+    min-height: 32px;
+    margin-bottom: var(--s-4);
   }
 
-  .filter__label {
-    min-width: 6.5em;
-    color: var(--graphite);
+  .results__count {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--corona-64);
   }
 
-  .filter a[aria-current] {
+  .results__count a {
+    margin-left: var(--s-3);
     color: var(--bead);
   }
 
-  .summary {
-    margin: 0 0 13px;
-    color: var(--dim);
+  .sort {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+  }
+
+  .sort a {
+    padding: 4px 13px;
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--corona-64);
+    transition:
+      color 0.2s,
+      background-color 0.2s;
+  }
+
+  .sort a:hover {
+    color: var(--corona);
+  }
+
+  .sort a[aria-current] {
+    color: var(--void);
+    background: var(--corona);
+  }
+
+  .active {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px var(--s-4);
+    margin-bottom: var(--s-4);
+  }
+
+  .active__chip {
+    height: 28px;
+    padding: 0 9px 0 13px;
+    font-size: 13px;
+    color: var(--bead-hot);
+    border-color: rgb(255 217 160 / 0.4);
+  }
+
+  .active__chip svg {
+    width: 12px;
+    height: 12px;
+    opacity: 0.7;
+  }
+
+  .active__chip:hover svg {
+    opacity: 1;
+  }
+
+  .active__clear {
+    font-size: 13px;
+    color: var(--corona-64);
+    text-decoration: underline;
+    text-decoration-color: var(--hairline-strong);
+    text-underline-offset: 3px;
   }
 
   .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
-    gap: 13px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+    grid-template-columns: repeat(auto-fill, minmax(17.5rem, 1fr));
+    gap: var(--s-4);
+    transition: opacity 0.25s;
+  }
+
+  [aria-busy='true'] .grid {
+    opacity: 0.45;
   }
 
   .empty {
-    padding: 55px 0;
+    display: grid;
+    justify-items: center;
+    gap: var(--s-3);
+    padding: var(--s-8) 0;
     text-align: center;
+    color: var(--corona-80);
   }
 
-  .pages {
+  .empty svg {
+    width: 120px;
+    margin-bottom: var(--s-4);
+    color: var(--hairline-strong);
+  }
+
+  .empty .muted {
+    max-width: 28rem;
+    font-size: 14px;
+  }
+
+  .pager {
+    display: grid;
+    justify-items: center;
+    gap: var(--s-4);
+    margin-top: var(--s-6);
+  }
+
+  .pager:empty {
+    display: none;
+  }
+
+  .pager__more[aria-busy='true'] {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  .pager__end {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+  }
+
+  .pager__first {
+    font-size: 13px;
+    color: var(--corona-64);
+  }
+
+  /* ------------------------------------------------------------- the sheet */
+
+  .sheet {
+    position: fixed;
+    inset: auto 0 0;
+    width: 100%;
+    max-width: none;
+    max-height: min(82dvh, 46rem);
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-top: 1px solid var(--hairline-strong);
+    border-radius: 21px 21px 0 0;
+    background: #0b0b10;
+    color: var(--corona);
+    box-shadow: 0 -34px 89px rgb(0 0 0 / 0.6);
+  }
+
+  .sheet[open] {
     display: flex;
+    flex-direction: column;
+    animation: sheet-in 0.42s var(--ease-out);
+  }
+
+  .sheet::backdrop {
+    background: rgb(5 5 7 / 0.72);
+  }
+
+  @keyframes sheet-in {
+    from {
+      translate: 0 40%;
+      opacity: 0;
+    }
+  }
+
+  .sheet__head {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
-    margin-top: 34px;
+    padding: var(--s-4) var(--edge);
+    border-bottom: 1px solid var(--hairline);
   }
 
-  .pages .next {
-    margin-left: auto;
+  .sheet__done {
+    height: 36px;
   }
 
-  @media (max-width: 640px) {
-    .filter__label {
-      min-width: 0;
-      width: 100%;
+  .sheet__body {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--s-5) var(--edge) calc(var(--s-6) + env(safe-area-inset-bottom));
+  }
+
+  /* --------------------------------------------------------------- smaller */
+
+  @media (max-width: 1100px) {
+    .browse__body {
+      grid-template-columns: minmax(0, 1fr);
+      margin-top: var(--s-5);
+    }
+
+    /* the catalog's filters go to the sheet; a publisher's card stays, above */
+    .browse--catalog .browse__side {
+      display: none;
+    }
+
+    .browse__side-inner {
+      position: static;
+      max-height: none;
+      overflow: visible;
+      padding-bottom: 0;
+    }
+
+    .browse__filters {
+      display: inline-flex;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .browse {
+      --bar-h: 104px;
+    }
+
+    .browse__bar-inner {
+      flex-wrap: wrap;
+      gap: var(--s-3);
+    }
+
+    .search {
+      flex-basis: 100%;
+      max-width: none;
+    }
+
+    .search input {
+      height: 40px;
+    }
+
+    .search__key {
+      display: none;
+    }
+
+    .kinds {
+      flex: 1;
+    }
+
+    .kinds .chip,
+    .browse__filters {
+      height: 30px;
+      padding: 0 12px;
+      font-size: 13.5px;
+    }
+
+    .browse__filters {
+      gap: 5px;
+      padding: 0 10px;
+    }
+
+    /* the icon says it; the words stay for screen readers */
+    .browse__filters-label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-3);
     }
   }
 </style>
