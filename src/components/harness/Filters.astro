@@ -20,14 +20,16 @@ interface Props {
 const { lang, path, state, tags, counts } = Astro.props;
 const h = harnessDicts[lang];
 const n = (v: number) => v.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en');
+// with a kind chosen, its own runtimes and counts ('runtime:node@skill'); otherwise the catalog's ('runtime:node')
+const within = state.kind ? `@${state.kind}` : '';
 const runtimes = Object.entries(counts)
-  .filter(([k, v]) => k.startsWith('runtime:') && v > 0)
-  .map(([k, v]) => ({ id: k.slice('runtime:'.length), n: v }))
+  .filter(([k, v]) => k.startsWith('runtime:') && (within ? k.endsWith(within) : !k.includes('@')) && v > 0)
+  .map(([k, v]) => ({ id: k.slice('runtime:'.length, k.length - within.length), n: v }))
   .sort((a, b) => b.n - a.n);
 // a runtime asked for that has nothing on the shelves is still the one shown as chosen
 if (state.runtime && !runtimes.some((r) => r.id === state.runtime)) runtimes.push({ id: state.runtime, n: 0 });
 const runtimeOptions = [
-  { id: '', name: h.runtime.any, n: counts.all ?? runtimes.reduce((sum, r) => sum + r.n, 0) },
+  { id: '', name: h.runtime.any, n: (state.kind ? counts[`kind:${state.kind}`] : counts.all) ?? runtimes.reduce((sum, r) => sum + r.n, 0) },
   ...runtimes.map((r) => ({ id: r.id, name: h.runtime.names[r.id] ?? r.id, n: r.n })),
 ].map((o) => ({ ...o, href: withQuery(path, state, { runtime: o.id || undefined }), chosen: (state.runtime ?? '') === o.id }));
 // the rest of the state, kept when the form is sent without scripts (a new choice starts from the first page)

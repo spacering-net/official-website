@@ -1,7 +1,7 @@
 // The pages beside the homepage (Harness, the policies): the shared HUD, menu
 // and account dialog, what stays in view while scrolling, Harness's in-place
-// browsing, the edges they share and the light theme, all without a page
-// error or a refused script.
+// browsing, the edges they share, the light theme and the prompts' gallery,
+// all without a page error or a refused script.
 // Usage: node scripts/check-pages.mjs [baseUrl]
 import { chromium } from 'playwright';
 
@@ -497,6 +497,111 @@ for (const [path, lang] of [
     JSON.stringify({ switched, next, home }),
   );
   report(!errors.length, 'lines and themes: no errors', errors.join(' | '));
+  await ctx.close();
+}
+
+// 9. prompts: their shelf as a gallery, pictures that move when pointed at, copying a whole prompt from
+// a card or its page, prompts among other items in rows that still line up, and the page of one
+{
+  const { ctx, page, errors } = await open('/zh/harness/?kind=prompt');
+  /** the distinct heights of the cards in each row: one per row when they line up */
+  const rowHeights = () =>
+    page.$$eval('[data-grid] > li', (lis) => {
+      const rows = new Map();
+      for (const li of lis) {
+        const r = li.getBoundingClientRect();
+        rows.set(Math.round(r.top), [...new Set([...(rows.get(Math.round(r.top)) ?? []), Math.round(r.height)])]);
+      }
+      return [...rows.values()];
+    });
+  const shelf = await page.evaluate(async () => {
+    for (let y = 0; y < document.body.scrollHeight; y += 500) {
+      window.scrollTo(0, y);
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    window.scrollTo(0, 0);
+    await new Promise((r) => setTimeout(r, 400));
+    const covers = [...document.querySelectorAll('.pc__cover')];
+    return {
+      chip: document.querySelector('.kinds a[aria-current="page"]')?.textContent?.replace(/\s+/g, ' ').trim(),
+      gallery: !!document.querySelector('[data-grid].grid--gallery'),
+      cards: document.querySelectorAll('[data-grid] > li.pc').length,
+      covers: covers.length,
+      loaded: covers.filter((img) => img.complete && img.naturalWidth > 0).length,
+      runtime: !!document.querySelector('.browse__side .pick__select'),
+      copies: [...document.querySelectorAll('.pc__copy')].filter((b) => !b.hidden).length,
+    };
+  });
+  const rows = await rowHeights();
+  report(
+    shelf.chip?.startsWith('提示词') && shelf.gallery && shelf.cards > 0 && shelf.covers > 0 && shelf.loaded === shelf.covers && !shelf.runtime && shelf.copies === shelf.cards && rows.every((r) => r.length === 1),
+    'prompts: a gallery whose pictures are kept here, rows that line up, a copy button on each, no runtime list',
+    JSON.stringify({ ...shelf, rows: rows.length }),
+  );
+
+  const moving = await page.$('.pc:has(.pc__motion)');
+  if (moving) {
+    await moving.scrollIntoViewIfNeeded();
+    const still = await moving.$eval('.pc__motion', (img) => ({ shown: getComputedStyle(img).display, src: img.currentSrc || null }));
+    await moving.hover();
+    await page.waitForFunction((card) => {
+      const img = card.querySelector('.pc__motion');
+      return getComputedStyle(img).display === 'block' && img.complete && img.naturalWidth > 0;
+    }, moving, { timeout: 8000 }).catch(() => {});
+    const played = await moving.$eval('.pc__motion', (img) => ({ shown: getComputedStyle(img).display, width: img.naturalWidth }));
+    report(still.shown === 'none' && !still.src && played.shown === 'block' && played.width > 0, 'a moving preview loads and plays only while its card is pointed at', JSON.stringify({ still, played }));
+  } else report(true, 'a moving preview: none on this page');
+
+  // copying from a card: the whole prompt, fetched when clicked
+  const card = page.locator('[data-grid] > li.pc').first();
+  const ref = (await card.locator('.pc__link').getAttribute('href')).replace(/^\/zh\/harness\//, '');
+  const whole = await page.evaluate(async (r) => (await fetch(`/api/harness/v1/items/${r}/prompt`)).text(), ref);
+  await page.evaluate(() => navigator.clipboard.writeText(''));
+  await card.locator('.pc__copy').click();
+  await page.waitForFunction(async (text) => (await navigator.clipboard.readText()) === text, whole, { timeout: 5000 }).catch(() => {});
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  report(whole.length > 0 && copied === whole, 'a card copies its whole prompt', `${copied.length} of ${whole.length} characters`);
+
+  // more of the shelf comes in place, its copy buttons ready
+  const more = page.locator('[data-more]');
+  if (await more.count()) {
+    await mark(page);
+    const before = shelf.cards;
+    await more.click();
+    await page.waitForFunction((n) => document.querySelectorAll('[data-grid] > li.pc').length > n, before, { timeout: 8000 }).catch(() => {});
+    const after = await page.evaluate(() => ({ cards: document.querySelectorAll('[data-grid] > li.pc').length, hidden: [...document.querySelectorAll('.pc__copy')].filter((b) => b.hidden).length }));
+    report((await same(page)) && after.cards > before && after.hidden === 0, 'more prompts load in place, with their copy buttons', JSON.stringify({ before, ...after }));
+  }
+
+  // prompts among other items: the same rows, the same heights
+  await page.goto(`${base}/zh/harness/?q=video`, { waitUntil: 'networkidle' });
+  const mixed = await page.evaluate(() => ({
+    prompts: document.querySelectorAll('[data-grid] > li.card--prompt').length,
+    others: document.querySelectorAll('[data-grid] > li.card:not(.card--prompt)').length,
+  }));
+  const mixedRows = await rowHeights();
+  report(mixed.prompts > 0 && mixedRows.every((r) => r.length === 1), 'prompts quoted among other items, every row still level', JSON.stringify({ ...mixed, rows: mixedRows.slice(0, 4) }));
+
+  // the page of one: the prompt to copy, the results made with it, its checks, nothing to install
+  await page.goto(`${base}/zh/harness/${ref}`, { waitUntil: 'networkidle' });
+  const one = await page.evaluate(() => ({
+    text: document.getElementById('prompt-text')?.textContent ?? null,
+    sections: [...document.querySelectorAll('[data-section]')].map((s) => s.id).join(' '),
+    use: document.querySelector('.side .install h2')?.textContent,
+    shots: document.querySelectorAll('#results .shot').length,
+    credit: !!document.querySelector('.credit a[href^="mailto:"]'),
+    copy: !document.querySelector('.side .use__copy')?.hidden,
+  }));
+  await page.evaluate(() => navigator.clipboard.writeText(''));
+  await page.click('.side .use__copy');
+  await page.waitForFunction(async (text) => (await navigator.clipboard.readText()) === text, whole, { timeout: 5000 }).catch(() => {});
+  const fromPage = await page.evaluate(() => navigator.clipboard.readText());
+  report(
+    one.text === whole && /^prompt( results)? checks/.test(one.sections) && !/permissions|files/.test(one.sections) && one.use === '使用' && one.credit && one.copy && fromPage === whole,
+    'a prompt’s page: the prompt as written, copied whole from its Use panel, its results and checks, nothing to install',
+    JSON.stringify({ ...one, text: one.text?.length, copied: fromPage.length }),
+  );
+  report(!errors.length, 'prompts: no errors', errors.join(' | '));
   await ctx.close();
 }
 

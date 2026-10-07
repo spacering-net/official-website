@@ -43,6 +43,35 @@ export interface HarnessDict {
   };
   copy: { label: string; done: string };
   card: { stars: string; unclaimed: string; listed: string };
+  /** prompts: their cards, and what their pages show instead of installing */
+  prompt: {
+    /** how many results were made with it */
+    results: (n: number) => string;
+    /** after the first sharer: how many more shared a result */
+    others: (n: number) => string;
+    partial: string;
+    copy: string;
+    text: string;
+    chars: (n: number) => string;
+    partialNote: string;
+    showcases: string;
+    showAll: (n: number) => string;
+    original: string;
+    sharedBy: string;
+    use: string;
+    download: string;
+    useNote: string;
+    glance: string;
+    model: string;
+    lang: string;
+    langs: Record<string, string>;
+    length: string;
+    count: string;
+    rights: string;
+    creators: string;
+    collected: string;
+    credit: string;
+  };
   item: {
     by: string;
     version: string;
@@ -160,6 +189,32 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     },
     copy: { label: 'Copy', done: 'Copied' },
     card: { stars: 'GitHub stars', unclaimed: 'Unclaimed', listed: 'Listed only' },
+    prompt: {
+      results: (n) => `${n.toLocaleString('en')} result${n === 1 ? '' : 's'}`,
+      others: (n) => `+${n.toLocaleString('en')}`,
+      partial: 'Partial',
+      copy: 'Copy prompt',
+      text: 'Prompt',
+      chars: (n) => `${n.toLocaleString('en')} character${n === 1 ? '' : 's'}`,
+      partialNote: 'Its author shared only part of this prompt.',
+      showcases: 'Made with it',
+      showAll: (n) => `Show all ${n.toLocaleString('en')}`,
+      original: 'Original post',
+      sharedBy: 'Shared by',
+      use: 'Use',
+      download: 'Download PROMPT.md',
+      useNote: 'Paste it into Claude or any agent. Codeg can keep it as a command.',
+      glance: 'At a glance',
+      model: 'Written for',
+      lang: 'Language',
+      langs: { en: 'English', zh: '中文', ja: '日本語', ko: '한국어' },
+      length: 'Length',
+      count: 'Results',
+      rights: 'Rights',
+      creators: 'Held by its creator',
+      collected: 'Collected in',
+      credit: 'Prompts and results belong to their creators. To have one corrected or removed, write to',
+    },
     item: {
       by: 'by',
       version: 'Version',
@@ -237,6 +292,8 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         bulk_publisher: 'its publisher lists in bulk',
         secrets: 'credentials were found in it',
         format: 'its package has format errors',
+        prompt_partial: 'its author shared only part of the prompt',
+        prompt_short: 'too short to use on its own',
       },
       toc: 'On this page',
       expand: 'Show all',
@@ -312,6 +369,32 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     },
     copy: { label: '复制', done: '已复制' },
     card: { stars: 'GitHub 星标', unclaimed: '未认领', listed: '仅收录' },
+    prompt: {
+      results: (n) => `${n.toLocaleString('zh-CN')} 个作品`,
+      others: (n) => `等 ${(n + 1).toLocaleString('zh-CN')} 人`,
+      partial: '仅部分',
+      copy: '复制提示词',
+      text: '提示词',
+      chars: (n) => `${n.toLocaleString('zh-CN')} 个字符`,
+      partialNote: '作者只公开了这条提示词的一部分。',
+      showcases: '用它做的作品',
+      showAll: (n) => `显示全部 ${n.toLocaleString('zh-CN')} 个`,
+      original: '原帖',
+      sharedBy: '分享者',
+      use: '使用',
+      download: '下载 PROMPT.md',
+      useNote: '粘贴给 Claude 或任何智能体即可。Codeg 还能把它存成命令。',
+      glance: '概要',
+      model: '适用模型',
+      lang: '语言',
+      langs: { en: '英文', zh: '中文', ja: '日文', ko: '韩文' },
+      length: '长度',
+      count: '作品',
+      rights: '版权',
+      creators: '归原作者',
+      collected: '收录于',
+      credit: '提示词和作品归各自的作者所有。如需更正或移除，请写信至',
+    },
     item: {
       by: '发布者',
       version: '版本',
@@ -389,6 +472,8 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         bulk_publisher: '发布者批量发布',
         secrets: '里面发现了凭据',
         format: '包的格式有错误',
+        prompt_partial: '作者只公开了一部分提示词',
+        prompt_short: '太短，单独用不了',
       },
       toc: '本页内容',
       expand: '展开全部',

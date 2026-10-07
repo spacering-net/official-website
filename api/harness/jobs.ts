@@ -1,6 +1,8 @@
 import { uuidv7 } from '../ids';
 import { importRepo, type RepoConfig } from './importers/github';
 import { refreshAvatars } from './importers/avatars';
+import { fetchMedia, MEDIA_BATCH } from './importers/media';
+import { importPrompts, type PromptSourceConfig } from './importers/prompts';
 import { importRegistryPage, recheckPackages } from './importers/registry';
 import { refreshStars } from './importers/stars';
 import { rescan } from './rescan';
@@ -20,7 +22,8 @@ export type Job =
   | { type: 'packages'; after?: number }
   | { type: 'rescan'; after?: number }
   | { type: 'facets' }
-  | { type: 'avatars'; after?: string };
+  | { type: 'avatars'; after?: string }
+  | { type: 'media' };
 
 /** How long a running sync may go without progress before it is presumed dead. */
 const LEASE_MS = 30 * 60 * 1000;
@@ -82,6 +85,12 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       // publishers' pictures, a batch at a time, in id order; the next batch follows while there is one
       const next = await refreshAvatars(env, job.after ?? '');
       if (next) await env.HARNESS_JOBS.send({ type: 'avatars', after: next } satisfies Job);
+      return;
+    }
+    case 'media': {
+      // pictures of items' results, a batch at a time; a full batch means there may be more
+      const n = await fetchMedia(env);
+      if (n >= MEDIA_BATCH) await env.HARNESS_JOBS.send({ type: 'media' } satisfies Job);
       return;
     }
     case 'facets': {
@@ -177,10 +186,15 @@ async function githubRepo(env: Env, id: string, force: boolean, part: number): P
   const now = new Date().toISOString();
   try {
     const fullName = row.url.replace(/^https:\/\/github\.com\//, '');
-    const result = await importRepo(env, fullName, JSON.parse(row.config) as RepoConfig, row.synced_ref, force, Date.now() + SAVE_MS);
+    // a repository of skills, or a collection of prompts (its config says which)
+    const config = JSON.parse(row.config) as RepoConfig | PromptSourceConfig;
+    const prompts = 'kind' in config && config.kind === 'prompt';
+    const result = prompts
+      ? await importPrompts(env, fullName, config, row.synced_ref, force, Date.now() + SAVE_MS)
+      : await importRepo(env, fullName, config as RepoConfig, row.synced_ref, force, Date.now() + SAVE_MS);
     if (result.remaining) {
       // not finished: the commit is not marked as imported, so the next job carries on with it
-      const left = `${result.remaining} of ${result.skills} skills left after part ${part}`;
+      const left = `${result.remaining} of ${result.skills} ${prompts ? 'prompts' : 'skills'} left after part ${part}`;
       await db
         .prepare('UPDATE import_sources SET stats = ?1, last_error = ?2, updated_at = ?3 WHERE id = ?4')
         .bind(JSON.stringify(result), part < PARTS ? null : `stopped: ${left}`, now, id)
@@ -194,8 +208,12 @@ async function githubRepo(env: Env, id: string, force: boolean, part: number): P
       .bind(result.commit, now, JSON.stringify(result), id)
       .run();
     if (result.changed) {
-      console.info(`[harness] ${fullName}@${result.commit.slice(0, 7)}: ${result.skills} skills, ${result.created} new, ${result.updated} updated, ${result.retired} retired, ${result.rejected.length} rejected`);
+      console.info(
+        `[harness] ${fullName}@${result.commit.slice(0, 7)}: ${result.skills} ${prompts ? 'prompts' : 'skills'}, ${result.created} new, ${result.updated} updated, ${result.retired} retired, ${result.rejected.length} rejected`,
+      );
       await env.HARNESS_JOBS.send({ type: 'facets' } satisfies Job);
+      // the pictures it named, for the cards
+      if (prompts) await env.HARNESS_JOBS.send({ type: 'media' } satisfies Job);
     }
   } catch (err) {
     await db.prepare('UPDATE import_sources SET last_error = ?1, updated_at = ?2 WHERE id = ?3').bind(String(err).slice(0, 500), now, id).run();
@@ -204,10 +222,10 @@ async function githubRepo(env: Env, id: string, force: boolean, part: number): P
 }
 
 /**
- * Daily: look at every skill repository for a new commit, retry package
- * lookups that failed, check again what older rules checked, fill in missing
- * stars, recount the facets, and look for publishers' pictures not looked
- * for in 30 days.
+ * Daily: look at every skill repository and prompt collection for a new
+ * commit, retry package lookups that failed, check again what older rules
+ * checked, fill in missing stars, recount the facets, look for publishers'
+ * pictures not looked for in 30 days, and for results' pictures due again.
  */
 export async function daily(env: Env): Promise<void> {
   const { results } = await env.HARNESS_DB.prepare("SELECT id FROM import_sources WHERE kind = 'github' AND enabled = 1").all<{ id: string }>();
@@ -218,6 +236,7 @@ export async function daily(env: Env): Promise<void> {
     { type: 'stars' },
     { type: 'facets' },
     { type: 'avatars' },
+    { type: 'media' },
   ];
   for (let i = 0; i < jobs.length; i += 100) await env.HARNESS_JOBS.sendBatch(jobs.slice(i, i + 100).map((body) => ({ body })));
 }

@@ -4,12 +4,15 @@
  * install it, what it needs at a glance and its details, staying in view;
  * below, its description, what it needs (declared beside detected), what the
  * checks found, its files and versions, with a bar to move between them.
+ * A prompt shows itself instead (with a button that copies it) and the
+ * results made with it, and is used rather than installed.
  */
 import Copy from './Copy.astro';
 import Avatar from './Avatar.astro';
+import Shot from './Shot.astro';
 import { harnessDicts, pick } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
-import type { ItemDetail, VersionSummary } from '../../lib/harness';
+import { modelName, type ItemDetail, type VersionSummary } from '../../lib/harness';
 import { compact } from '../../lib/github';
 
 interface Props {
@@ -49,6 +52,15 @@ const remotes = ((install.server?.remotes as { url?: string; type?: string }[] |
 const codeg = `codeg://harness/install?ref=${encodeURIComponent(item.ref)}`;
 const publisherPage = `${h.base}${item.publisher.handle}`;
 
+// a prompt: its text, the results made with it (the first is whoever shared it first), and its file to download
+const prompt = item.kind === 'prompt' ? install.prompt : undefined;
+const showcases = prompt?.showcases ?? [];
+const SHOTS = 12;
+const firstShared = showcases[0];
+const promptBlob = prompt && install.archive ? install.files.find((f) => f.path === 'PROMPT.md') : undefined;
+const model = modelName(prompt?.model);
+const chars = prompt ? [...prompt.text].length : 0;
+
 // files by folder, the top level first
 const folders = new Map<string, typeof install.files>();
 for (const f of install.files) {
@@ -59,14 +71,23 @@ const dirs = [...folders.keys()].sort((a, b) => (a === '' ? -1 : b === '' ? 1 : 
 const totalSize = install.files.reduce((s, f) => s + f.size, 0);
 const fewFiles = install.files.length <= 24;
 
-const sections = [
-  { id: 'readme', label: t.description, show: !!readme || !!install.source },
-  { id: 'server', label: t.server, show: !!install.server },
-  { id: 'permissions', label: t.permissions, show: true },
-  { id: 'checks', label: t.checks, show: true },
-  { id: 'files', label: t.files, show: install.files.length > 0 },
-  { id: 'versions', label: t.versions, show: versions.length > 0 },
-].filter((s) => s.show);
+const sections = (
+  prompt
+    ? [
+        { id: 'prompt', label: h.prompt.text, show: true },
+        { id: 'results', label: h.prompt.showcases, show: showcases.length > 0 },
+        { id: 'checks', label: t.checks, show: true },
+        { id: 'versions', label: t.versions, show: versions.length > 0 },
+      ]
+    : [
+        { id: 'readme', label: t.description, show: !!readme || !!install.source },
+        { id: 'server', label: t.server, show: !!install.server },
+        { id: 'permissions', label: t.permissions, show: true },
+        { id: 'checks', label: t.checks, show: true },
+        { id: 'files', label: t.files, show: install.files.length > 0 },
+        { id: 'versions', label: t.versions, show: versions.length > 0 },
+      ]
+).filter((s) => s.show);
 // a description that opens with the item's own title says it once, in the page's heading
 const opening = readme ? /^\s*<h1[^>]*>(.*?)<\/h1>\s*/s.exec(readme) : null;
 const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim().toLowerCase();
@@ -106,6 +127,16 @@ const needs = {
             <Avatar handle={item.publisher.handle} avatar={item.publisher.avatar} size={24} />
             <span>{item.publisher.name}</span>
           </a>
+          {firstShared?.by && (
+            <span class="head__credit">
+              {h.prompt.sharedBy}
+              {firstShared.link ? (
+                <a href={firstShared.link} rel="nofollow ugc noopener" target="_blank">@{firstShared.by.name} ↗</a>
+              ) : (
+                <span>@{firstShared.by.name}</span>
+              )}
+            </span>
+          )}
           <span class="head__ref">
             <code>{item.ref}</code>
             <Copy lang={lang} text={item.ref} />
@@ -129,6 +160,46 @@ const needs = {
             <a href={`#${s.id}`}>{s.label}</a>
           ))}
         </nav>
+      )}
+
+      {prompt && (
+        <section class="section" id="prompt" data-section>
+          <h2 class="eyebrow section__title">
+            {h.prompt.text}
+            <span class="section__aside">{h.prompt.chars(chars)}</span>
+          </h2>
+          {prompt.partial && item.status !== 'listed' && <p class="notice">{h.prompt.partialNote}</p>}
+          <div class="prompt" data-prompt>
+            <pre class="prompt__text" id="prompt-text">{prompt.text}</pre>
+            <Copy lang={lang} from="prompt-text" label={h.prompt.copy} class="prompt__copy" />
+            <button class="prompt__more" type="button" data-prompt-toggle data-less={t.collapse} hidden>{t.expand}</button>
+          </div>
+          {prompt.rights === 'creators' && (
+            <p class="small muted credit">
+              {h.prompt.credit} <a href="mailto:privacy@spacering.net">privacy@spacering.net</a>
+            </p>
+          )}
+        </section>
+      )}
+
+      {showcases.length > 0 && (
+        <section class="section" id="results" data-section>
+          <h2 class="eyebrow section__title">
+            {h.prompt.showcases}
+            <span class="section__aside">{h.prompt.results(showcases.length)}</span>
+          </h2>
+          <ul class:list={['shots', showcases.length === 1 && 'shots--one']}>
+            {showcases.slice(0, SHOTS).map((s) => <Shot lang={lang} shot={s} />)}
+          </ul>
+          {showcases.length > SHOTS && (
+            <details class="shots__more">
+              <summary>{h.prompt.showAll(showcases.length)}</summary>
+              <ul class="shots">
+                {showcases.slice(SHOTS).map((s) => <Shot lang={lang} shot={s} />)}
+              </ul>
+            </details>
+          )}
+        </section>
       )}
 
       {sections.some((s) => s.id === 'readme') && (
@@ -155,6 +226,7 @@ const needs = {
         </section>
       )}
 
+      {!prompt && (
       <section class="section" id="permissions" data-section>
         <h2 class="eyebrow section__title">{t.permissions}</h2>
         <div class="perms" role="table" aria-label={t.permissions}>
@@ -181,6 +253,7 @@ const needs = {
           })}
         </div>
       </section>
+      )}
 
       <section class="section" id="checks" data-section>
         <h2 class="eyebrow section__title">{t.checks}</h2>
@@ -223,7 +296,7 @@ const needs = {
         )}
       </section>
 
-      {install.files.length > 0 && (
+      {!prompt && install.files.length > 0 && (
         <section class="section" id="files" data-section>
           <h2 class="eyebrow section__title">
             {t.files}
@@ -293,6 +366,22 @@ const needs = {
           </a>
         </section>
 
+        {prompt ? (
+          <section class="panel install" data-install aria-labelledby="install-title">
+            <h2 class="eyebrow" id="install-title">{h.prompt.use}</h2>
+            <div class="install__actions">
+              <button class="btn btn--primary use__copy" type="button" data-copy="" data-copy-from="prompt-text" data-done={h.copy.done} hidden>
+                <span class="use__idle">{h.prompt.copy}</span>
+                <span class="use__done">{h.copy.done}</span>
+              </button>
+              <a class="btn btn--ghost" href={codeg}>{t.openInCodeg}</a>
+              {promptBlob && (
+                <a class="btn btn--ghost" href={`/api/harness/v1/blobs/${promptBlob.sha256}`} download="PROMPT.md">{h.prompt.download}</a>
+              )}
+            </div>
+            <p class="install__note">{h.prompt.useNote}</p>
+          </section>
+        ) : (
         <section class="panel install" data-install aria-labelledby="install-title">
           <h2 class="eyebrow" id="install-title">{t.install}</h2>
           <div class="install__actions">
@@ -330,7 +419,41 @@ const needs = {
             ) : null}
           </p>
         </section>
+        )}
 
+        {prompt ? (
+          <section class="panel glance" aria-labelledby="glance-title">
+            <h2 class="eyebrow" id="glance-title">{h.prompt.glance}</h2>
+            <dl class="facts-list">
+              <div>
+                <dt>{t.checks}</dt>
+                <dd><span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{t.risk[item.risk]}</span></dd>
+              </div>
+              {model && (
+                <div>
+                  <dt>{h.prompt.model}</dt>
+                  <dd>{model}</dd>
+                </div>
+              )}
+              {prompt.lang && (
+                <div>
+                  <dt>{h.prompt.lang}</dt>
+                  <dd>{h.prompt.langs[prompt.lang] ?? prompt.lang}</dd>
+                </div>
+              )}
+              <div>
+                <dt>{h.prompt.length}</dt>
+                <dd>{h.prompt.chars(chars)}</dd>
+              </div>
+              {showcases.length > 0 && (
+                <div>
+                  <dt>{h.prompt.count}</dt>
+                  <dd><a href="#results">{h.prompt.results(showcases.length)}</a></dd>
+                </div>
+              )}
+            </dl>
+          </section>
+        ) : (
         <section class="panel glance" aria-labelledby="glance-title">
           <h2 class="eyebrow" id="glance-title">{t.safety}</h2>
           <dl class="facts-list">
@@ -353,6 +476,7 @@ const needs = {
           </dl>
           <a class="panel__more" href="#permissions">{t.permissions} <span aria-hidden="true">→</span></a>
         </section>
+        )}
 
         <section class="panel facts" aria-labelledby="facts-title">
           <h2 class="eyebrow" id="facts-title">{t.facts}</h2>
@@ -367,21 +491,36 @@ const needs = {
               <dt>{t.revision}</dt>
               <dd><code>#{item.latest.revision}</code></dd>
             </div>
-            <div>
-              <dt>{t.license}</dt>
-              <dd>{item.license ? <code>{item.license}</code> : <span class="muted">{t.noLicense}</span>}</dd>
-            </div>
-            <div>
-              <dt>{t.runtime}</dt>
-              <dd>{h.runtime.names[item.runtime] ?? item.runtime}</dd>
-            </div>
+            {prompt?.rights === 'creators' ? (
+              <div>
+                <dt>{h.prompt.rights}</dt>
+                <dd>{firstShared?.link ? <a href={firstShared.link} rel="nofollow ugc noopener" target="_blank">{h.prompt.creators} ↗</a> : h.prompt.creators}</dd>
+              </div>
+            ) : (
+              <div>
+                <dt>{t.license}</dt>
+                <dd>{item.license ? <code>{item.license}</code> : <span class="muted">{t.noLicense}</span>}</dd>
+              </div>
+            )}
+            {firstShared?.by && (
+              <div>
+                <dt>{h.prompt.sharedBy}</dt>
+                <dd>{firstShared.by.url ? <a href={firstShared.by.url} rel="nofollow ugc noopener" target="_blank">@{firstShared.by.name} ↗</a> : `@${firstShared.by.name}`}</dd>
+              </div>
+            )}
+            {!prompt && (
+              <div>
+                <dt>{t.runtime}</dt>
+                <dd>{h.runtime.names[item.runtime] ?? item.runtime}</dd>
+              </div>
+            )}
             <div>
               <dt>{t.source}</dt>
               <dd>{item.sourceUrl ? <a href={item.sourceUrl} rel="nofollow ugc noopener" target="_blank">{t.sources[item.source]} ↗</a> : t.sources[item.source]}</dd>
             </div>
             {item.repositoryUrl && (
               <div>
-                <dt>{t.repository}</dt>
+                <dt>{prompt ? h.prompt.collected : t.repository}</dt>
                 <dd><a href={item.repositoryUrl} rel="nofollow ugc noopener" target="_blank">{item.repositoryUrl.replace(/^https:\/\/(www\.)?(github\.com\/)?/, '')} ↗</a></dd>
               </div>
             )}
@@ -400,7 +539,14 @@ const needs = {
 
   <div class="dock" data-dock hidden>
     <span class="dock__title">{title}</span>
-    <a class="btn btn--primary" href={codeg}>{t.openInCodeg}</a>
+    {prompt ? (
+      <button class="btn btn--primary use__copy" type="button" data-copy="" data-copy-from="prompt-text" data-done={h.copy.done} hidden>
+        <span class="use__idle">{h.prompt.copy}</span>
+        <span class="use__done">{h.copy.done}</span>
+      </button>
+    ) : (
+      <a class="btn btn--primary" href={codeg}>{t.openInCodeg}</a>
+    )}
   </div>
 </div>
 
@@ -537,6 +683,23 @@ const needs = {
     letter-spacing: 0.02em;
   }
 
+  .head__credit {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .head__credit a,
+  .head__credit span {
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    color: var(--corona-80);
+  }
+
+  .head__credit a:hover {
+    color: var(--bead-hot);
+  }
+
   .notice {
     margin-top: var(--s-5);
     padding: var(--s-4) var(--s-5);
@@ -648,6 +811,114 @@ const needs = {
 
   .elsewhere a {
     color: var(--bead);
+  }
+
+  /* A prompt, as written: its own line breaks, the column's width, the
+     copy button in its corner; a long one folds (client/harness.ts). */
+  .prompt {
+    position: relative;
+    padding: var(--s-5) calc(var(--s-5) + 30px) var(--s-5) var(--s-5);
+    border: 1px solid var(--hairline);
+    border-left: 2px solid rgb(var(--bead-rgb) / 0.55);
+    border-radius: 13px;
+    background: var(--well);
+  }
+
+  .prompt__text {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: inherit;
+    font-size: 15.5px;
+    line-height: 1.75;
+    color: var(--corona);
+  }
+
+  .prompt.is-folded .prompt__text {
+    max-height: calc(16 * 1.75em);
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 4.5em), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 4.5em), transparent);
+  }
+
+  .prompt :global(.prompt__copy) {
+    position: absolute;
+    top: var(--s-3);
+    right: var(--s-3);
+  }
+
+  .prompt__more {
+    margin-top: var(--s-3);
+    font-size: 13.5px;
+    color: var(--bead);
+  }
+
+  .prompt__more:hover {
+    color: var(--bead-hot);
+  }
+
+  .credit {
+    line-height: 1.6;
+  }
+
+  .credit a {
+    color: var(--corona-64);
+    text-decoration: underline;
+    text-decoration-color: var(--hairline-strong);
+    text-underline-offset: 3px;
+  }
+
+  .credit a:hover {
+    color: var(--corona);
+  }
+
+  /* the results made with it: a wall of their pictures */
+  .shots {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+    gap: var(--s-5) var(--s-4);
+  }
+
+  /* one result, at a size its picture deserves */
+  .shots--one {
+    grid-template-columns: minmax(0, 28rem);
+  }
+
+  .shots__more {
+    margin-top: var(--s-5);
+  }
+
+  .shots__more summary {
+    width: fit-content;
+    margin-bottom: var(--s-5);
+    font-size: 13.5px;
+    color: var(--bead);
+    cursor: pointer;
+  }
+
+  .shots__more summary:hover {
+    color: var(--bead-hot);
+  }
+
+  .shots__more[open] summary {
+    display: none;
+  }
+
+  /* the copy button says it is done in its own words */
+  .use__done {
+    display: none;
+  }
+
+  .use__copy.is-done .use__idle {
+    display: none;
+  }
+
+  .use__copy.is-done .use__done {
+    display: inline;
+  }
+
+  .use__copy[hidden] {
+    display: none;
   }
 
   /* The description, rendered from its markdown, as wide as the column:
@@ -1288,6 +1559,15 @@ const needs = {
   }
 
   @media (max-width: 760px) {
+    .shots {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--s-4) var(--s-3);
+    }
+
+    .shots--one {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
     .head__summary p {
       font-size: 15.5px;
     }

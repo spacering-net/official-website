@@ -1,0 +1,119 @@
+---
+/**
+ * One result made with a prompt: a picture of it (moving while pointed at,
+ * like the cards), who made it, what kind of thing it is and when, and a
+ * link to the original post. The pictures are the copies kept here.
+ */
+import { harnessDicts, pick } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+import type { ItemDetail } from '../../lib/harness';
+
+type Showcase = NonNullable<ItemDetail['install']['prompt']>['showcases'][number];
+
+interface Props {
+  lang: Lang;
+  shot: Showcase;
+}
+const { lang, shot } = Astro.props;
+const h = harnessDicts[lang];
+const meta = [(shot.categoryName && pick(shot.categoryName, lang)) ?? shot.category, shot.at && h.date(shot.at)].filter(Boolean).join(' · ');
+const Tag = shot.link ? 'a' : 'div';
+const link = shot.link ? { href: shot.link, rel: 'nofollow ugc noopener', target: '_blank' } : {};
+---
+<li class="shot">
+  <Tag class="shot__link" {...link}>
+    <span class:list={['shot__media', !shot.cover && 'shot__media--none']}>
+      {shot.cover && <img class="shot__cover" src={shot.cover} alt="" loading="lazy" decoding="async" />}
+      {shot.cover && shot.motion && <img class="shot__motion" src={shot.motion} alt="" loading="lazy" decoding="async" />}
+    </span>
+    <span class="shot__by">
+      {shot.by ? `@${shot.by.name}` : h.prompt.original}
+      {shot.link && <span class="shot__out" aria-hidden="true">↗</span>}
+    </span>
+    {meta && <span class="shot__meta">{meta}</span>}
+  </Tag>
+</li>
+
+<style>
+  .shot {
+    display: flex;
+    min-width: 0;
+  }
+
+  .shot__link {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .shot__media {
+    position: relative;
+    display: block;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    background: var(--well);
+    transition: border-color 0.3s;
+  }
+
+  a.shot__link:hover .shot__media {
+    border-color: rgb(var(--bead-rgb) / 0.4);
+  }
+
+  .shot__media--none {
+    background: radial-gradient(110% 90% at 90% 110%, rgb(var(--bead-rgb) / 0.12), transparent 62%), var(--well);
+  }
+
+  .shot__media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* the moving one loads only once it is shown: while pointed at, where pointing is how one looks */
+  .shot__motion {
+    display: none;
+  }
+
+  @media (hover: hover) and (prefers-reduced-motion: no-preference) {
+    a.shot__link:hover .shot__motion,
+    a.shot__link:focus-visible .shot__motion {
+      display: block;
+    }
+  }
+
+  .shot__by {
+    display: block;
+    margin-top: var(--s-3);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--corona-80);
+    transition: color 0.2s;
+  }
+
+  a.shot__link:hover .shot__by {
+    color: var(--bead-hot);
+  }
+
+  .shot__out {
+    margin-left: 5px;
+    color: var(--graphite);
+  }
+
+  .shot__meta {
+    margin-top: 2px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12.5px;
+    color: var(--graphite);
+  }
+</style>

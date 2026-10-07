@@ -54,6 +54,54 @@ export interface PinnedPackage {
   fileSha256?: string;
 }
 
+/**
+ * One result made with a prompt (a video, a game), as its source names it:
+ * who shared it, the original post, and pictures of it (addresses at the
+ * source; pages show the copies kept here, see the media table).
+ */
+export interface Showcase {
+  by: { name: string; url: string | null } | null;
+  link: string | null;
+  cover: string | null;
+  motion: string | null;
+  category: string | null;
+  categoryName?: Localized;
+  labels: string[];
+  /** when it was posted, or collected */
+  at: string | null;
+}
+
+/** A prompt as a version keeps it (item_versions.metadata.prompt). */
+export interface PromptMeta {
+  name: string;
+  text: string;
+  /** the model it was written for */
+  model: string | null;
+  argumentHint: string | null;
+  /** its author shared only part of it */
+  partial: boolean;
+  /** 'creators': it belongs to whoever shared it (shown credited); 'license': the item's license covers it */
+  rights: 'creators' | 'license';
+  /** the language it is written in, when it can be told: en, zh, ja, ko */
+  lang: string | null;
+}
+
+/** What a prompt's card shows (items.card), with its pictures named by their addresses at the source. */
+export interface StoredPromptCard {
+  excerpt: string;
+  /**
+   * pictures of its results, a few, the likeliest first: the card shows the
+   * first whose cover is kept here, and moves with the first that also has a
+   * moving preview kept here (catalog.ts)
+   */
+  faces: { cover: string | null; motion: string | null }[];
+  model: string | null;
+  /** who shared it first */
+  by: string | null;
+  results: number;
+  partial: boolean;
+}
+
 export const listingOf = (title: Localized, summary: Localized, tags: string[]): Listing => ({
   title,
   summary,

@@ -28,6 +28,18 @@ export const Publisher = z
   })
   .openapi('Publisher');
 
+export const PromptCard = z
+  .object({
+    excerpt: z.string().openapi({ description: 'The start of the prompt, on one line.' }),
+    cover: z.string().nullable().openapi({ description: 'A picture of what it makes, kept on this site; null if there is none.' }),
+    motion: z.string().nullable().openapi({ description: 'The same, moving (an animated WebP); null if there is none.' }),
+    model: z.string().nullable().openapi({ example: 'claude-opus-5-5', description: 'The model it was written for.' }),
+    by: z.string().nullable().openapi({ description: 'Who shared it first (a handle where it was shared, without @).' }),
+    results: z.number().int().openapi({ description: 'How many results made with it its source lists.' }),
+    partial: z.boolean().openapi({ description: 'Its author shared only part of it.' }),
+  })
+  .openapi('PromptCard');
+
 export const ItemSummary = z
   .object({
     id: z.string().openapi({ description: 'Stable id (UUIDv7); survives renames.' }),
@@ -48,6 +60,7 @@ export const ItemSummary = z
     stars: z.number().int(),
     installs: z.number().int(),
     latest: z.object({ revision: z.number().int(), version: z.string().nullable(), publishedAt: z.string() }),
+    prompt: PromptCard.optional().openapi({ description: 'Prompts only: what their cards show.' }),
   })
   .openapi('ItemSummary');
 
@@ -95,6 +108,31 @@ export const Advisory = z
   })
   .openapi('Advisory', { description: 'Security advisories arrive in H3; until then the list is always empty.' });
 
+export const Showcase = z
+  .object({
+    by: z.object({ name: z.string(), url: z.string().nullable() }).nullable().openapi({ description: 'Who made and shared it.' }),
+    link: z.string().nullable().openapi({ description: 'The original post.' }),
+    cover: z.string().nullable().openapi({ description: 'A picture of it, kept on this site.' }),
+    motion: z.string().nullable().openapi({ description: 'The same, moving.' }),
+    category: z.string().nullable(),
+    categoryName: Localized.optional(),
+    labels: z.array(z.string()),
+    at: z.string().nullable().openapi({ description: 'When it was posted, or collected.' }),
+  })
+  .openapi('Showcase', { description: 'A result made with a prompt.' });
+
+export const PromptInfo = z
+  .object({
+    text: z.string().openapi({ description: 'The prompt, as it is to be used.' }),
+    model: z.string().nullable(),
+    argumentHint: z.string().nullable().openapi({ description: 'What to add to it, as Claude Code commands give `argument-hint`.' }),
+    partial: z.boolean(),
+    rights: z.enum(['creators', 'license']).openapi({ description: "creators: it belongs to whoever shared it (credit them, see `showcases`); license: the item's license covers it." }),
+    lang: z.string().nullable().openapi({ example: 'en' }),
+    showcases: z.array(Showcase).openapi({ description: 'Results made with it, the first first.' }),
+  })
+  .openapi('PromptInfo');
+
 export const FileEntry = z.object({ path: z.string(), sha256: z.string(), size: z.number().int(), executable: z.boolean() }).openapi('FileEntry');
 
 export const InstallInfo = z
@@ -120,6 +158,7 @@ export const InstallInfo = z
       })
       .optional(),
     server: z.looseObject({ name: z.string() }).optional().openapi({ description: "The registry's server.json, as published." }),
+    prompt: PromptInfo.optional().openapi({ description: 'Prompts only. The package is PROMPT.md: this text, with frontmatter.' }),
     packages: z.array(PinnedPackage).optional(),
     permissions: Permissions,
     risk: Risk,
@@ -200,3 +239,5 @@ export type TagInfo = z.infer<typeof TagInfo>;
 export type Config = z.infer<typeof Config>;
 export type PublisherSummary = z.infer<typeof Publisher>;
 export type FileEntry = z.infer<typeof FileEntry>;
+export type PromptCard = z.infer<typeof PromptCard>;
+export type PromptInfo = z.infer<typeof PromptInfo>;

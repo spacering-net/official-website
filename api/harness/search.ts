@@ -169,12 +169,15 @@ export async function searchIds(
 }
 
 /**
- * Recount the facets (public items per kind, runtime and tag, and in all)
- * in one transaction, dropping keys that no longer have any.
+ * Recount the facets (public items per kind, runtime and tag, and in all;
+ * runtimes and tags also within each kind, as 'runtime:node@skill' and
+ * 'tag:video@prompt') in one transaction, dropping keys that no longer have
+ * any.
  */
 export async function recountFacets(db: D1Database): Promise<void> {
   const now = new Date().toISOString();
   const pub = "status = 'public' AND visibility = 'public'";
+  const ipub = "i.status = 'public' AND i.visibility = 'public'";
   const upsert = 'ON CONFLICT (key) DO UPDATE SET count = excluded.count, updated_at = excluded.updated_at';
   await db.batch([
     db.prepare(`INSERT INTO facets (key, count, updated_at) SELECT 'all', COUNT(*), ?1 FROM items WHERE ${pub} ${upsert}`).bind(now),
@@ -184,10 +187,24 @@ export async function recountFacets(db: D1Database): Promise<void> {
       .bind(now),
     db
       .prepare(
+        `INSERT INTO facets (key, count, updated_at) SELECT 'runtime:' || runtime || '@' || kind, COUNT(*), ?1 FROM items WHERE ${pub} GROUP BY runtime, kind ${upsert}`,
+      )
+      .bind(now),
+    db
+      .prepare(
         `INSERT INTO facets (key, count, updated_at)
-         SELECT 'tag:' || t.tag_id, COUNT(*), ?1 FROM item_tags t JOIN items i ON i.id = t.item_id WHERE i.${pub.replace(' AND ', ' AND i.')} GROUP BY t.tag_id ${upsert}`,
+         SELECT 'tag:' || t.tag_id, COUNT(*), ?1 FROM item_tags t JOIN items i ON i.id = t.item_id WHERE ${ipub} GROUP BY t.tag_id ${upsert}`,
+      )
+      .bind(now),
+    db
+      .prepare(
+        `INSERT INTO facets (key, count, updated_at)
+         SELECT 'tag:' || t.tag_id || '@' || i.kind, COUNT(*), ?1 FROM item_tags t JOIN items i ON i.id = t.item_id WHERE ${ipub} GROUP BY t.tag_id, i.kind ${upsert}`,
       )
       .bind(now),
     db.prepare('DELETE FROM facets WHERE updated_at < ?1').bind(now),
   ]);
 }
+
+/** The facet key for a runtime or tag, within a kind when one is chosen. */
+export const facetKey = (dim: 'runtime' | 'tag', value: string, kind?: string) => `${dim}:${value}${kind ? `@${kind}` : ''}`;

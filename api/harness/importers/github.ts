@@ -56,13 +56,13 @@ function headers(env: Env): HeadersInit {
   return h;
 }
 
-async function gh<T>(env: Env, path: string): Promise<T> {
+export async function gh<T>(env: Env, path: string): Promise<T> {
   const res = await fetch(`${API}${path}`, { headers: headers(env), signal: AbortSignal.timeout(20_000), redirect: 'follow' });
   if (!res.ok) throw new Error(`GitHub ${path} answered ${res.status}`);
   return res.json() as Promise<T>;
 }
 
-interface Repo {
+export interface Repo {
   full_name: string;
   html_url: string;
   default_branch: string;

@@ -1,16 +1,27 @@
 ---
-/** Copies `text` (client/harness.ts). Hidden until a script can do it. */
+/**
+ * Copies a text (client/harness.ts): `text` itself, the text of the element
+ * with the id `from`, or what the address `src` answers (fetched when
+ * clicked, so a long prompt is not written into every card). Hidden until a
+ * script can do it.
+ */
 import { harnessDicts } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
 
 interface Props {
   lang: Lang;
-  text: string;
+  text?: string;
+  from?: string;
+  src?: string;
+  /** what it copies, for those who cannot see the icon */
+  label?: string;
+  class?: string;
 }
-const { lang, text } = Astro.props;
+const { lang, text, from, src, label, class: className } = Astro.props;
 const h = harnessDicts[lang];
+const name = label ?? h.copy.label;
 ---
-<button class="copy" type="button" data-copy={text} data-done={h.copy.done} aria-label={h.copy.label} title={h.copy.label} hidden>
+<button class:list={['copy', className]} type="button" data-copy={text ?? ''} data-copy-from={from} data-copy-src={src} data-done={h.copy.done} aria-label={name} title={name} hidden>
   <svg class="copy__idle" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" aria-hidden="true">
     <rect x="5.5" y="5.5" width="8" height="8" rx="1.8"></rect>
     <path d="M10.5 3.5v-.2a1.3 1.3 0 0 0-1.3-1.3H3.8a1.3 1.3 0 0 0-1.3 1.3v5.4a1.3 1.3 0 0 0 1.3 1.3h.2"></path>

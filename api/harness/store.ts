@@ -54,6 +54,10 @@ export interface VersionInput {
   versionAt: string;
   risk: Risk;
   repoStars?: number | null;
+  /** what its card shows besides the title and summary (items.card), by kind: a prompt's StoredPromptCard */
+  card?: unknown;
+  /** what its own signals add to its popularity (items.boost): a prompt's results */
+  boost?: number;
 }
 
 export interface SaveResult {
@@ -77,9 +81,9 @@ export function decideStatus(current: ItemStatus | undefined, risk: Risk, reason
   return reasons.length ? 'listed' : 'public';
 }
 
-/** log10(1 + stars), lowered for stuffed descriptions; installs join in H3. */
-export const popularityOf = (quality: number, repoStars: number | null | undefined, featured = false) =>
-  Math.round(quality * (Math.log10(1 + Math.max(0, repoStars ?? 0)) + (featured ? 2 : 0)) * 1000) / 1000;
+/** log10(1 + stars), with what the item's own signals add (`boost`), lowered for stuffed descriptions; installs join in H3. */
+export const popularityOf = (quality: number, repoStars: number | null | undefined, featured = false, boost = 0) =>
+  Math.round(quality * (Math.log10(1 + Math.max(0, repoStars ?? 0)) + boost + (featured ? 2 : 0)) * 1000) / 1000;
 
 const json = (v: unknown) => JSON.stringify(v);
 const unique = <T>(xs: T[]) => [...new Set(xs)];
@@ -111,6 +115,8 @@ interface ItemRow {
   quality: number;
   repo_stars: number | null;
   featured: number;
+  card: string | null;
+  boost: number;
   content_sha256: string | null;
 }
 
@@ -121,15 +127,21 @@ interface ItemRow {
  * to date. Each item's rows are written together or not at all. With a
  * deadline (a time in ms), no chunk is started after it: what is left is
  * counted in `remaining`, for a later run (where what was saved is unchanged).
+ *
+ * `collection`: the source-key prefix of a source whose importer already
+ * keeps its items' dedupe keys apart (a prompt collection merges copies of a
+ * prompt into one item). Its own items saved before do not count as holding
+ * a key, since in this same import they may be changing or leaving: an entry
+ * that takes over another's prompt is not a copy of it.
  */
-export async function saveVersions(env: Env, inputs: VersionInput[], until?: number): Promise<SaveResult> {
+export async function saveVersions(env: Env, inputs: VersionInput[], until?: number, collection?: string): Promise<SaveResult> {
   const result: SaveResult = { created: 0, updated: 0, unchanged: 0, remaining: 0, versions: new Map() };
   for (let i = 0; i < inputs.length; i += 40) {
     if (until !== undefined && Date.now() >= until) {
       result.remaining = inputs.length - i;
       break;
     }
-    await saveChunk(env, inputs.slice(i, i + 40), result);
+    await saveChunk(env, inputs.slice(i, i + 40), result, collection);
   }
   return result;
 }
@@ -143,7 +155,7 @@ async function inParallel(tasks: Iterable<() => Promise<unknown>>, limit = 6): P
   await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, worker));
 }
 
-async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): Promise<void> {
+async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, collection?: string): Promise<void> {
   const db = env.HARNESS_DB;
   const now = new Date().toISOString();
 
@@ -159,7 +171,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
   const { results: itemRows } = await db
     .prepare(
       `SELECT i.id, i.latest_version_id, i.publisher_id, i.name, i.status, i.listed_reasons, i.latest_revision, i.source_key, i.published_at,
-              i.quality, i.repo_stars, i.featured, v.content_sha256
+              i.quality, i.repo_stars, i.featured, i.card, i.boost, v.content_sha256
          FROM items i LEFT JOIN item_versions v ON v.id = i.latest_version_id
         WHERE i.source_key IN (${marks(keys.length)})`,
     )
@@ -203,7 +215,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
       .bind(...dedupe)
       .all<{ dedupe_key: string; source_key: string }>();
     for (const r of results) {
-      if (holders.has(r.dedupe_key)) continue;
+      if (holders.has(r.dedupe_key) || (collection && r.source_key.startsWith(collection))) continue;
       holders.set(r.dedupe_key, r.source_key);
       keptByDb.add(r.dedupe_key);
     }
@@ -248,7 +260,9 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
     const status = decideStatus(old?.status, input.risk, reasons);
     const quality = input.checks.quality.score;
     const repoStars = input.repoStars ?? old?.repo_stars ?? null;
-    const popularity = popularityOf(quality, repoStars, !!old?.featured);
+    const boost = input.boost ?? 0;
+    const popularity = popularityOf(quality, repoStars, !!old?.featured, boost);
+    const card = input.card === undefined || input.card === null ? null : json(input.card);
     const { title, summary, tags } = input.listing;
     // files, and anything read from them, are kept only when the license allows it
     const excerpt = input.hosted ? (input.excerpt ?? null) : null;
@@ -265,17 +279,18 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
       });
 
     if (old && old.content_sha256 === input.contentSha256) {
-      // same content: only where it stands may have changed (a source's status, a publisher found to publish in bulk)
+      // same content: only where it stands may have changed (a source's status, a publisher found to publish in bulk),
+      // and what its card shows (the pictures it picks from, as they are found)
       result.unchanged++;
-      if (old.status !== status || old.listed_reasons !== json(reasons) || old.repo_stars !== repoStars) {
+      if (old.status !== status || old.listed_reasons !== json(reasons) || old.repo_stars !== repoStars || old.card !== card || old.boost !== boost) {
         group.push(
           db
             .prepare(
-              `UPDATE items SET status = ?1, listed_reasons = ?2, repo_stars = ?3, popularity = ?4, updated_at = ?5,
+              `UPDATE items SET status = ?1, listed_reasons = ?2, repo_stars = ?3, popularity = ?4, updated_at = ?5, card = ?7, boost = ?8,
                       published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN version_at END)
                 WHERE id = ?6`,
             )
-            .bind(status, json(reasons), repoStars, popularity, now, old.id),
+            .bind(status, json(reasons), repoStars, popularity, now, old.id, card, boost),
         );
         if (old.status !== status) group.push(event(db, old.id, null, status, old.status, now));
         group.push(...searchStatements(db, old.id, old.latest_version_id, doc(old.name)));
@@ -320,14 +335,14 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
           .prepare(
             `INSERT INTO items (id, publisher_id, name, kind, status, listed_reasons, title_en, title_zh, summary_en, summary_zh,
                                 source, source_key, dedupe_key, repository_url, website_url, license, runtime, risk, latest_version_id,
-                                latest_revision, repo_stars, quality, popularity, created_at, updated_at, version_at, published_at)
+                                latest_revision, repo_stars, quality, popularity, created_at, updated_at, version_at, published_at, card, boost)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?24, ?25,
-                     CASE WHEN ?5 = 'public' THEN ?25 END)`,
+                     CASE WHEN ?5 = 'public' THEN ?25 END, ?26, ?27)`,
           )
           .bind(
             itemId, pub.id, name, input.kind, status, json(reasons), title.en ?? null, title.zh ?? null, summary.en ?? null, summary.zh ?? null,
             input.source, input.sourceKey, input.dedupeKey ?? null, input.repositoryUrl ?? null, input.websiteUrl ?? null, input.license ?? null,
-            input.runtime, input.risk, versionId, revision, repoStars, quality, popularity, now, input.versionAt,
+            input.runtime, input.risk, versionId, revision, repoStars, quality, popularity, now, input.versionAt, card, boost,
           ),
       );
       if (status === 'pending') group.push(event(db, itemId, versionId, status, null, now));
@@ -341,13 +356,14 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
             `UPDATE items SET status = ?1, listed_reasons = ?2, title_en = ?3, title_zh = ?4, summary_en = ?5, summary_zh = ?6,
                     dedupe_key = ?7, repository_url = ?8, website_url = ?9, license = ?10, runtime = ?11, risk = ?12,
                     latest_version_id = ?13, latest_revision = ?14, repo_stars = ?15, quality = ?16, popularity = ?17,
-                    updated_at = ?18, version_at = ?19, published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN ?19 END)
+                    updated_at = ?18, version_at = ?19, published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN ?19 END),
+                    card = ?21, boost = ?22
               WHERE id = ?20`,
           )
           .bind(
             status, json(reasons), title.en ?? null, title.zh ?? null, summary.en ?? null, summary.zh ?? null, input.dedupeKey ?? null,
             input.repositoryUrl ?? null, input.websiteUrl ?? null, input.license ?? null, input.runtime, input.risk, versionId, revision,
-            repoStars, quality, popularity, now, input.versionAt, itemId,
+            repoStars, quality, popularity, now, input.versionAt, itemId, card, boost,
           ),
       );
       if (old.status !== status) group.push(event(db, itemId, versionId, status, old.status, now));

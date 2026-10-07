@@ -3,13 +3,16 @@
  * One item in a list: who publishes it, what it is called and does, its kind,
  * where it runs and its tags. Every card has the same rows at the same heights
  * (a title on one line, three lines of summary, one line of marks), so a row
- * of cards lines up.
+ * of cards lines up. A prompt quotes itself in the title's and the summary's
+ * four lines, and has a button that copies it (a gallery shows prompts as
+ * PromptCard).
  */
-import type { ItemSummary, TagInfo } from '../../lib/harness';
+import { modelName, type ItemSummary, type TagInfo } from '../../lib/harness';
 import { harnessDicts, pick } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
 import { compact } from '../../lib/github';
 import Avatar from './Avatar.astro';
+import Copy from './Copy.astro';
 
 interface Props {
   item: ItemSummary;
@@ -20,34 +23,56 @@ const { item, lang, tags } = Astro.props;
 const h = harnessDicts[lang];
 const title = pick(item.title, lang) ?? item.name;
 const summary = pick(item.summary, lang);
+const prompt = item.kind === 'prompt' ? item.prompt : undefined;
 ---
-<li class="card">
-  <a class="card__link" href={`${h.base}${item.ref}`}>
+<li class:list={['card', prompt && 'card--prompt']}>
+  <a class="card__link" href={`${h.base}${item.ref}`} aria-label={prompt ? title : undefined}>
     <span class="card__top">
       <Avatar handle={item.publisher.handle} avatar={item.publisher.avatar} size={22} />
       <span class="card__pub">{item.publisher.handle}</span>
-      {item.repoStars !== null && item.repoStars > 0 && (
+      {!prompt && item.repoStars !== null && item.repoStars > 0 && (
         <span class="card__stars" title={h.card.stars}><span aria-hidden="true">★</span> {compact(item.repoStars)}</span>
       )}
     </span>
-    <span class="card__title" title={title}>{title}</span>
-    <span class="card__summary">{summary}</span>
+    {prompt ? (
+      <span class="card__quote"><span class="card__quote-text">{prompt.excerpt}</span></span>
+    ) : (
+      <>
+        <span class="card__title" title={title}>{title}</span>
+        <span class="card__summary">{summary}</span>
+      </>
+    )}
     <span class="card__foot">
       <span class="badge badge--kind">{h.kind[item.kind]}</span>
       {item.risk !== 'low' && (
         <span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{h.item.risk[item.risk]}</span>
       )}
       {item.status === 'listed' && <span class="badge badge--listed">{h.card.listed}</span>}
-      <span class="card__runtime">{h.runtime.names[item.runtime] ?? item.runtime}</span>
+      {prompt ? (
+        <>
+          {prompt.model && <span class="card__runtime">{modelName(prompt.model, true)}</span>}
+          {prompt.results > 1 && <span class="card__runtime">{h.prompt.results(prompt.results)}</span>}
+        </>
+      ) : (
+        <span class="card__runtime">{h.runtime.names[item.runtime] ?? item.runtime}</span>
+      )}
       {item.tags.slice(0, 3).map((t) => <span class="card__tag">{tags.get(t)?.name[lang] ?? t}</span>)}
     </span>
   </a>
+  {prompt && <Copy lang={lang} src={`/api/harness/v1/items/${item.ref}/prompt`} label={h.prompt.copy} class="card__copy" />}
 </li>
 
 <style>
   .card {
+    position: relative;
     display: flex;
     min-width: 0;
+    transition: translate 0.4s var(--ease-out);
+  }
+
+  /* the card lifts as a whole, with a button laid over it */
+  .card:hover {
+    translate: 0 -2px;
   }
 
   .card__link {
@@ -61,14 +86,12 @@ const summary = pick(item.summary, lang);
     background: var(--card-bg);
     transition:
       border-color 0.3s,
-      box-shadow 0.4s,
-      translate 0.4s var(--ease-out);
+      box-shadow 0.4s;
   }
 
-  .card__link:hover {
+  .card:hover .card__link {
     border-color: rgb(var(--bead-rgb) / 0.4);
     box-shadow: var(--card-lift);
-    translate: 0 -2px;
   }
 
   .card__link:focus-visible {
@@ -159,5 +182,40 @@ const summary = pick(item.summary, lang);
     content: '#';
     margin-right: 1px;
     color: rgb(var(--corona-rgb) / 0.3);
+  }
+
+  /* -------------------------------------------------------------- a prompt */
+
+  /* room on the first line for the copy button */
+  .card--prompt .card__top {
+    padding-right: 30px;
+  }
+
+  /* the prompt, quoted in the four lines a title and its summary take (the box as tall, the quote as long as it is) */
+  .card__quote {
+    display: block;
+    height: calc(24px + var(--s-2) + 4.65em);
+    margin-top: var(--s-4);
+    font-size: 14px;
+  }
+
+  .card__quote-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    padding-left: var(--s-3);
+    border-left: 2px solid rgb(var(--bead-rgb) / 0.45);
+    line-height: calc((24px + var(--s-2) + 4.65em) / 4);
+    color: var(--corona-80);
+    overflow-wrap: anywhere;
+  }
+
+  /* (the button is Copy's own, so it is reached as :global) */
+  .card :global(.card__copy) {
+    position: absolute;
+    top: calc(var(--s-5) - 4px);
+    right: calc(var(--s-5) - 8px);
+    z-index: 1;
   }
 </style>

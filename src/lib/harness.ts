@@ -14,13 +14,16 @@ import {
   SORTS,
   type ItemDetail,
   type ItemList,
+  type ItemSummary,
+  type PromptCard,
   type PublisherInfo,
   type TagInfo,
   type VersionSummary,
 } from '../../api/harness/catalog';
 import type { ItemKind } from '../../api/harness/model';
 
-export type { ItemDetail, ItemList, PublisherInfo, TagInfo, VersionSummary };
+export type { ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
+export { modelName } from '../../api/harness/prompt';
 
 export interface BrowseState {
   q: string;
@@ -57,7 +60,8 @@ export function withQuery(path: string, state: BrowseState, change: Partial<Reco
 
 export async function loadBrowse(state: BrowseState, publisher?: string): Promise<{ list: ItemList; tags: TagInfo[]; counts: Record<string, number> }> {
   const db = env.HARNESS_DB;
-  const [list, tags, counts] = await Promise.all([listItems(db, { ...state, q: state.q || undefined, publisher }), listTags(db), facetCounts(db)]);
+  // with a kind chosen, the tags count within it
+  const [list, tags, counts] = await Promise.all([listItems(db, { ...state, q: state.q || undefined, publisher }), listTags(db, state.kind), facetCounts(db)]);
   return { list, tags, counts };
 }
 

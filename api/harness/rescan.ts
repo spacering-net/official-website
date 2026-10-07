@@ -1,6 +1,7 @@
 import { uuidv7 } from '../ids';
 import type { PackageFile } from './files';
-import type { Checks, ItemStatus, Risk } from './model';
+import type { Checks, ItemStatus, PromptMeta, Risk, Showcase } from './model';
+import { promptFileOf } from './prompt';
 import { riskOf, scanStructure } from './scan/content';
 import { applyRules, loadRules } from './scan/rules';
 import { docsFor, searchStatements } from './search';
@@ -76,6 +77,12 @@ async function filesOf(env: Env, r: { kind: string; version_id: string; hosted: 
   if (r.kind === 'mcp') {
     // as it was checked when imported (with any credential already redacted)
     return [{ path: 'server.json', data: new TextEncoder().encode(JSON.stringify(JSON.parse(r.metadata), null, 2)), executable: false }];
+  }
+  if (r.kind === 'prompt') {
+    // PROMPT.md is written from the collection's entry, not read from the repository: written again the same way
+    const meta = JSON.parse(r.metadata) as { prompt?: PromptMeta; showcases?: Showcase[] };
+    if (!meta.prompt) throw new Error(`version ${r.version_id} has no prompt`);
+    return [{ path: 'PROMPT.md', data: new TextEncoder().encode(promptFileOf(meta.prompt, meta.showcases ?? [])), executable: false }];
   }
   const { results } = await env.HARNESS_DB.prepare('SELECT path, sha256, executable FROM version_files WHERE version_id = ?1')
     .bind(r.version_id)

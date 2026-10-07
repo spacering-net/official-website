@@ -2,7 +2,8 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context, Next } from 'hono';
 import { etag } from 'hono/etag';
 import { cacheKey, edgeCache, forCache, fromCache } from './cache';
-import { facetCounts, getItem, getPublisher, getVersion, getVersions, KINDS, listItems, listTags, readmeKey, SORTS } from './catalog';
+import { facetCounts, getItem, getPublisher, getVersion, getVersions, KINDS, listItems, listTags, promptText, readmeKey, SORTS } from './catalog';
+import { MEDIA_TYPES } from './importers/media';
 import { LIMITS } from './limits';
 import * as S from './schemas';
 
@@ -72,7 +73,8 @@ harnessApi.openapi(
     const db = c.env.HARNESS_DB;
     const [tags, counts] = await Promise.all([listTags(db), facetCounts(db)]);
     const runtimes = Object.entries(counts)
-      .filter(([k]) => k.startsWith('runtime:'))
+      // in all kinds ('runtime:node'), not within one ('runtime:node@skill')
+      .filter(([k]) => k.startsWith('runtime:') && !k.includes('@'))
       .map(([k, count]) => ({ id: k.slice('runtime:'.length), count }))
       .sort((a, b) => b.count - a.count);
     return c.json(
@@ -178,6 +180,23 @@ harnessApi.openapi(
 harnessApi.openapi(
   createRoute({
     method: 'get',
+    path: '/items/{publisher}/{name}/prompt',
+    summary: "A prompt's text",
+    description: 'Prompts only: the text to use, as plain text (what copying it gives).',
+    request: { params: Ref },
+    responses: { 200: { content: { 'text/plain': { schema: z.string() } }, description: 'The prompt' }, 404: notFound },
+  }),
+  async (c) => {
+    const { publisher, name } = c.req.valid('param');
+    const text = await promptText(c.env.HARNESS_DB, publisher, name);
+    if (text === null) return c.json({ error: 'not_found' }, 404);
+    return c.text(text, 200, { 'Content-Security-Policy': 'sandbox' });
+  },
+);
+
+harnessApi.openapi(
+  createRoute({
+    method: 'get',
     path: '/publishers/{publisher}',
     summary: 'A publisher',
     request: { params: Ref.pick({ publisher: true }) },
@@ -228,6 +247,29 @@ harnessApi.openapi(
     responses: { 200: { content: { 'application/octet-stream': { schema: z.string().openapi({ format: 'binary' }) } }, description: 'The bytes' }, 404: notFound },
   }),
   (c) => serveFile(c, `blobs/${c.req.valid('param').sha256}`, 'application/octet-stream'),
+);
+
+harnessApi.openapi(
+  createRoute({
+    method: 'get',
+    path: '/media/{file}',
+    summary: 'A picture, by its hash',
+    description: "Pictures of items' results, copied here from their sources: WebP, PNG, JPEG or GIF only, told by their bytes.",
+    request: { params: z.object({ file: z.string().regex(/^[0-9a-f]{64}\.(webp|png|jpg|gif)$/).openapi({ param: { name: 'file', in: 'path' } }) }) },
+    responses: { 200: { content: { 'image/webp': { schema: z.string().openapi({ format: 'binary' }) } }, description: 'The picture' }, 404: notFound },
+  }),
+  async (c) => {
+    const object = await c.env.HARNESS_FILES.get(`media/${c.req.valid('param').file.slice(0, 64)}`);
+    const type = object?.httpMetadata?.contentType ?? '';
+    // only pictures kept by the media job are served, and only as what their bytes showed them to be
+    if (!object || !MEDIA_TYPES[type]) return c.json({ error: 'not_found' }, 404);
+    return c.body(object.body, 200, {
+      'Content-Type': type,
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      ETag: object.httpEtag,
+    });
+  },
 );
 
 harnessApi.doc31('/openapi.json', {

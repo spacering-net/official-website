@@ -1,11 +1,12 @@
-import type { Checks, ItemKind, ItemStatus, PinnedPackage, Risk } from './model';
+import { mediaPath } from './importers/media';
+import type { Checks, ItemKind, ItemStatus, PinnedPackage, PromptMeta, Risk, Showcase, StoredPromptCard } from './model';
 import type { PermissionProfile } from './scan/permissions';
-import type { InstallInfo, ItemDetail, ItemList, ItemSummary, PublisherInfo, PublisherSummary, TagInfo, VersionSummary } from './schemas';
-import { searchIds } from './search';
+import type { InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, PublisherSummary, TagInfo, VersionSummary } from './schemas';
+import { facetKey, searchIds } from './search';
 import type { SkillMeta } from './skill';
 import { NAME_RE, type Localized } from './text';
 
-export type { InstallInfo, ItemDetail, ItemList, ItemSummary, PublisherInfo, TagInfo, VersionSummary };
+export type { InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
 
 /**
  * Reading the catalog: browsing, search, an item and its versions. The API
@@ -59,18 +60,64 @@ interface Row {
   license: string | null;
   repository_url: string | null;
   website_url: string | null;
+  card: string | null;
 }
 
 const COLUMNS = `i.id, i.seq, i.name, i.kind, i.status, i.title_en, i.title_zh, i.summary_en, i.summary_zh, i.runtime, i.risk, i.reviewed,
   i.featured, i.source, i.repo_stars, i.stars, i.installs, i.quality, i.popularity, i.latest_revision, i.latest_version_id,
-  i.published_at, i.version_at, i.listed_reasons, i.license, i.repository_url, i.website_url,
+  i.published_at, i.version_at, i.listed_reasons, i.license, i.repository_url, i.website_url, i.card,
   p.handle, p.name AS p_name, p.kind AS p_kind, p.verified AS p_verified, p.user_id AS p_user_id, p.avatar AS p_avatar,
   (SELECT v.version FROM item_versions v WHERE v.id = i.latest_version_id) AS version`;
 const FROM = 'items i JOIN publishers p ON p.id = i.publisher_id';
 
 const loc = (en: string | null, zh: string | null): Localized => ({ ...(en ? { en } : {}), ...(zh ? { zh } : {}) });
 
-function summarize(r: Row, tags: string[]): ItemSummary {
+/** A picture kept here (the media table), by the address its source names it at. */
+interface Picture {
+  sha256: string;
+  type: string;
+}
+
+/** The pictures among these addresses that are kept here. */
+async function picturesOf(db: D1Database, urls: (string | null | undefined)[]): Promise<Map<string, Picture>> {
+  const out = new Map<string, Picture>();
+  const wanted = [...new Set(urls.filter((u): u is string => !!u))];
+  for (let i = 0; i < wanted.length; i += 90) {
+    const chunk = wanted.slice(i, i + 90);
+    const { results } = await db
+      .prepare(`SELECT url, sha256, type FROM media WHERE status = 'ok' AND url IN (${marks(chunk.length)})`)
+      .bind(...chunk)
+      .all<{ url: string; sha256: string; type: string }>();
+    for (const r of results) out.set(r.url, { sha256: r.sha256, type: r.type });
+  }
+  return out;
+}
+
+const pictureAt = (pictures: Map<string, Picture>, url: string | null) => {
+  const p = url ? pictures.get(url) : undefined;
+  return p ? mediaPath(p.sha256, p.type) : null;
+};
+
+const storedCard = (r: Row): StoredPromptCard | null => (r.kind === 'prompt' && r.card ? (JSON.parse(r.card) as StoredPromptCard) : null);
+
+/** A prompt's card: the first of its pictures that moves (and is kept here), else the first still one. */
+function promptCard(card: StoredPromptCard, pictures: Map<string, Picture>): PromptCard {
+  const faces = card.faces ?? [];
+  const moving = faces.find((f) => pictureAt(pictures, f.cover) && pictureAt(pictures, f.motion));
+  const still = moving ?? faces.find((f) => pictureAt(pictures, f.cover));
+  return {
+    excerpt: card.excerpt,
+    cover: still ? pictureAt(pictures, still.cover) : null,
+    motion: moving ? pictureAt(pictures, moving.motion) : null,
+    model: card.model,
+    by: card.by,
+    results: card.results,
+    partial: card.partial,
+  };
+}
+
+function summarize(r: Row, tags: string[], pictures: Map<string, Picture>): ItemSummary {
+  const card = storedCard(r);
   return {
     id: r.id,
     ref: `${r.handle}/${r.name}`,
@@ -90,6 +137,7 @@ function summarize(r: Row, tags: string[]): ItemSummary {
     stars: r.stars,
     installs: r.installs,
     latest: { revision: r.latest_revision, version: r.version, publishedAt: r.version_at },
+    ...(card ? { prompt: promptCard(card, pictures) } : {}),
   };
 }
 
@@ -107,8 +155,9 @@ async function tagsOf(db: D1Database, ids: string[]): Promise<Map<string, string
 }
 
 async function summaries(db: D1Database, rows: Row[]): Promise<ItemSummary[]> {
-  const tags = await tagsOf(db, rows.map((r) => r.id));
-  return rows.map((r) => summarize(r, tags.get(r.id) ?? []));
+  const urls = rows.flatMap((r) => storedCard(r)?.faces?.flatMap((f) => [f.cover, f.motion]) ?? []);
+  const [tags, pictures] = await Promise.all([tagsOf(db, rows.map((r) => r.id)), picturesOf(db, urls)]);
+  return rows.map((r) => summarize(r, tags.get(r.id) ?? [], pictures));
 }
 
 // cursors: base64url JSON, opaque to clients
@@ -175,11 +224,12 @@ async function browse(db: D1Database, query: ListQuery, publisherId: string | un
   return { items: await summaries(db, page), next, approxTotal: await facetCount(db, query, publisherId) };
 }
 
-/** The count of public items under the filters, from the facets, when one facet covers them. */
+/** The count of public items under the filters, from the facets, when one facet covers them (a runtime or a tag within a kind is one). */
 async function facetCount(db: D1Database, query: ListQuery, publisherId: string | undefined): Promise<number | null> {
-  const keys = [query.kind && `kind:${query.kind}`, query.runtime && `runtime:${query.runtime}`, query.tag && `tag:${query.tag}`].filter(Boolean) as string[];
-  if (publisherId || keys.length > 1) return null;
-  const row = await db.prepare('SELECT count FROM facets WHERE key = ?1').bind(keys[0] ?? 'all').first<{ count: number }>();
+  const dims = [query.runtime && facetKey('runtime', query.runtime, query.kind), query.tag && facetKey('tag', query.tag, query.kind)].filter(Boolean) as string[];
+  if (publisherId || dims.length > 1) return null;
+  const key = dims[0] ?? (query.kind ? `kind:${query.kind}` : 'all');
+  const row = await db.prepare('SELECT count FROM facets WHERE key = ?1').bind(key).first<{ count: number }>();
   return row?.count ?? 0;
 }
 
@@ -287,7 +337,7 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
     .prepare('SELECT path, sha256, size, executable FROM version_files WHERE version_id = ?1 ORDER BY path')
     .bind(v.id)
     .all<{ path: string; sha256: string; size: number; executable: number }>();
-  const metadata = JSON.parse(v.metadata) as { skill?: SkillMeta; repository?: string; path?: string; name?: string };
+  const metadata = JSON.parse(v.metadata) as { skill?: SkillMeta; repository?: string; path?: string; name?: string; prompt?: PromptMeta; showcases?: Showcase[] };
   const perms = JSON.parse(v.permissions) as PermissionProfile;
   const info: InstallInfo = {
     item: { id: item.id, ref: item.ref, kind: item.kind, title: item.title },
@@ -308,7 +358,33 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
     info.server = metadata as InstallInfo['server'];
     info.packages = JSON.parse(v.packages) as PinnedPackage[];
   }
+  if (item.kind === 'prompt' && metadata.prompt) {
+    const { text, model, argumentHint, partial, rights, lang } = metadata.prompt;
+    const showcases = metadata.showcases ?? [];
+    const pictures = await picturesOf(db, showcases.flatMap((s) => [s.cover, s.motion]));
+    info.prompt = {
+      text,
+      model,
+      argumentHint,
+      partial,
+      rights,
+      lang,
+      // a moving preview only beside a still one, as on the cards
+      showcases: showcases.map((s) => {
+        const cover = pictureAt(pictures, s.cover);
+        return { ...s, cover, motion: cover ? pictureAt(pictures, s.motion) : null };
+      }),
+    };
+  }
   return info;
+}
+
+/** A prompt's text, by its item's address (public or listed); null if there is none. */
+export async function promptText(db: D1Database, handle: string, name: string): Promise<string | null> {
+  const row = await itemRow(db, handle, name);
+  if (row?.kind !== 'prompt' || !row.latest_version_id) return null;
+  const v = await db.prepare('SELECT metadata FROM item_versions WHERE id = ?1').bind(row.latest_version_id).first<{ metadata: string }>();
+  return v ? ((JSON.parse(v.metadata) as { prompt?: PromptMeta }).prompt?.text ?? null) : null;
 }
 
 /** An item's page: its listing, permissions, checks, and how to install its latest version. */
@@ -401,10 +477,11 @@ export async function getPublisher(db: D1Database, handle: string): Promise<Publ
   };
 }
 
-/** Every tag with its count of public items. */
-export async function listTags(db: D1Database): Promise<TagInfo[]> {
+/** Every tag with its count of public items, in all or of one kind. */
+export async function listTags(db: D1Database, kind?: ItemKind): Promise<TagInfo[]> {
   const { results } = await db
-    .prepare("SELECT t.id, t.name_en, t.name_zh, COALESCE(f.count, 0) AS count FROM tags t LEFT JOIN facets f ON f.key = 'tag:' || t.id ORDER BY t.sort, t.id")
+    .prepare("SELECT t.id, t.name_en, t.name_zh, COALESCE(f.count, 0) AS count FROM tags t LEFT JOIN facets f ON f.key = 'tag:' || t.id || ?1 ORDER BY t.sort, t.id")
+    .bind(kind ? `@${kind}` : '')
     .all<{ id: string; name_en: string; name_zh: string; count: number }>();
   return results.map((t) => ({ id: t.id, name: { en: t.name_en, zh: t.name_zh }, count: t.count }));
 }

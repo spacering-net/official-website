@@ -3,9 +3,10 @@
  * search as you type, filters (a runtime as soon as it is chosen from its
  * list) and order, more to load, with the address and the history kept in
  * step; on small screens the filters open in a sheet.
- * Copy buttons; on an item page, the summary folds, the section bar follows
- * the reading, and a dock keeps "Open in Codeg" at hand. Everything works
- * without it, with plain links and the form.
+ * Copy buttons (a prompt's card copies its prompt, fetched when clicked); on
+ * an item page, the summary and a long prompt fold, the section bar follows
+ * the reading, and a dock keeps "Open in Codeg" (or "Copy prompt") at hand.
+ * Everything works without it, with plain links and the form.
  */
 const root = document.documentElement;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -29,15 +30,45 @@ const parse = (html: string) => new DOMParser().parseFromString(html, 'text/html
 
 // -------------------------------------------------------------------- copy
 
+const canCopy = !!navigator.clipboard;
+
+/** Show the copy buttons in this part of the page (they are hidden until a script can copy). */
+const revealCopy = (scope: ParentNode) => {
+  if (canCopy) scope.querySelectorAll<HTMLButtonElement>('[data-copy][hidden]').forEach((b) => (b.hidden = false));
+};
+
+/** Copy what a button names: its own text, an element's, or what an address answers. */
+async function copyFor(button: HTMLButtonElement): Promise<void> {
+  const { copySrc: src, copyFrom: from } = button.dataset;
+  if (!src) {
+    await navigator.clipboard.writeText(from ? (document.getElementById(from)?.textContent ?? '') : (button.dataset.copy ?? ''));
+    return;
+  }
+  const text = fetch(src, { headers: { accept: 'text/plain' } }).then((res) => {
+    if (!res.ok) throw new Error(`answered ${res.status}`);
+    return res.text();
+  });
+  // Safari copies only within the click itself: the clipboard is handed the text still on its way
+  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'text/plain': text.then((t) => new Blob([t], { type: 'text/plain' })) })]);
+      return;
+    } catch {
+      // a browser that takes no text still on its way: copied once it is here
+    }
+  }
+  await navigator.clipboard.writeText(await text);
+}
+
 function initCopy() {
-  if (!navigator.clipboard) return;
-  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((b) => (b.hidden = false));
+  if (!canCopy) return;
+  revealCopy(document);
   const timers = new WeakMap<HTMLButtonElement, number>();
   document.addEventListener('click', async (e) => {
     const button = (e.target as Element | null)?.closest<HTMLButtonElement>('[data-copy]');
     if (!button) return;
     try {
-      await navigator.clipboard.writeText(button.dataset.copy ?? '');
+      await copyFor(button);
     } catch {
       return;
     }
@@ -111,6 +142,7 @@ function initBrowse() {
         const next = doc.querySelector(`[data-region="${region.dataset.region}"]`);
         if (next) region.innerHTML = next.innerHTML;
       });
+      revealCopy(browse);
       list++;
       // the other language's link carries the same query
       const other = doc.querySelector('[data-lang-switch]')?.getAttribute('href');
@@ -169,6 +201,7 @@ function initBrowse() {
       const grid = browse.querySelector('[data-grid]');
       const items = [...doc.querySelectorAll('[data-grid] > li')].map((li) => document.importNode(li, true));
       grid?.append(...items);
+      items.forEach(revealCopy);
       const pager = browse.querySelector('[data-pager]');
       const next = doc.querySelector('[data-pager]');
       if (pager && next) {
@@ -283,24 +316,30 @@ function initBrowse() {
 
 // -------------------------------------------------------------------- item
 
-function initItem() {
-  // a long summary folds to three lines
-  const clamp = document.querySelector<HTMLElement>('[data-clamp]');
-  const text = clamp?.querySelector('p');
-  const toggle = clamp?.querySelector<HTMLButtonElement>('[data-clamp-toggle]');
-  if (clamp && text && toggle) {
-    clamp.classList.add('is-clamped');
-    if (text.scrollHeight > text.clientHeight + 2) {
-      const more = toggle.textContent ?? '';
-      toggle.hidden = false;
-      toggle.setAttribute('aria-expanded', 'false');
-      toggle.addEventListener('click', () => {
-        const folded = clamp.classList.toggle('is-clamped');
-        toggle.textContent = folded ? more : (toggle.dataset.less ?? more);
-        toggle.setAttribute('aria-expanded', String(!folded));
-      });
-    } else clamp.classList.remove('is-clamped');
+/** Fold a box's text under `cls` when it runs longer than the fold, with a button that unfolds it. */
+function fold(box: HTMLElement | null, text: HTMLElement | null | undefined, toggle: HTMLButtonElement | null | undefined, cls: string) {
+  if (!box || !text || !toggle) return;
+  box.classList.add(cls);
+  if (text.scrollHeight <= text.clientHeight + 2) {
+    box.classList.remove(cls);
+    return;
   }
+  const more = toggle.textContent ?? '';
+  toggle.hidden = false;
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.addEventListener('click', () => {
+    const folded = box.classList.toggle(cls);
+    toggle.textContent = folded ? more : (toggle.dataset.less ?? more);
+    toggle.setAttribute('aria-expanded', String(!folded));
+  });
+}
+
+function initItem() {
+  // a long summary folds to three lines, a long prompt to its first lines
+  const clamp = document.querySelector<HTMLElement>('[data-clamp]');
+  fold(clamp, clamp?.querySelector('p'), clamp?.querySelector<HTMLButtonElement>('[data-clamp-toggle]'), 'is-clamped');
+  const prompt = document.querySelector<HTMLElement>('[data-prompt]');
+  fold(prompt, prompt?.querySelector<HTMLElement>('.prompt__text'), prompt?.querySelector<HTMLButtonElement>('[data-prompt-toggle]'), 'is-folded');
 
   // the section bar marks the section being read, and moves to a section smoothly
   const toc = document.querySelector<HTMLElement>('[data-toc]');

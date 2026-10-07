@@ -11,12 +11,12 @@ export async function refreshStars(env: Env, limit = 1000): Promise<number> {
   const db = env.HARNESS_DB;
   const { results } = await db
     .prepare(
-      `SELECT id, repository_url, quality, featured FROM items
+      `SELECT id, repository_url, quality, featured, boost FROM items
         WHERE repo_stars IS NULL AND repository_url LIKE 'https://github.com/%' AND status IN ('public', 'listed', 'pending')
         LIMIT ?1`,
     )
     .bind(limit)
-    .all<{ id: string; repository_url: string; quality: number; featured: number }>();
+    .all<{ id: string; repository_url: string; quality: number; featured: number; boost: number }>();
 
   const byRepo = new Map<string, typeof results>();
   for (const r of results) {
@@ -51,7 +51,7 @@ export async function refreshStars(env: Env, limit = 1000): Promise<number> {
       const stars = data?.[`r${j}`]?.stargazerCount ?? -1;
       for (const item of byRepo.get(full) ?? []) {
         statements.push(
-          db.prepare('UPDATE items SET repo_stars = ?1, popularity = ?2 WHERE id = ?3').bind(stars, popularityOf(item.quality, stars, !!item.featured), item.id),
+          db.prepare('UPDATE items SET repo_stars = ?1, popularity = ?2 WHERE id = ?3').bind(stars, popularityOf(item.quality, stars, !!item.featured, item.boost), item.id),
         );
       }
     });
