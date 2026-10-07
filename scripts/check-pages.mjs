@@ -190,6 +190,9 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
   // a kind asked for, then the old list's "more": the kind's answer first, then the page of the old list
   await page.goto(`${base}/zh/harness/`, { waitUntil: 'networkidle' });
   await mark(page);
+  // a page's length, and how many MCP servers there are: the kind's first page holds the fewer
+  const firstPage = await page.locator('[data-grid] > li').count();
+  const mcpTotal = await page.evaluate(() => Number(document.querySelector('.kinds a[href*="kind=mcp"] .chip__n')?.textContent?.replace(/\D/g, '') ?? NaN));
   let releaseKind;
   let releasePage;
   const kindHeld = new Promise((done) => (releaseKind = done));
@@ -215,7 +218,11 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
     cards: document.querySelectorAll('[data-grid] > li').length,
     more: document.querySelector('[data-more]')?.getAttribute('href') ?? null,
   }));
-  report(crossed.allMcp && crossed.cards === 18 && (crossed.more === null || crossed.more.includes('kind=mcp')) && (await same(page)), 'the old list\'s more, answered after a new kind, is dropped', JSON.stringify(crossed));
+  report(
+    crossed.allMcp && crossed.cards === Math.min(firstPage, mcpTotal) && (crossed.more === null || crossed.more.includes('kind=mcp')) && (await same(page)),
+    'the old list\'s more, answered after a new kind, is dropped',
+    JSON.stringify({ ...crossed, firstPage, mcpTotal }),
+  );
   await page.unroute(/[?&]cursor=/);
   await page.unroute((url) => url.searchParams.get('kind') === 'mcp' && !url.searchParams.has('cursor'));
 
@@ -412,7 +419,8 @@ for (const [path, lang] of [
     JSON.stringify({ left: lines.sideLeft, right: lines.sideRight, words: lines.words }),
   );
 
-  await page.goto(`${base}/harness/anthropics/pdf`, { waitUntil: 'networkidle' });
+  // an item whose description (text and code) is kept here, not only at its source
+  await page.goto(`${base}/harness/anthropics/mcp-builder`, { waitUntil: 'networkidle' });
   const item = await page.evaluate(() => {
     const r = (s) => document.querySelector(s)?.getBoundingClientRect();
     const img = document.querySelector('.publisher img.avatar');
