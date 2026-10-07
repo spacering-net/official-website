@@ -14,7 +14,7 @@ import { recountFacets, repairIndex } from './search';
  */
 export type Job =
   | { type: 'registry.page'; run: string; cursor: string | null }
-  | { type: 'github.repo'; source: string; force?: boolean }
+  | { type: 'github.repo'; source: string; force?: boolean; part?: number }
   | { type: 'stars' }
   | { type: 'packages'; after?: number }
   | { type: 'rescan'; after?: number }
@@ -55,7 +55,7 @@ export async function runJob(env: Env, job: Job): Promise<void> {
     case 'registry.page':
       return registryPage(env, job);
     case 'github.repo':
-      return githubRepo(env, job.source, !!job.force);
+      return githubRepo(env, job.source, !!job.force, job.part ?? 1);
     case 'stars': {
       const limit = 2000;
       const n = await refreshStars(env, limit);
@@ -153,14 +153,34 @@ async function registryPage(env: Env, job: Extract<Job, { type: 'registry.page' 
   await env.HARNESS_JOBS.sendBatch([{ body: { type: 'packages' } satisfies Job }, { body: { type: 'stars' } satisfies Job }, { body: { type: 'facets' } satisfies Job }]);
 }
 
-async function githubRepo(env: Env, id: string, force: boolean): Promise<void> {
+/**
+ * How long one job may spend saving a repository's skills. A job may run 15
+ * minutes; a big repository (hundreds of skills) takes several jobs, each
+ * starting where the last stopped (what it saved is unchanged by then), up
+ * to PARTS of them.
+ */
+const SAVE_MS = 7 * 60 * 1000;
+const PARTS = 20;
+
+async function githubRepo(env: Env, id: string, force: boolean, part: number): Promise<void> {
   const db = env.HARNESS_DB;
   const row = await source(db, id);
   if (!row?.enabled) return;
   const now = new Date().toISOString();
   try {
     const fullName = row.url.replace(/^https:\/\/github\.com\//, '');
-    const result = await importRepo(env, fullName, JSON.parse(row.config) as RepoConfig, row.synced_ref, force);
+    const result = await importRepo(env, fullName, JSON.parse(row.config) as RepoConfig, row.synced_ref, force, Date.now() + SAVE_MS);
+    if (result.remaining) {
+      // not finished: the commit is not marked as imported, so the next job carries on with it
+      const left = `${result.remaining} of ${result.skills} skills left after part ${part}`;
+      await db
+        .prepare('UPDATE import_sources SET stats = ?1, last_error = ?2, updated_at = ?3 WHERE id = ?4')
+        .bind(JSON.stringify(result), part < PARTS ? null : `stopped: ${left}`, now, id)
+        .run();
+      console.info(`[harness] ${fullName}@${result.commit.slice(0, 7)}: ${result.created} new, ${result.updated} updated, ${left}`);
+      if (part < PARTS) await env.HARNESS_JOBS.send({ type: 'github.repo', source: id, force, part: part + 1 } satisfies Job);
+      return;
+    }
     await db
       .prepare('UPDATE import_sources SET synced_ref = ?1, synced_at = ?2, stats = ?3, last_error = NULL, updated_at = ?2 WHERE id = ?4')
       .bind(result.commit, now, JSON.stringify(result), id)

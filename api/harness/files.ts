@@ -211,15 +211,15 @@ export function buildZip(files: PackageFile[]): Uint8Array {
 // ---------------------------------------------------------------------------
 // R2
 
-/** Store a file under its hash, once: the same bytes in many versions are kept one time. */
+/**
+ * Store a file under its hash: the same bytes in many versions are kept one
+ * time. Written without looking first, which would cost a round trip per
+ * file; writing it again stores the same bytes.
+ */
 export async function putBlob(bucket: R2Bucket, sha: string, data: Uint8Array): Promise<void> {
-  const key = `blobs/${sha}`;
-  if (await bucket.head(key)) return;
-  await bucket.put(key, data, { sha256: sha, httpMetadata: { contentType: 'application/octet-stream' } });
+  await bucket.put(`blobs/${sha}`, data, { sha256: sha, httpMetadata: { contentType: 'application/octet-stream' } });
 }
 
 export async function putArchive(bucket: R2Bucket, sha: string, data: Uint8Array): Promise<void> {
-  const key = `archives/${sha}.zip`;
-  if (await bucket.head(key)) return;
-  await bucket.put(key, data, { sha256: sha, httpMetadata: { contentType: 'application/zip' } });
+  await bucket.put(`archives/${sha}.zip`, data, { sha256: sha, httpMetadata: { contentType: 'application/zip' } });
 }

@@ -60,6 +60,8 @@ export interface SaveResult {
   created: number;
   updated: number;
   unchanged: number;
+  /** inputs not reached before the deadline, left for the next run */
+  remaining: number;
   /** new versions, by source key */
   versions: Map<string, string>;
 }
@@ -116,12 +118,29 @@ interface ItemRow {
  * Keep a set of versions: publishers and items created as needed, a new
  * revision only where the content changed, files and the package zip stored
  * in R2 by hash (when the license allows), then the search index brought up
- * to date. Each item's rows are written together or not at all.
+ * to date. Each item's rows are written together or not at all. With a
+ * deadline (a time in ms), no chunk is started after it: what is left is
+ * counted in `remaining`, for a later run (where what was saved is unchanged).
  */
-export async function saveVersions(env: Env, inputs: VersionInput[]): Promise<SaveResult> {
-  const result: SaveResult = { created: 0, updated: 0, unchanged: 0, versions: new Map() };
-  for (let i = 0; i < inputs.length; i += 40) await saveChunk(env, inputs.slice(i, i + 40), result);
+export async function saveVersions(env: Env, inputs: VersionInput[], until?: number): Promise<SaveResult> {
+  const result: SaveResult = { created: 0, updated: 0, unchanged: 0, remaining: 0, versions: new Map() };
+  for (let i = 0; i < inputs.length; i += 40) {
+    if (until !== undefined && Date.now() >= until) {
+      result.remaining = inputs.length - i;
+      break;
+    }
+    await saveChunk(env, inputs.slice(i, i + 40), result);
+  }
   return result;
+}
+
+/** Run these, at most `limit` at a time (a Worker has six connections open at once). */
+async function inParallel(tasks: Iterable<() => Promise<unknown>>, limit = 6): Promise<void> {
+  const queue = [...tasks];
+  const worker = async () => {
+    for (let task = queue.shift(); task; task = queue.shift()) await task();
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, queue.length) }, worker));
 }
 
 async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): Promise<void> {
@@ -198,6 +217,8 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
   const tagNames = new Map((await loadTags(db)).map((t) => [t.id, t]));
 
   const groups: D1PreparedStatement[][] = [];
+  /** R2 writes for the new versions, each object once (many skills share a file) */
+  const writes = new Map<string, () => Promise<unknown>>();
 
   for (const input of inputs) {
     const group: D1PreparedStatement[] = [];
@@ -263,24 +284,28 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
       continue;
     }
 
-    // a new version: files and the zip into R2 first (by hash; a failed write below leaves only unreferenced blobs)
+    // a new version: files and the zip go into R2 before any row refers to them (by hash; a failed
+    // write leaves the rows unwritten and only unreferenced objects behind)
     const versionId = uuidv7();
     const fileRows: { path: string; sha: string; size: number; executable: boolean }[] = [];
     for (const f of input.files) {
       const sha = await sha256(f.data);
-      if (input.hosted) await putBlob(env.HARNESS_FILES, sha, f.data);
+      if (input.hosted) writes.set(`blob:${sha}`, () => putBlob(env.HARNESS_FILES, sha, f.data));
       fileRows.push({ path: f.path, sha, size: f.data.length, executable: f.executable });
     }
     let archive: { sha: string; size: number } | null = null;
     if (input.hosted && input.files.length) {
       const zip = buildZip(input.files);
-      archive = { sha: await sha256(zip), size: zip.length };
-      await putArchive(env.HARNESS_FILES, archive.sha, zip);
+      const sha = await sha256(zip);
+      archive = { sha, size: zip.length };
+      writes.set(`archive:${sha}`, () => putArchive(env.HARNESS_FILES, sha, zip));
     }
     let readmeKey: string | null = null;
     if (input.hosted && input.readme?.trim()) {
-      readmeKey = `readme/${versionId}.html`;
-      await env.HARNESS_FILES.put(readmeKey, renderMarkdown(input.readme), { httpMetadata: { contentType: 'text/html; charset=utf-8' } });
+      const key = `readme/${versionId}.html`;
+      const html = renderMarkdown(input.readme);
+      readmeKey = key;
+      writes.set(key, () => env.HARNESS_FILES.put(key, html, { httpMetadata: { contentType: 'text/html; charset=utf-8' } }));
     }
 
     let itemId: string;
@@ -359,6 +384,8 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult): 
     result.versions.set(input.sourceKey, versionId);
   }
 
+  // each one is a round trip, so they overlap
+  await inParallel(writes.values());
   await runGroups(db, groups);
 }
 

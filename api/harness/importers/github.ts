@@ -44,6 +44,8 @@ export interface RepoResult {
   created: number;
   updated: number;
   retired: number;
+  /** skills not saved before the deadline: the import is not finished */
+  remaining: number;
   rejected: { path: string; errors: string[] }[];
 }
 
@@ -72,12 +74,21 @@ interface Repo {
 
 /**
  * Import one repository at its default branch's latest commit. Nothing is
- * done when that commit was imported already, unless `force`.
+ * done when that commit was imported already, unless `force`. Saving stops
+ * at the deadline `until` (ms), if given: the rest is counted in `remaining`,
+ * and skills gone from the repository are retired only once all are saved.
  */
-export async function importRepo(env: Env, fullName: string, config: RepoConfig, lastCommit: string | null, force = false): Promise<RepoResult> {
+export async function importRepo(
+  env: Env,
+  fullName: string,
+  config: RepoConfig,
+  lastCommit: string | null,
+  force = false,
+  until?: number,
+): Promise<RepoResult> {
   const repo = await gh<Repo>(env, `/repos/${fullName}`);
   const commit = await gh<{ sha: string; commit: { committer?: { date?: string } } }>(env, `/repos/${repo.full_name}/commits/${encodeURIComponent(repo.default_branch)}`);
-  const result: RepoResult = { commit: commit.sha, changed: false, skills: 0, created: 0, updated: 0, retired: 0, rejected: [] };
+  const result: RepoResult = { commit: commit.sha, changed: false, skills: 0, created: 0, updated: 0, retired: 0, remaining: 0, rejected: [] };
   if (!force && commit.sha === lastCommit) return result;
   result.changed = true;
 
@@ -211,9 +222,11 @@ export async function importRepo(env: Env, fullName: string, config: RepoConfig,
     });
   }
   result.skills = inputs.length;
-  const saved = await saveVersions(env, inputs);
+  const saved = await saveVersions(env, inputs, until);
   result.created = saved.created;
   result.updated = saved.updated;
+  result.remaining = saved.remaining;
+  if (result.remaining) return result;
 
   // skills that were in this repository before and are gone now
   const prefix = `github:${repo.full_name.toLowerCase()}:`;

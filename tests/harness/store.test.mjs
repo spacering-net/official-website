@@ -311,3 +311,48 @@ test('a long token is still a token when part of it reads like a placeholder', a
   assert.equal(reg.status, 'listed');
   assert.ok(!JSON.stringify(reg).includes(unit));
 });
+
+test('a repository too big for one run is saved over several, and nothing is retired before the last', async (t) => {
+  const { importRepo } = await import('../../api/harness/importers/github.ts');
+  const { tarGz } = await import('./env.mjs');
+  const env = testEnv();
+  const sha = 'abc1234def';
+  const files = { LICENSE: 'Permission is hereby granted, free of charge, to any person obtaining a copy' };
+  for (let i = 1; i <= 45; i++) {
+    const name = `task-${String(i).padStart(2, '0')}`;
+    files[`skills/${name}/SKILL.md`] = `---\nname: ${name}\ndescription: Carries out task number ${i}, step by step.\n---\n# Task ${i}\nBody ${i}.\n`;
+  }
+  const tgz = await tarGz('someone-skills-abc1234', files);
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    const u = String(url);
+    if (u === 'https://api.github.com/repos/someone/skills') {
+      return Response.json({ full_name: 'someone/skills', html_url: 'https://github.com/someone/skills', default_branch: 'main', stargazers_count: 3, archived: false, license: { spdx_id: 'MIT' }, owner: { id: 42, login: 'someone', type: 'User' } });
+    }
+    if (u === 'https://api.github.com/repos/someone/skills/commits/main') return Response.json({ sha, commit: { committer: { date: '2026-10-01T00:00:00Z' } } });
+    if (u.startsWith(`https://api.github.com/repos/someone/skills/git/trees/${sha}`)) {
+      return Response.json({ truncated: false, tree: Object.entries(files).map(([path, text]) => ({ path, type: 'blob', size: text.length })) });
+    }
+    if (u === `https://codeload.github.com/someone/skills/tar.gz/${sha}`) return new Response(tgz);
+    throw new Error(`unexpected fetch ${u}`);
+  });
+  // a skill an earlier commit had, gone from this one
+  await saveVersions(env, [versionInput({ name: 'gone', sourceKey: 'github:someone/skills:skills/gone' })]);
+
+  // the clock passes the deadline while the first chunk of 40 is written
+  let now = 1_000;
+  const clock = t.mock.method(Date, 'now', () => now);
+  env.HARNESS_DB.beforeBatch = () => (now = 10_000);
+  const first = await importRepo(env, 'someone/skills', { paths: ['skills'] }, null, false, 5_000);
+  assert.deepEqual([first.skills, first.created, first.remaining, first.retired], [45, 40, 5, 0]);
+  assert.equal(item(env, 'gone').status, 'public');
+  // the first chunk's files are stored: a SKILL.md, a zip and a readme each (and the earlier skill's three)
+  assert.equal(env.HARNESS_FILES.objects.size, 40 * 3 + 3);
+  clock.mock.restore();
+  env.HARNESS_DB.beforeBatch = null;
+
+  // the next run finds the 40 unchanged and saves the rest, then retires what is gone
+  const second = await importRepo(env, 'someone/skills', { paths: ['skills'] }, null);
+  assert.deepEqual([second.created, second.remaining, second.retired], [5, 0, 1]);
+  assert.equal(item(env, 'gone').status, 'retired');
+  assert.equal(env.HARNESS_DB.rows("SELECT COUNT(*) AS n FROM items WHERE status = 'public' AND source_key LIKE 'github:someone/skills:skills/task-%'")[0].n, 45);
+});
