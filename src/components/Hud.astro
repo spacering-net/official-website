@@ -9,10 +9,14 @@ interface Props {
 const { t } = Astro.props;
 const other = dicts[t.lang === 'en' ? 'zh' : 'en'];
 // Each link lights the rail while any chapter in its range is projected. Space,
-// the assistant and Harness have links of their own; the ring covers the hero
-// and the rest of its products; open source covers Codeg and the finale, and
-// leads to the finale.
-const own = (['space', 'assistant', 'harness'] as const).map((key) => ({ key, at: CHAPTER_IDS.indexOf(key) }));
+// the assistant and Harness have links of their own (Harness's opens the
+// marketplace itself); the ring covers the hero and the rest of its products;
+// open source covers Codeg and the finale, and leads to the finale.
+const own = (['space', 'assistant', 'harness'] as const).map((key) => ({
+  key,
+  at: CHAPTER_IDS.indexOf(key),
+  page: key === 'harness' ? `${t.path}harness/` : null,
+}));
 const codeg = CHAPTER_IDS.indexOf('codeg');
 const last = CHAPTER_IDS.length - 1;
 const ring = [...Array(codeg).keys()].filter((i) => !own.some((p) => p.at === i)).join(',');
@@ -25,8 +29,8 @@ const ring = [...Array(codeg).keys()].filter((i) => !own.some((p) => p.at === i)
   <div class="hud__right">
     <nav class="nav" aria-label={t.nav.label}>
       <a class="nav__link" href={`#${CHAPTER_IDS[0]}`} data-goto="0" data-range={ring} data-scramble>{t.nav.ring}</a>
-      {own.map(({ key, at }) => (
-        <a class="nav__link" href={`#${key}`} data-goto={at} data-range={`${at}`} data-scramble>{t.nav[key]}</a>
+      {own.map(({ key, at, page }) => (
+        <a class="nav__link" href={page ?? `#${key}`} data-goto={page ? undefined : at} data-range={`${at}`} data-scramble>{t.nav[key]}</a>
       ))}
       <a class="nav__link" href={`#${CHAPTER_IDS[last]}`} data-goto={last} data-range={`${codeg}-${last}`} data-scramble>{t.nav.openSource}</a>
       <svg class="nav__rail" aria-hidden="true"><path d=""></path></svg>

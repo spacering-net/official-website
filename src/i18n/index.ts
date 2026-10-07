@@ -82,6 +82,7 @@ export interface Dict {
     };
   };
   harness: Chapter & {
+    actions: { enter: string };
     holo: {
       label: string;
       summary: string;
@@ -137,7 +138,7 @@ const en: Dict = {
   meta: {
     title: 'SpaceRing — Your digital world, in a space ring',
     description:
-      'SpaceRing is a space ring for the network. Your data, devices, identity and the AI that works for you, linked into one ring you carry anywhere and manage in one place. Coming to the ring: Space, a personal assistant, the Harness marketplace, Relay and Signet.',
+      'SpaceRing is a space ring for the network. Your data, devices, identity and the AI that works for you, linked into one ring you carry anywhere and manage in one place. The Harness marketplace is open; coming next to the ring: Space, a personal assistant, Relay and Signet.',
   },
   nav: {
     label: 'Primary',
@@ -233,6 +234,7 @@ const en: Dict = {
     title: 'Harness',
     kicker: 'Put raw intelligence to work.',
     body: 'Skills, MCP servers, prompts, assistants and connectors in one marketplace. Every listing shows its author, version and the permissions it needs, and installs in one step into your personal assistant, Codeg or any compatible client.',
+    actions: { enter: 'Enter Harness' },
     holo: {
       label: 'harness · market',
       summary: '5 kinds · one install',
@@ -302,7 +304,7 @@ const en: Dict = {
   },
   open: {
     title: 'Forged in the open.',
-    body: 'SpaceRing is built in public at github.com/spacering-net. Codeg has shipped, and the rest of the ring is still on the anvil.',
+    body: 'SpaceRing is built in public at github.com/spacering-net. Codeg and Harness have shipped, and the rest of the ring is still on the anvil.',
     roadmap: 'Roadmap',
     actions: { org: 'Follow spacering-net', star: 'Star Codeg' },
     footer: 'SpaceRing · spacering.net',
@@ -316,7 +318,7 @@ const en: Dict = {
     items: [
       { key: 'space', name: 'Space', desc: 'Your files, notes and memories, encrypted', status: 'planned' },
       { key: 'assistant', name: 'Personal assistant', desc: 'Always on, working while you are away', status: 'planned' },
-      { key: 'harness', name: 'Harness', desc: 'Skills · MCP · prompts · assistants · connectors', status: 'planned' },
+      { key: 'harness', name: 'Harness', desc: 'Skills · MCP · prompts · assistants · connectors', status: 'live' },
       { key: 'relay', name: 'Relay', desc: 'Every device on one private network', status: 'planned' },
       { key: 'signet', name: 'Signet', desc: 'Identity, keys and permissions', status: 'planned' },
       { key: 'codeg', name: 'Codeg', desc: 'Open-source multi-agent coding workspace', status: 'live' },
@@ -325,7 +327,7 @@ const en: Dict = {
       { key: 'docs', name: 'Codeg docs', desc: 'docs.codeg.app' },
       { key: 'github', name: 'GitHub', desc: 'github.com/spacering-net' },
     ],
-    chartLabel: 'Orbit chart: the SpaceRing mark at the centre, each product on its own orbit. Codeg, the live project, is lit.',
+    chartLabel: 'Orbit chart: the SpaceRing mark at the centre, each product on its own orbit. Codeg and Harness, the live ones, are lit.',
   },
 };
 
@@ -336,7 +338,7 @@ const zh: Dict = {
   meta: {
     title: 'SpaceRing 网络空间戒指 — 把数字世界，收进空间戒指',
     description:
-      'SpaceRing 网络空间戒指：通过网络，把数据、设备、身份，以及替你做事的 AI 与它的能力连进同一枚戒指，随身携带，统一管理。规划中的产品有空间、个人助手、Harness 综合市场、Relay 与 Signet。',
+      'SpaceRing 网络空间戒指：通过网络，把数据、设备、身份，以及替你做事的 AI 与它的能力连进同一枚戒指，随身携带，统一管理。Harness 综合市场已经上线，空间、个人助手、Relay 与 Signet 正在规划中。',
   },
   nav: {
     label: '主导航',
@@ -429,6 +431,7 @@ const zh: Dict = {
     title: 'Harness',
     kicker: '让 AI 的能力，落到实处。',
     body: '技能、MCP 服务、提示词、助手与连接器，汇集在同一个市场。每一项都写明作者、版本和所需权限，一步装进你的个人助手、Codeg 或任何兼容的客户端。',
+    actions: { enter: '进入 Harness' },
     holo: {
       label: 'Harness · 市场',
       summary: '5 类能力 · 一步安装',
@@ -498,7 +501,7 @@ const zh: Dict = {
   },
   open: {
     title: '在开源中锻造。',
-    body: 'SpaceRing 在 github.com/spacering-net 公开构建。Codeg 已经上线，其余部分还在锻造。',
+    body: 'SpaceRing 在 github.com/spacering-net 公开构建。Codeg 和 Harness 已经上线，其余部分还在锻造。',
     roadmap: '路线图',
     actions: { org: '关注 spacering-net', star: '为 Codeg 点 Star' },
     footer: 'SpaceRing 网络空间戒指 · spacering.net',
@@ -512,7 +515,7 @@ const zh: Dict = {
     items: [
       { key: 'space', name: '空间', desc: '加密存放文件、笔记与记忆', status: 'planned' },
       { key: 'assistant', name: '个人助手', desc: '全天候在线，你不在时也在工作', status: 'planned' },
-      { key: 'harness', name: 'Harness', desc: '技能 · MCP · 提示词 · 助手 · 连接器', status: 'planned' },
+      { key: 'harness', name: 'Harness', desc: '技能 · MCP · 提示词 · 助手 · 连接器', status: 'live' },
       { key: 'relay', name: 'Relay', desc: '所有设备连成一张私有网络', status: 'planned' },
       { key: 'signet', name: 'Signet', desc: '身份、密钥与授权', status: 'planned' },
       { key: 'codeg', name: 'Codeg', desc: '开源的多智能体编程工作台', status: 'live' },
@@ -521,7 +524,7 @@ const zh: Dict = {
       { key: 'docs', name: 'Codeg 文档', desc: 'docs.codeg.app' },
       { key: 'github', name: 'GitHub', desc: 'github.com/spacering-net' },
     ],
-    chartLabel: '轨道图：SpaceRing 标志居中，每个产品各占一条轨道，已上线的 Codeg 被点亮',
+    chartLabel: '轨道图：SpaceRing 标志居中，每个产品各占一条轨道，已上线的 Codeg 和 Harness 被点亮',
   },
 };
 

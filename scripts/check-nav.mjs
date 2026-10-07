@@ -23,7 +23,7 @@ await page.waitForTimeout(2600);
 console.log('home link →', await page.evaluate(() => ({ chapter: document.documentElement.dataset.chapter, hash: location.hash || '(none)' })));
 
 // 2. click "Open the ring" from the hero: focus lands on the Space heading. Planned
-// chapters hold no links, so Tab goes on to the next link (in Codeg) and the
+// chapters hold no links, so Tab goes on to the next link (Enter Harness) and the
 // projection follows it there.
 await page.goto(`${base}/`, { waitUntil: 'load' });
 await page.waitForTimeout(5200);
@@ -51,7 +51,7 @@ console.log('roadmap → harness:', await page.evaluate(() => ({ chapter: docume
 // 4. HUD nav: Space, Assistant and Harness light on their own chapters, Ring on the
 // hero and the ring's other products, Open source on Codeg and the finale. Each link lands
 // on its own chapter (Open source on the finale, not on Codeg); Ring leaves a
-// clean address.
+// clean address. Harness leads to the marketplace instead, as does its chapter's button.
 const lit = [];
 for (let i = 0; i <= lastIndex; i++) {
   await page.click(`.dial__item[data-goto="${i}"]`, { force: true });
@@ -59,17 +59,24 @@ for (let i = 0; i <= lastIndex; i++) {
   lit.push(await page.evaluate(() => document.querySelector('.nav__link[aria-current="true"]')?.getAttribute('href') ?? '-'));
 }
 const lands = [];
-for (const href of ['#space', '#assistant', '#harness', '#open-source', '#top']) {
+for (const href of ['#space', '#assistant', '#open-source', '#top']) {
   await page.click(`.nav__link[href="${href}"]`);
   await page.waitForTimeout(2800);
   lands.push(await page.evaluate(() => `${document.documentElement.dataset.chapter}${location.hash}`));
 }
-const navOk = lit.join() === '#top,#space,#assistant,#harness,#top,#top,#open-source,#open-source' && lands.join() === '1#space,2#assistant,3#harness,7#open-source,0';
-console.log('nav lit per chapter:', lit.join(' '), '| links land on', lands.join(' '), navOk ? 'ok' : '✗ nav');
+const market = await page.evaluate(() => [
+  document.querySelector('.nav__link[data-range="3"]')?.getAttribute('href'),
+  document.querySelector('#harness .projection__actions a')?.getAttribute('href'),
+]);
+const navOk =
+  lit.join() === '#top,#space,#assistant,/harness/,#top,#top,#open-source,#open-source' &&
+  lands.join() === '1#space,2#assistant,7#open-source,0' &&
+  market.join() === '/harness/,/harness/';
+console.log('nav lit per chapter:', lit.join(' '), '| links land on', lands.join(' '), '| market:', market.join(' '), navOk ? 'ok' : '✗ nav');
 
 // 5. language switch: remembers the choice, cross-fades, and lands on the same
 // chapter already projected, without replaying the intro
-await page.click('.nav__link[href="#harness"]');
+await page.click('.dial__item[data-goto="3"]', { force: true });
 await page.waitForTimeout(2800);
 await page.addInitScript(() => addEventListener('pagereveal', (e) => (window.__vt = !!e.viewTransition)));
 await page.click('.hud .lang-switch');

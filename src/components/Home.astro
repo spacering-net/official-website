@@ -26,8 +26,10 @@ const year = new Date().getFullYear();
 const at = (id: string) => CHAPTER_IDS.indexOf(id as (typeof CHAPTER_IDS)[number]);
 const finale = CHAPTER_IDS.length - 1;
 
-// Planned products in scroll order. Panels alternate sides so the ring always has room.
-const planned = [
+// The ring's products in scroll order, each with its status from the menu. Panels
+// alternate sides so the ring always has room.
+const statusOf = (key: string) => t.menu.items.find((item) => item.key === key)?.status ?? 'planned';
+const products = [
   { key: 'space', side: 'right', copy: t.space, Holo: SpaceHolo },
   { key: 'assistant', side: 'left', copy: t.assistant, Holo: AssistantHolo },
   { key: 'harness', side: 'right', copy: t.harness, Holo: HarnessHolo },
@@ -74,7 +76,7 @@ const isLong = (title: string) => title.length > 10;
         </div>
       </section>
 
-      {planned.map(({ key, side, copy, Holo }) => (
+      {products.map(({ key, side, copy, Holo }) => (
         <section class="chapter" id={key} data-chapter={at(key)} data-side={side} aria-labelledby={`${key}-title`}>
           <article class="projection" data-projection>
             <div class="projection__edge" aria-hidden="true"></div>
@@ -83,13 +85,18 @@ const isLong = (title: string) => title.length > 10;
             <div class="projection__scanline" aria-hidden="true"></div>
             <div class="projection__body scan">
               <p class="projection__meta mono">
-                <span class="status">{t.status.planned}</span>
+                <span class:list={['status', statusOf(key) === 'live' && 'status--live']}>{t.status[statusOf(key)]}</span>
                 <span>{copy.tag}</span>
               </p>
               <h2 class:list={['projection__title', isLong(copy.title) && 'projection__title--long']} id={`${key}-title`}>{copy.title}</h2>
               <p class="projection__kicker">{copy.kicker}</p>
               <p class="projection__text">{copy.body}</p>
               <Holo t={t} />
+              {key === 'harness' && (
+                <div class="projection__actions">
+                  <a class="btn btn--primary" href={`${t.path}harness/`}>{t.harness.actions.enter}<Icon name="arrow" /></a>
+                </div>
+              )}
             </div>
           </article>
         </section>
