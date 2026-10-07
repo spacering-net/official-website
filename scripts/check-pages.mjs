@@ -137,6 +137,41 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
   await page.waitForTimeout(400);
   const back = await page.evaluate(() => ({ url: location.search, chip: document.querySelector('.active__chip')?.textContent?.trim() }));
   report(back.url.startsWith('?tag=') && back.chip === tagName && (await same(page)), 'Back returns to the filter before', JSON.stringify(back));
+
+  // a runtime chosen from its list: in place, the list showing it and keeping the focus
+  await page.focus('.browse__side select[data-pick]');
+  await page.selectOption('.browse__side select[data-pick]', 'python');
+  await page.waitForFunction(() => new URL(location.href).searchParams.get('runtime') === 'python', null, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(300);
+  const picked = await page.evaluate(() => {
+    const list = document.querySelector('.browse__side select[data-pick]');
+    return {
+      url: location.search,
+      value: list?.value,
+      shown: list?.selectedOptions[0]?.textContent?.replace(/\s+/g, ' ').trim(),
+      focus: document.activeElement === list,
+      chips: [...document.querySelectorAll('.active__chip')].map((c) => c.textContent.trim()),
+    };
+  });
+  // the tag chosen before stays chosen
+  const query = new URLSearchParams(picked.url);
+  report(
+    query.get('runtime') === 'python' && query.get('tag') === new URLSearchParams(back.url).get('tag') && picked.value === 'python' && picked.shown?.startsWith('Python') && picked.focus && picked.chips.includes('Python') && (await same(page)),
+    'a runtime chosen from its list filters in place, the list keeping the focus',
+    JSON.stringify(picked),
+  );
+  await page.selectOption('.browse__side select[data-pick]', '');
+  await page.waitForFunction(() => !new URL(location.href).searchParams.has('runtime'), null, { timeout: 8000 }).catch(() => {});
+  // and from the keyboard: an arrow opens it, another moves on, Enter chooses; the focus comes back to it
+  await page.waitForTimeout(300);
+  await page.focus('.browse__side select[data-pick]');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => new URL(location.href).searchParams.has('runtime'), null, { timeout: 8000 }).catch(() => {});
+  await page.waitForTimeout(400);
+  const keyed = await page.evaluate(() => ({ runtime: new URL(location.href).searchParams.get('runtime'), focus: !!document.activeElement?.matches('.browse__side select[data-pick]') }));
+  report(!!keyed.runtime && keyed.focus && (await same(page)), 'the runtime list works from the keyboard, the focus staying on it', JSON.stringify(keyed));
   report(!errors.length, 'browse: no errors', errors.join(' | '));
   await ctx.close();
 }
@@ -278,10 +313,10 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
   await page.click('[data-sheet-open]');
   await page.waitForTimeout(500);
   const shown = await page.evaluate(() => [document.querySelector('[data-sheet]')?.open, document.documentElement.classList.contains('is-locked')]);
-  await page.click('[data-sheet] .facet:has-text("Python")');
+  await page.selectOption('[data-sheet] select[data-pick]', 'python');
   await page.waitForFunction(() => new URL(location.href).searchParams.get('runtime') === 'python', null, { timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(300);
-  const chosen = await page.evaluate(() => document.querySelector('[data-sheet] .facet[aria-current]')?.textContent?.trim());
+  const chosen = await page.evaluate(() => document.querySelector('[data-sheet] select[data-pick]')?.selectedOptions[0]?.textContent?.replace(/\s+/g, ' ').trim());
   await page.click('[data-sheet-close]');
   await page.waitForTimeout(400);
   const after = await page.evaluate(() => [document.querySelector('[data-sheet]')?.open, document.documentElement.classList.contains('is-locked'), document.querySelector('[data-region="filtered"]')?.textContent?.trim()]);
@@ -376,7 +411,7 @@ for (const [path, lang] of [
 
 // 8. one column and its lines, at a 5K-wide window: the HUD, the bar, the
 // sidebar, the grid and the footer keep to the same edges, and the sidebar's
-// rows to the search's; an item's side starts level with its head, its
+// runtime list to the search's; an item's side starts level with its head, its
 // publisher first, its text and code as wide as the column. Then the theme:
 // switched, kept for the next page from its first paint, and never on the
 // homepage (whose menu has no switch).
@@ -390,7 +425,7 @@ for (const [path, lang] of [
   const lines = await page.evaluate(() => {
     const r = (s) => document.querySelector(s).getBoundingClientRect();
     const x = (v) => Math.round(v);
-    const [heading, count, facet, card] = ['.browse__side .filters__group h2', '.results__count', '.browse__side .facet', '.grid .card'].map(r);
+    const [heading, count, pick, card] = ['.browse__side .filters__group h2', '.results__count', '.browse__side .pick__select', '.grid .card'].map(r);
     const words = (el) => {
       const range = document.createRange();
       range.selectNodeContents([...el.childNodes].find((n) => n.textContent.trim()));
@@ -401,10 +436,11 @@ for (const [path, lang] of [
       right: [r('.hud .menu-btn').right, r('.grid').right, r('.sort').right].map(x),
       columns: [r('.browse .kinds').left, r('.grid').left].map(x),
       rows: [x(heading.top + heading.height / 2), x(count.top + count.height / 2)],
-      first: [x(facet.top), x(card.top)],
-      sideLeft: [r('.browse .search').left, r('.browse__side .filters').left, facet.left].map(x),
-      sideRight: [r('.browse .search').right, r('.browse__side .filters').right, facet.right].map(x),
-      words: [words(document.querySelector('.browse__side .facet')), words(document.querySelector('.browse__side .tags .chip'))].map(x),
+      first: [x(pick.top), x(card.top)],
+      sideLeft: [r('.browse .search').left, r('.browse__side .filters').left, pick.left].map(x),
+      sideRight: [r('.browse .search').right, r('.browse__side .filters').right, pick.right].map(x),
+      // the chosen runtime's name, as the list shows it, and a tag's
+      words: [words(document.querySelector('.browse__side selectedcontent .pick__name') ?? document.querySelector('.browse__side .pick__select')), words(document.querySelector('.browse__side .tags .chip'))].map(x),
     };
   });
   const level = (a, d = 1) => Math.max(...a) - Math.min(...a) <= d;
@@ -415,7 +451,7 @@ for (const [path, lang] of [
   );
   report(
     level(lines.sideLeft) && level(lines.sideRight) && level(lines.words),
-    'the sidebar: its rows on the search’s edges, their words where a tag’s are',
+    'the sidebar: the runtime list on the search’s edges, its words where a tag’s are',
     JSON.stringify({ left: lines.sideLeft, right: lines.sideRight, words: lines.words }),
   );
 

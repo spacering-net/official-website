@@ -39,11 +39,53 @@ export function parseYaml(yaml: string): unknown {
 }
 
 /**
+ * Frontmatter as Claude Code reads it: a top-level value that is not valid
+ * YAML as written, such as an unquoted `[pr-number] [priority]` (the form
+ * Claude Code's own documentation gives `argument-hint`) or a sentence with a
+ * `: ` in it, is the text it is. Each such value, with the lines continuing
+ * it, comes back quoted; null when none needed it.
+ */
+export function quoteLooseValues(yaml: string): string | null {
+  const lines = yaml.split(/\r?\n/);
+  const out: string[] = [];
+  let changed = false;
+  for (let i = 0; i < lines.length; ) {
+    const m = /^([A-Za-z0-9_][\w.-]*):[ \t]+(\S.*)$/.exec(lines[i]);
+    let end = i + 1;
+    // quoted values and block scalars are as their authors meant them
+    if (m && !/^["']/.test(m[2]) && !/^[|>][-+0-9]*[ \t]*(#.*)?$/.test(m[2])) {
+      while (end < lines.length && /^[ \t]+\S/.test(lines[end])) end++;
+      let valid = true;
+      try {
+        parseYaml(lines.slice(i, end).join('\n'));
+      } catch {
+        valid = false;
+      }
+      if (!valid) {
+        const text = [m[2], ...lines.slice(i + 1, end).map((l) => l.trim())].join(' ').trim();
+        out.push(`${m[1]}: ${JSON.stringify(text)}`);
+        changed = true;
+        i = end;
+        continue;
+      }
+    }
+    out.push(...lines.slice(i, end));
+    i = end;
+  }
+  return changed ? out.join('\n') : null;
+}
+
+/** Tools listed as text: separated by spaces or commas, a pattern's own spaces (and parentheses, one level deep) kept: `Bash(ls *)`. */
+const toolList = (text: string) => text.match(/[^\s,()]+(?:\((?:[^()]|\([^()]*\))*\))?/g) ?? [];
+
+/**
  * Read and check a SKILL.md against the Agent Skills specification: `name`
  * follows the naming rule and matches the folder; `description` is 1 to 1024
  * characters. `folder` is the skill's directory name. `lenient` (imports)
  * turns an over-long description into a warning: some well-used skills have
- * one, and agents other than claude.ai accept it.
+ * one, and agents other than claude.ai accept it. It also reads frontmatter
+ * values that are not valid YAML as written the way Claude Code does, as
+ * text (quoteLooseValues), with a warning.
  */
 export function parseSkill(text: string, folder: string, { lenient = false } = {}): SkillParse {
   const errors: string[] = [];
@@ -54,7 +96,14 @@ export function parseSkill(text: string, folder: string, { lenient = false } = {
   try {
     data = parseYaml(fm.yaml);
   } catch {
-    return { body: fm.body, errors: ['frontmatter_invalid'], warnings };
+    const loose = lenient ? quoteLooseValues(fm.yaml) : null;
+    if (loose === null) return { body: fm.body, errors: ['frontmatter_invalid'], warnings };
+    try {
+      data = parseYaml(loose);
+    } catch {
+      return { body: fm.body, errors: ['frontmatter_invalid'], warnings };
+    }
+    warnings.push('frontmatter_unquoted');
   }
   if (!data || typeof data !== 'object' || Array.isArray(data)) return { body: fm.body, errors: ['frontmatter_invalid'], warnings };
   const d = data as Record<string, unknown>;
@@ -79,7 +128,7 @@ export function parseSkill(text: string, folder: string, { lenient = false } = {
   const allowedTools = Array.isArray(tools)
     ? tools.filter((t): t is string => typeof t === 'string')
     : typeof tools === 'string'
-      ? tools.split(/[\s,]+/).filter(Boolean)
+      ? toolList(tools)
       : undefined;
   const compatibility = str(d.compatibility);
   if (compatibility && compatibility.length > 500) warnings.push('compatibility_too_long');

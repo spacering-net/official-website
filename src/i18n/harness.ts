@@ -19,7 +19,8 @@ export interface HarnessDict {
   kinds: Record<'all' | 'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector', string>;
   kind: Record<'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector', string>;
   sort: { label: string; popular: string; new: string; updated: string };
-  runtime: { label: string; any: string; names: Record<string, string> };
+  /** `apply`: sends the runtime list's form, where scripts do not apply a choice at once */
+  runtime: { label: string; any: string; apply: string; names: Record<string, string> };
   tags: { label: string; all: string };
   more: string;
   first: string;
@@ -134,7 +135,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     kinds: { all: 'All', skill: 'Skills', mcp: 'MCP servers', prompt: 'Prompts', assistant: 'Assistants', connector: 'Connectors' },
     kind: { skill: 'Skill', mcp: 'MCP', prompt: 'Prompt', assistant: 'Assistant', connector: 'Connector' },
     sort: { label: 'Sort', popular: 'Popular', new: 'New', updated: 'Updated' },
-    runtime: { label: 'Runs on', any: 'Any', names: runtimes.en },
+    runtime: { label: 'Runs on', any: 'Any', apply: 'Apply', names: runtimes.en },
     tags: { label: 'Tags', all: 'All tags' },
     more: 'More',
     first: 'Back to the start',
@@ -286,7 +287,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     kinds: { all: '全部', skill: '技能', mcp: 'MCP 服务', prompt: '提示词', assistant: '助手', connector: '连接器' },
     kind: { skill: '技能', mcp: 'MCP', prompt: '提示词', assistant: '助手', connector: '连接器' },
     sort: { label: '排序', popular: '热门', new: '最新', updated: '最近更新' },
-    runtime: { label: '运行环境', any: '不限', names: runtimes.zh },
+    runtime: { label: '运行环境', any: '不限', apply: '应用', names: runtimes.zh },
     tags: { label: '标签', all: '全部标签' },
     more: '更多',
     first: '回到开头',

@@ -25,6 +25,45 @@ test('parseSkill refuses what the specification refuses, and flags the rest', ()
   assert.deepEqual(r.meta.extra, { 'user-invocable': false });
 });
 
+test('imports read frontmatter values that are not valid YAML as written as text, as Claude Code does', () => {
+  const skill = [
+    '---',
+    'name: image-blast-world',
+    'description: Build a world. Use when: the user has an image',
+    '  and wants a scene.',
+    'argument-hint: [world-name] [optional image path or world prompt]',
+    'allowed-tools: Read Write Bash(ls *) Bash(node .claude/scripts/world.mjs *)',
+    'context: fork',
+    '---',
+    'Body',
+  ].join('\n');
+  // an upload keeps to YAML
+  assert.deepEqual(parseSkill(skill, 'image-blast-world').errors, ['frontmatter_invalid']);
+  const r = parseSkill(skill, 'image-blast-world', { lenient: true });
+  assert.deepEqual(r.errors, []);
+  assert.ok(r.warnings.includes('frontmatter_unquoted'));
+  assert.equal(r.meta.description, 'Build a world. Use when: the user has an image and wants a scene.');
+  assert.equal(r.meta.extra['argument-hint'], '[world-name] [optional image path or world prompt]');
+  assert.equal(r.meta.extra.context, 'fork');
+  assert.deepEqual(r.meta.allowedTools, ['Read', 'Write', 'Bash(ls *)', 'Bash(node .claude/scripts/world.mjs *)']);
+  assert.equal(r.body, 'Body');
+
+  // what is valid as written stays as written: quoted values, block scalars, lists
+  const kept = parseSkill('---\nname: x\ndescription: |\n  Two: lines\n  here\nlicense: "MIT"\nallowed-tools: [Read, "Bash(git add:*)"]\nargument-hint: [a] [b]\n---\n', 'x', { lenient: true });
+  assert.equal(kept.meta.description, 'Two: lines\nhere');
+  assert.equal(kept.meta.license, 'MIT');
+  assert.deepEqual(kept.meta.allowedTools, ['Read', 'Bash(git add:*)']);
+  assert.equal(kept.meta.extra['argument-hint'], '[a] [b]');
+  // what quoting cannot mend is still refused
+  const misplaced = parseSkill('---\nname: x\n description: d\n---\n', 'x', { lenient: true });
+  assert.equal(misplaced.meta, undefined);
+  assert.ok(misplaced.errors.length > 0);
+  assert.deepEqual(parseSkill('---\nname: x\ndescription: d\nname: y\n---\n', 'x', { lenient: true }).errors, ['frontmatter_invalid']);
+  // tools written with commas, as Claude Code's commands often are, and patterns with parentheses of their own
+  assert.deepEqual(parseSkill('---\nname: x\ndescription: d\nallowed-tools: Bash(git add:*), Bash(git status:*), Read\n---\n', 'x').meta.allowedTools, ['Bash(git add:*)', 'Bash(git status:*)', 'Read']);
+  assert.deepEqual(parseSkill('---\nname: x\ndescription: d\nallowed-tools: Bash(echo $(date) *) Read\n---\n', 'x').meta.allowedTools, ['Bash(echo $(date) *)', 'Read']);
+});
+
 test('licenses are named from SPDX ids, common spellings and license texts', () => {
   assert.equal(spdx('mit'), 'MIT');
   assert.equal(spdx('Apache 2.0'), 'Apache-2.0');

@@ -1,8 +1,10 @@
 ---
 /**
- * The catalog's filters: where items run and what they are about, each with
- * how many are on the shelves. Plain links; the same in the sidebar and, on
- * small screens, in the filter sheet.
+ * The catalog's filters: where items run, chosen from a list, and what they
+ * are about, as tags; each with how many are on the shelves. The same in the
+ * sidebar and, on small screens, in the filter sheet. A runtime chosen applies
+ * at once (client/harness.ts); without scripts the list is a form, and the
+ * tags are plain links.
  */
 import { harnessDicts } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
@@ -22,6 +24,16 @@ const runtimes = Object.entries(counts)
   .filter(([k, v]) => k.startsWith('runtime:') && v > 0)
   .map(([k, v]) => ({ id: k.slice('runtime:'.length), n: v }))
   .sort((a, b) => b.n - a.n);
+// a runtime asked for that has nothing on the shelves is still the one shown as chosen
+if (state.runtime && !runtimes.some((r) => r.id === state.runtime)) runtimes.push({ id: state.runtime, n: 0 });
+const runtimeOptions = [
+  { id: '', name: h.runtime.any, n: counts.all ?? runtimes.reduce((sum, r) => sum + r.n, 0) },
+  ...runtimes.map((r) => ({ id: r.id, name: h.runtime.names[r.id] ?? r.id, n: r.n })),
+].map((o) => ({ ...o, href: withQuery(path, state, { runtime: o.id || undefined }), chosen: (state.runtime ?? '') === o.id }));
+// the rest of the state, kept when the form is sent without scripts (a new choice starts from the first page)
+const kept = Object.entries({ q: state.q || undefined, kind: state.kind, tag: state.tag, sort: state.sort === 'popular' ? undefined : state.sort }).filter(
+  (e): e is [string, string] => !!e[1],
+);
 const used = tags.filter((t) => t.count > 0).sort((a, b) => b.count - a.count);
 // the most used first; the rest fold away, unless one of them is the chosen tag
 const SHOWN = 16;
@@ -33,21 +45,20 @@ const open = folded.some((t) => t.id === state.tag);
   {runtimes.length > 1 && (
     <section class="filters__group">
       <h2 class="eyebrow">{h.runtime.label}</h2>
-      <ul class="facets">
-        <li>
-          <a class="facet" href={withQuery(path, state, { runtime: undefined })} aria-current={!state.runtime ? 'true' : undefined}>
-            <span>{h.runtime.any}</span>
-          </a>
-        </li>
-        {runtimes.map((r) => (
-          <li>
-            <a class="facet" href={withQuery(path, state, { runtime: r.id })} aria-current={state.runtime === r.id ? 'true' : undefined}>
-              <span>{h.runtime.names[r.id] ?? r.id}</span>
-              <span class="facet__n">{n(r.n)}</span>
-            </a>
-          </li>
-        ))}
-      </ul>
+      <form class="pick" action={path} method="get">
+        {kept.map(([name, value]) => <input type="hidden" name={name} value={value} />)}
+        {/* Chrome draws the list itself (appearance: base-select), names and counts apart;
+            elsewhere it is the system's, each option read as "name · count" */}
+        <select class="pick__select" name="runtime" aria-label={h.runtime.label} data-pick>
+          <button class="pick__button" type="button"><selectedcontent></selectedcontent></button>
+          {runtimeOptions.map((o) => (
+            <option value={o.id} selected={o.chosen} data-href={o.href}>
+              <span class="pick__name">{o.name}</span><span class="pick__sep"> · </span><span class="pick__n">{n(o.n)}</span>
+            </option>
+          ))}
+        </select>
+        <noscript><button class="chip pick__apply" type="submit">{h.runtime.apply}</button></noscript>
+      </form>
     </section>
   )}
   {used.length > 0 && (
@@ -89,50 +100,181 @@ const open = folded.some((t) => t.id === state.tag);
     margin-bottom: var(--s-3);
   }
 
-  .facets {
-    display: grid;
-    gap: 1px;
+  /* The runtime list: a pill on the column's edges, like the search above,
+     its words where a tag's are; open, a raised list of the same rows, the
+     chosen one outlined as a chosen tag is. */
+  .pick {
+    position: relative;
   }
 
-  /* Each row a pill on the column's edges, like the search above and the
-     tags below; its words inset as a tag's are, the one chosen outlined as
-     a chosen tag is. */
-  .facet {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: var(--s-4);
-    padding: 7px 12px;
+  .pick__select {
+    width: 100%;
+    height: 40px;
+    padding: 0 38px 0 11px;
+    border: 1px solid var(--hairline-strong);
     border-radius: 999px;
-    font-size: 14.5px;
-    line-height: 1.4;
-    color: var(--corona-64);
-    transition:
-      color 0.2s,
-      background-color 0.2s,
-      box-shadow 0.2s;
-  }
-
-  .facet:hover {
+    background: var(--field);
     color: var(--corona);
-    background: rgb(var(--corona-rgb) / 0.05);
+    font: inherit;
+    font-size: 14.5px;
+    cursor: pointer;
+    appearance: none;
+    transition:
+      border-color 0.25s,
+      box-shadow 0.25s;
   }
 
-  .facet[aria-current] {
-    color: var(--bead-hot);
-    background: rgb(var(--bead-rgb) / 0.08);
-    box-shadow: inset 0 0 0 1px rgb(var(--bead-rgb) / 0.5);
+  .pick__select:hover {
+    border-color: rgb(var(--corona-rgb) / 0.3);
   }
 
-  .facet__n {
+  .pick__select:focus-visible {
+    outline: none;
+    border-color: rgb(var(--bead-rgb) / 0.6);
+    box-shadow: 0 0 0 4px rgb(var(--bead-rgb) / 0.12);
+  }
+
+  /* the system's list: a chevron of our own over the box */
+  .pick::after {
+    content: '';
+    position: absolute;
+    right: 17px;
+    top: 50%;
+    width: 6px;
+    height: 6px;
+    margin-top: -4px;
+    border-right: 1.3px solid var(--graphite);
+    border-bottom: 1.3px solid var(--graphite);
+    rotate: 45deg;
+    pointer-events: none;
+  }
+
+  .pick__apply {
+    margin-top: var(--s-3);
+  }
+
+  @supports (appearance: base-select) {
+    .pick__select,
+    .pick__select::picker(select) {
+      appearance: base-select;
+    }
+
+    .pick::after {
+      display: none;
+    }
+
+    .pick__select {
+      display: flex;
+      align-items: center;
+      gap: var(--s-3);
+      padding-inline: 11px 16px;
+    }
+
+    .pick__select:open {
+      border-color: rgb(var(--bead-rgb) / 0.6);
+    }
+
+    /* the same chevron as the tags' fold */
+    .pick__select::picker-icon {
+      content: '';
+      width: 6px;
+      height: 6px;
+      margin: -3px 2px 0 0;
+      border-right: 1.3px solid var(--graphite);
+      border-bottom: 1.3px solid var(--graphite);
+      rotate: 45deg;
+      transition:
+        rotate 0.25s var(--ease-out),
+        margin-top 0.25s var(--ease-out);
+    }
+
+    .pick__select:open::picker-icon {
+      rotate: 225deg;
+      margin-top: 3px;
+    }
+
+    .pick__button {
+      display: flex;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pick selectedcontent,
+    .pick option {
+      display: flex;
+      flex: 1;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--s-4);
+      min-width: 0;
+    }
+
+    /* the names and counts stand apart; the dot is kept for screen readers */
+    .pick__sep {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .pick__select::picker(select) {
+      min-width: anchor-size(width);
+      margin-block: 6px;
+      padding: 4px;
+      border: 1px solid var(--hairline-strong);
+      border-radius: 20px;
+      background: var(--raised);
+      color: var(--corona);
+      box-shadow: 0 13px 34px var(--shadow-deep);
+    }
+
+    .pick option {
+      padding: 7px 12px;
+      border-radius: 999px;
+      color: var(--corona-64);
+      cursor: pointer;
+      transition:
+        color 0.2s,
+        background-color 0.2s;
+    }
+
+    .pick option::checkmark {
+      display: none;
+    }
+
+    .pick option:hover,
+    .pick option:focus-visible {
+      outline: none;
+      color: var(--corona);
+      background: rgb(var(--corona-rgb) / 0.05);
+    }
+
+    .pick option:checked {
+      color: var(--bead-hot);
+      background: rgb(var(--bead-rgb) / 0.08);
+      box-shadow: inset 0 0 0 1px rgb(var(--bead-rgb) / 0.5);
+    }
+
+    .pick option:checked .pick__n {
+      color: var(--bead);
+    }
+  }
+
+  .pick__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pick__n {
+    flex: none;
     font-family: var(--f-mono);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     color: var(--graphite);
-  }
-
-  .facet[aria-current] .facet__n {
-    color: var(--bead);
   }
 
   .tags {

@@ -1,7 +1,8 @@
 /**
  * Harness pages, once scripts run. Browsing swaps the results in place:
- * search as you type, filters and order, more to load, with the address and
- * the history kept in step; on small screens the filters open in a sheet.
+ * search as you type, filters (a runtime as soon as it is chosen from its
+ * list) and order, more to load, with the address and the history kept in
+ * step; on small screens the filters open in a sheet.
  * Copy buttons; on an item page, the summary folds, the section bar follows
  * the reading, and a dock keeps "Open in Codeg" at hand. Everything works
  * without it, with plain links and the form.
@@ -98,6 +99,8 @@ function initBrowse() {
     const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const activeRegion = active?.closest<HTMLElement>('[data-region]') ?? null;
     const activeHref = active?.closest('a')?.getAttribute('href') ?? null;
+    // a list's own option has the focus while its choice is being made
+    const activeList = active?.closest('select')?.name ?? null;
     try {
       const res = await fetch(url, { signal: mine.signal, headers: { accept: 'text/html' } });
       if (!res.ok) throw new Error(`answered ${res.status}`);
@@ -118,8 +121,13 @@ function initBrowse() {
       shown = here();
       if ((sync || how === 'pop') && document.activeElement !== input) input.value = new URL(location.href).searchParams.get('q') ?? '';
       if (activeRegion && active && !active.isConnected) {
-        const again = activeHref ? [...activeRegion.querySelectorAll<HTMLAnchorElement>('a')].find((a) => a.getAttribute('href') === activeHref) : undefined;
-        (again ?? activeRegion.querySelector<HTMLElement>('a, button') ?? results)?.focus({ preventScroll: true });
+        const again = activeList
+          ? (activeRegion.querySelector<HTMLSelectElement>(`select[name="${activeList}"]`) ?? undefined)
+          : activeHref
+            ? [...activeRegion.querySelectorAll<HTMLAnchorElement>('a')].find((a) => a.getAttribute('href') === activeHref)
+            : undefined;
+        // (a list's own button is part of the list, never focused alone)
+        (again ?? [...activeRegion.querySelectorAll<HTMLElement>('a, button')].find((el) => !el.closest('select')) ?? results)?.focus({ preventScroll: true });
       }
       announce(browse.querySelector('.results__count')?.textContent);
       toResults();
@@ -189,6 +197,13 @@ function initBrowse() {
     e.preventDefault();
     if (link.hasAttribute('data-more')) void more(link);
     else void load(url.href, 'push', true);
+  });
+
+  // a runtime chosen from its list applies at once, as its link would
+  browse.addEventListener('change', (e) => {
+    const picker = (e.target as Element | null)?.closest<HTMLSelectElement>('select[data-pick]');
+    const href = picker?.selectedOptions[0]?.dataset.href;
+    if (href) void load(new URL(href, location.href).href, 'push', true);
   });
 
   // search as you type; a word being composed (pinyin, kana) waits until it is chosen
