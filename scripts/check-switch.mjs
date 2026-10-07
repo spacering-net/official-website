@@ -79,7 +79,7 @@ async function open(url, viewport = { width: 1440, height: 900 }) {
   const { ctx, page } = await open('/zh/#signet');
   await page.click('.hud .menu-btn');
   await page.waitForTimeout(900);
-  await page.click('.orbit-menu .lang-switch');
+  await page.click('.orbit-menu [data-lang-switch]');
   await page.waitForLoadState('load');
   await page.waitForTimeout(400);
   const a = await page.evaluate(ARRIVAL);
@@ -97,7 +97,7 @@ async function open(url, viewport = { width: 1440, height: 900 }) {
   const { ctx, page } = await open('/zh/#relay', { width: 390, height: 844 });
   await page.tap('.hud .menu-btn');
   await page.waitForTimeout(900);
-  await page.tap('.orbit-menu .lang-switch');
+  await page.tap('.orbit-menu [data-lang-switch]');
   await page.waitForLoadState('load');
   await page.waitForTimeout(400);
   const a = await page.evaluate(ARRIVAL);

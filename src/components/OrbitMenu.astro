@@ -1,8 +1,8 @@
 ---
 import Logo from './Logo.astro';
 import AccountButton from './AccountButton.astro';
-import ThemeSwitch from './ThemeSwitch.astro';
-import { dicts, CHAPTER_IDS, PRODUCT_PAGES, type Dict } from '../i18n';
+import FootLine from './FootLine.astro';
+import { CHAPTER_IDS, PRODUCT_PAGES, type Dict } from '../i18n';
 import { SITE } from '../config';
 import { MARK_BAND, MARK_CRESCENT } from './mark';
 
@@ -15,7 +15,6 @@ interface Props {
   page?: { alternate: string };
 }
 const { t, page } = Astro.props;
-const other = dicts[t.lang === 'en' ? 'zh' : 'en'];
 const destination = (key: string) => {
   if (!page) return `#${key}`;
   const own = PRODUCT_PAGES[key as keyof typeof PRODUCT_PAGES];
@@ -44,14 +43,18 @@ const github = t.menu.external[1];
 ---
 <div class:list={['orbit-menu', page && 'orbit-menu--page']} id="orbit-menu" role="dialog" aria-modal="true" aria-label={t.menu.label} data-menu data-lenis-prevent>
   <canvas class="orbit-menu__backdrop" aria-hidden="true" data-menu-backdrop></canvas>
+  {/* the HUD's ends: the account where it was, the close button on the menu button */}
   <div class="orbit-menu__top">
     <a class="brand" href={t.path} aria-label={t.nav.home}>
       <Logo class="brand__mark" />
       <span class="brand__word" aria-hidden="true">SpaceRing</span>
     </a>
-    <button class="menu-btn menu-close" type="button" aria-label={t.nav.closeMenu} data-menu-close>
-      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 4.5l11 11M15.5 4.5l-11 11"></path></svg>
-    </button>
+    <div class="orbit-menu__actions">
+      <AccountButton t={t} />
+      <button class="menu-btn menu-close" type="button" aria-label={t.nav.closeMenu} data-menu-close>
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 4.5l11 11M15.5 4.5l-11 11"></path></svg>
+      </button>
+    </div>
   </div>
 
   <div class="orbit-menu__grid">
@@ -99,10 +102,6 @@ const github = t.menu.external[1];
     </div>
   </div>
 
-  <div class="orbit-menu__foot mono">
-    <span>spacering.net</span>
-    <AccountButton t={t} />
-    {page && <ThemeSwitch t={t} />}
-    <a class="lang-switch" href={page?.alternate ?? other.path} hreflang={other.htmlLang} lang={other.htmlLang} data-lang-switch={other.lang}>{t.nav.langSwitch}</a>
-  </div>
+  {/* the line that ends every page's foot; the homepage has no theme to switch */}
+  <FootLine t={t} alternate={page?.alternate} theme={!!page} class="orbit-menu__foot" />
 </div>

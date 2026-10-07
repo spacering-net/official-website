@@ -3,8 +3,8 @@
    Palette: Void / Corona / Bead / Ion / Prominence / Graphite
    Type: Jost (display + text), IBM Plex Mono (telemetry)
    Spacing: Fibonacci. Type scale: √φ. Ellipses: b/a = cos30°, tilt 30°.
-   Tokens and base styles, the HUD (brand, nav, language, account, menu
-   button), the account dialog, buttons, status marks and the orbit menu.
+   Tokens and base styles, the HUD (brand, nav, account, menu button), the
+   account dialog, buttons, status marks and the orbit menu.
    The homepage adds its scene and chapters in home.css.
    ========================================================================== */
 
@@ -212,7 +212,9 @@ ul {
   margin-right: -0.42em;
 }
 
-.hud__right {
+/* the menu's top bar ends as the HUD does: the account, then its button */
+.hud__right,
+.orbit-menu__actions {
   display: flex;
   align-items: center;
   gap: var(--s-6);
@@ -284,19 +286,6 @@ ul {
   opacity: 1;
 }
 
-.lang-switch {
-  font-family: var(--f-mono);
-  font-size: 11.5px;
-  letter-spacing: 0.08em;
-  color: var(--corona-64);
-  padding: var(--s-3) 0;
-  transition: color 0.3s;
-}
-
-.lang-switch:hover {
-  color: var(--corona);
-}
-
 /* ---------------------------------------------------------------- account */
 
 .account-btn {
@@ -316,10 +305,6 @@ ul {
 .account-btn__srn {
   margin-right: 0.4em;
   color: var(--bead);
-}
-
-.orbit-menu__foot .account-btn {
-  margin-left: auto;
 }
 
 .account {
@@ -820,12 +805,10 @@ ul {
   opacity: 1;
 }
 
+/* the line that ends every page's foot (FootLine.astro), over a hairline as there */
 .orbit-menu__foot {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--s-4);
-  color: var(--graphite);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--hairline);
 }
 
 .menu-item-in {
@@ -974,7 +957,8 @@ html.is-locked {
     letter-spacing: 0.34em;
   }
 
-  .hud__right {
+  .hud__right,
+  .orbit-menu__actions {
     gap: var(--s-5);
   }
 

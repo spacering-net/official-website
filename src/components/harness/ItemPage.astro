@@ -1,7 +1,7 @@
 ---
 /**
- * An item: what it is and who publishes it; beside it, how to install it, its
- * publisher, what it needs at a glance and its details, staying in view;
+ * An item: what it is and who publishes it; beside it, its publisher, how to
+ * install it, what it needs at a glance and its details, staying in view;
  * below, its description, what it needs (declared beside detected), what the
  * checks found, its files and versions, with a bar to move between them.
  */
@@ -281,6 +281,18 @@ const needs = {
 
     <aside class="side">
       <div class="side__inner">
+        <section class="panel publisher" aria-labelledby="publisher-title">
+          <h2 class="eyebrow" id="publisher-title">{h.publisher.label}</h2>
+          <a class="publisher__link" href={publisherPage}>
+            <Avatar handle={item.publisher.handle} avatar={item.publisher.avatar} size={40} />
+            <span class="publisher__text">
+              <span class="publisher__name">{item.publisher.name}</span>
+              <span class="publisher__all">{t.publisherAll}</span>
+            </span>
+            <svg class="publisher__go" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          </a>
+        </section>
+
         <section class="panel install" data-install aria-labelledby="install-title">
           <h2 class="eyebrow" id="install-title">{t.install}</h2>
           <div class="install__actions">
@@ -317,18 +329,6 @@ const needs = {
               t.codegNote
             ) : null}
           </p>
-        </section>
-
-        <section class="panel publisher" aria-labelledby="publisher-title">
-          <h2 class="eyebrow" id="publisher-title">{h.publisher.label}</h2>
-          <a class="publisher__link" href={publisherPage}>
-            <Avatar handle={item.publisher.handle} avatar={item.publisher.avatar} size={40} />
-            <span class="publisher__text">
-              <span class="publisher__name">{item.publisher.name}</span>
-              <span class="publisher__all">{t.publisherAll}</span>
-            </span>
-            <svg class="publisher__go" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
-          </a>
         </section>
 
         <section class="panel glance" aria-labelledby="glance-title">
@@ -407,8 +407,6 @@ const needs = {
 <style>
   .item {
     --toc-h: 52px;
-    /* a line of prose: the summary, and the description's text */
-    --measure: 44rem;
     padding-top: var(--s-5);
   }
 
@@ -478,7 +476,6 @@ const needs = {
   }
 
   .head__summary {
-    max-width: var(--measure);
     margin-top: var(--s-4);
   }
 
@@ -541,7 +538,6 @@ const needs = {
   }
 
   .notice {
-    max-width: var(--measure);
     margin-top: var(--s-5);
     padding: var(--s-4) var(--s-5);
     border: 1px solid rgb(var(--ion-rgb) / 0.3);
@@ -654,17 +650,13 @@ const needs = {
     color: var(--bead);
   }
 
-  /* The description, rendered from its markdown: its text keeps to a line
-     that reads well, its code, tables and rules to the column's edges. */
+  /* The description, rendered from its markdown, as wide as the column:
+     its text, code, tables and rules all keep to the column's edges. */
   .readme {
     font-size: 15.5px;
     line-height: 1.75;
     color: var(--corona-80);
     overflow-wrap: anywhere;
-  }
-
-  .readme :global(:is(p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6)) {
-    max-width: var(--measure);
   }
 
   .readme :global(> :first-child) {
@@ -1211,8 +1203,8 @@ const needs = {
       grid-template-rows: none;
     }
 
-    /* the side's panels join the page: installing and the publisher after the
-       head, the rest after the content */
+    /* the side's panels join the page: the publisher and installing after
+       the head, the rest after the content */
     .side,
     .side__inner {
       display: contents;
@@ -1228,9 +1220,14 @@ const needs = {
       order: -3;
     }
 
-    .install {
+    .publisher {
       order: -2;
       margin-top: var(--s-6);
+    }
+
+    .install {
+      order: -1;
+      margin-top: var(--s-4);
     }
 
     /* a panel the page's width: its buttons as wide as their words */
@@ -1241,11 +1238,6 @@ const needs = {
     .install__actions .btn {
       width: auto;
       padding-inline: var(--s-6);
-    }
-
-    .publisher {
-      order: -1;
-      margin-top: var(--s-4);
     }
 
     .glance,

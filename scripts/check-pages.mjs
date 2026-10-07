@@ -34,7 +34,7 @@ const mark = (page) => page.evaluate(() => (window.__same = true));
 const same = (page) => page.evaluate(() => window.__same === true);
 const top = (page, selector) => page.evaluate((s) => Math.round(document.querySelector(s)?.getBoundingClientRect().top ?? -1), selector);
 
-// 1. the frame: HUD, rail, language twin, menu, account dialog
+// 1. the frame: HUD, rail, language twin, menu (ending as the page does), account dialog
 {
   const { ctx, page, errors } = await open('/zh/harness/?q=pdf');
   const hud = await page.evaluate(() => ({
@@ -51,6 +51,23 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
   await page.click('.hud [data-menu-open]');
   await page.waitForTimeout(900);
   const opened = await page.evaluate(() => [document.querySelector('.orbit-menu')?.classList.contains('is-open'), document.documentElement.classList.contains('is-locked')]);
+  // the menu ends with the footer's last line, at its places; the account sits in its top bar
+  const foot = await page.evaluate(() => {
+    const r = (s) => document.querySelector(s)?.getBoundingClientRect();
+    const x = (v) => (v === undefined ? null : Math.round(v));
+    return {
+      lang: document.querySelector('.orbit-menu .foot-line [data-lang-switch]')?.getAttribute('href'),
+      theme: document.querySelector('.orbit-menu .foot-line [data-theme-switch]')?.hidden === false,
+      account: !!document.querySelector('.orbit-menu__top [data-account-open]') && !document.querySelector('.orbit-menu__foot [data-account-open]'),
+      left: [x(r('.orbit-menu .foot-line .langs')?.left), x(r('.page-foot .foot-line .langs')?.left)],
+      right: [x(r('.orbit-menu .foot-line__legal')?.right), x(r('.page-foot .foot-line__legal')?.right)],
+    };
+  });
+  report(
+    foot.lang === '/harness/?q=pdf' && foot.theme && foot.account && foot.left[0] !== null && foot.left[0] === foot.left[1] && foot.right[0] !== null && foot.right[0] === foot.right[1],
+    'the menu ends as the page does: languages and theme, the small print, at the footer’s places',
+    JSON.stringify(foot),
+  );
   await page.keyboard.press('Escape');
   await page.waitForTimeout(700);
   const closed = await page.evaluate(() => [document.querySelector('.orbit-menu')?.classList.contains('is-open'), document.documentElement.classList.contains('is-locked')]);
@@ -351,10 +368,11 @@ for (const [path, lang] of [
 }
 
 // 8. one column and its lines, at a 5K-wide window: the HUD, the bar, the
-// sidebar, the grid and the footer keep to the same edges; an item's side
-// starts level with its head, its publisher second, its code as wide as the
-// column. Then the theme: switched, kept for the next page from its first
-// paint, and never on the homepage.
+// sidebar, the grid and the footer keep to the same edges, and the sidebar's
+// rows to the search's; an item's side starts level with its head, its
+// publisher first, its text and code as wide as the column. Then the theme:
+// switched, kept for the next page from its first paint, and never on the
+// homepage (whose menu has no switch).
 {
   const ctx = await browser.newContext({ viewport: { width: 2560, height: 1440 }, locale: 'en-US' });
   const page = await ctx.newPage();
@@ -366,12 +384,20 @@ for (const [path, lang] of [
     const r = (s) => document.querySelector(s).getBoundingClientRect();
     const x = (v) => Math.round(v);
     const [heading, count, facet, card] = ['.browse__side .filters__group h2', '.results__count', '.browse__side .facet', '.grid .card'].map(r);
+    const words = (el) => {
+      const range = document.createRange();
+      range.selectNodeContents([...el.childNodes].find((n) => n.textContent.trim()));
+      return range.getBoundingClientRect().left;
+    };
     return {
       left: [r('.hud .brand').left, r('.browse .search').left, r('.browse__side .filters').left, r('.page-foot .brand').left].map(x),
       right: [r('.hud .menu-btn').right, r('.grid').right, r('.sort').right].map(x),
       columns: [r('.browse .kinds').left, r('.grid').left].map(x),
       rows: [x(heading.top + heading.height / 2), x(count.top + count.height / 2)],
       first: [x(facet.top), x(card.top)],
+      sideLeft: [r('.browse .search').left, r('.browse__side .filters').left, facet.left].map(x),
+      sideRight: [r('.browse .search').right, r('.browse__side .filters').right, facet.right].map(x),
+      words: [words(document.querySelector('.browse__side .facet')), words(document.querySelector('.browse__side .tags .chip'))].map(x),
     };
   });
   const level = (a, d = 1) => Math.max(...a) - Math.min(...a) <= d;
@@ -380,6 +406,11 @@ for (const [path, lang] of [
     'one column: the HUD, bar, sidebar, grid and footer share their edges',
     JSON.stringify(lines),
   );
+  report(
+    level(lines.sideLeft) && level(lines.sideRight) && level(lines.words),
+    'the sidebar: its rows on the search’s edges, their words where a tag’s are',
+    JSON.stringify({ left: lines.sideLeft, right: lines.sideRight, words: lines.words }),
+  );
 
   await page.goto(`${base}/harness/anthropics/pdf`, { waitUntil: 'networkidle' });
   const item = await page.evaluate(() => {
@@ -387,16 +418,22 @@ for (const [path, lang] of [
     const img = document.querySelector('.publisher img.avatar');
     return {
       head: Math.round(r('.head__badges').top),
-      side: Math.round(r('.install').top),
+      side: Math.round(r('.side__inner > .panel').top),
       order: [...document.querySelectorAll('.side__inner > .panel')].map((p) => [...p.classList].find((c) => c !== 'panel')).join(' '),
       code: r('.readme pre') ? Math.round(r('.readme pre').right) : null,
+      text: r('.readme > p') ? Math.round(r('.readme > p').right) : null,
       column: Math.round(r('.toc').right),
       avatar: img ? img.complete && img.naturalWidth > 0 : 'letter',
     };
   });
   report(
-    Math.abs(item.head - item.side) <= 1 && item.order.startsWith('install publisher') && (item.code === null || Math.abs(item.code - item.column) <= 1) && item.avatar !== false,
-    'an item: its side level with its head, the publisher second, code as wide as the column',
+    Math.abs(item.head - item.side) <= 1 &&
+      item.order.startsWith('publisher install') &&
+      (item.code === null || Math.abs(item.code - item.column) <= 1) &&
+      item.text !== null &&
+      Math.abs(item.text - item.column) <= 1 &&
+      item.avatar !== false,
+    'an item: its side level with its head, the publisher first, its text and code as wide as the column',
     JSON.stringify(item),
   );
 
@@ -405,9 +442,13 @@ for (const [path, lang] of [
   await page.goto(`${base}/zh/harness/`, { waitUntil: 'networkidle' });
   const next = await page.evaluate(() => ({ atReady: window.__themeAtReady, pressed: document.querySelector('.page-foot [aria-pressed="true"]')?.dataset.themeSet }));
   await page.goto(`${base}/`, { waitUntil: 'load' });
-  const home = await page.evaluate(() => ({ theme: document.documentElement.dataset.theme ?? 'dark', bg: getComputedStyle(document.documentElement).backgroundColor }));
+  const home = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme ?? 'dark',
+    bg: getComputedStyle(document.documentElement).backgroundColor,
+    switch: !!document.querySelector('[data-theme-switch]'),
+  }));
   report(
-    switched.theme === 'light' && switched.stored === 'light' && switched.bg === 'rgb(246, 245, 241)' && next.atReady === 'light' && next.pressed === 'light' && home.theme === 'dark' && home.bg === 'rgb(5, 5, 7)',
+    switched.theme === 'light' && switched.stored === 'light' && switched.bg === 'rgb(246, 245, 241)' && next.atReady === 'light' && next.pressed === 'light' && home.theme === 'dark' && home.bg === 'rgb(5, 5, 7)' && !home.switch,
     'the theme switches, holds from the next page’s first paint, and leaves the homepage dark',
     JSON.stringify({ switched, next, home }),
   );
