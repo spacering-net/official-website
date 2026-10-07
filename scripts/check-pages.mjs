@@ -1,6 +1,7 @@
 // The pages beside the homepage (Harness, the policies): the shared HUD, menu
-// and account dialog, what stays in view while scrolling, and Harness's
-// in-place browsing, all without a page error or a refused script.
+// and account dialog, what stays in view while scrolling, Harness's in-place
+// browsing, the edges they share and the light theme, all without a page
+// error or a refused script.
 // Usage: node scripts/check-pages.mjs [baseUrl]
 import { chromium } from 'playwright';
 
@@ -346,6 +347,71 @@ for (const [path, lang] of [
     noindex: document.querySelector('meta[name="robots"]')?.getAttribute('content'),
   }));
   report(res?.status() === 404 && seen.lang === lang && seen.hud && seen.code === '404' && seen.noindex === 'noindex' && !errors.length, `not found: ${path}`, `${res?.status()} ${JSON.stringify(seen)} ${errors.join(' | ')}`);
+  await ctx.close();
+}
+
+// 8. one column and its lines, at a 5K-wide window: the HUD, the bar, the
+// sidebar, the grid and the footer keep to the same edges; an item's side
+// starts level with its head, its publisher second, its code as wide as the
+// column. Then the theme: switched, kept for the next page from its first
+// paint, and never on the homepage.
+{
+  const ctx = await browser.newContext({ viewport: { width: 2560, height: 1440 }, locale: 'en-US' });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => document.addEventListener('DOMContentLoaded', () => (window.__themeAtReady = document.documentElement.dataset.theme ?? 'dark')));
+  await page.goto(`${base}/harness/`, { waitUntil: 'networkidle' });
+  const lines = await page.evaluate(() => {
+    const r = (s) => document.querySelector(s).getBoundingClientRect();
+    const x = (v) => Math.round(v);
+    const [heading, count, facet, card] = ['.browse__side .filters__group h2', '.results__count', '.browse__side .facet', '.grid .card'].map(r);
+    return {
+      left: [r('.hud .brand').left, r('.browse .search').left, r('.browse__side .filters').left, r('.page-foot .brand').left].map(x),
+      right: [r('.hud .menu-btn').right, r('.grid').right, r('.sort').right].map(x),
+      columns: [r('.browse .kinds').left, r('.grid').left].map(x),
+      rows: [x(heading.top + heading.height / 2), x(count.top + count.height / 2)],
+      first: [x(facet.top), x(card.top)],
+    };
+  });
+  const level = (a, d = 1) => Math.max(...a) - Math.min(...a) <= d;
+  report(
+    level(lines.left) && level(lines.right) && level(lines.columns) && level(lines.rows, 2) && level(lines.first),
+    'one column: the HUD, bar, sidebar, grid and footer share their edges',
+    JSON.stringify(lines),
+  );
+
+  await page.goto(`${base}/harness/anthropics/pdf`, { waitUntil: 'networkidle' });
+  const item = await page.evaluate(() => {
+    const r = (s) => document.querySelector(s)?.getBoundingClientRect();
+    const img = document.querySelector('.publisher img.avatar');
+    return {
+      head: Math.round(r('.head__badges').top),
+      side: Math.round(r('.install').top),
+      order: [...document.querySelectorAll('.side__inner > .panel')].map((p) => [...p.classList].find((c) => c !== 'panel')).join(' '),
+      code: r('.readme pre') ? Math.round(r('.readme pre').right) : null,
+      column: Math.round(r('.toc').right),
+      avatar: img ? img.complete && img.naturalWidth > 0 : 'letter',
+    };
+  });
+  report(
+    Math.abs(item.head - item.side) <= 1 && item.order.startsWith('install publisher') && (item.code === null || Math.abs(item.code - item.column) <= 1) && item.avatar !== false,
+    'an item: its side level with its head, the publisher second, code as wide as the column',
+    JSON.stringify(item),
+  );
+
+  await page.click('.page-foot [data-theme-set="light"]');
+  const switched = await page.evaluate(() => ({ theme: document.documentElement.dataset.theme, stored: localStorage.getItem('sr-theme'), bg: getComputedStyle(document.documentElement).backgroundColor }));
+  await page.goto(`${base}/zh/harness/`, { waitUntil: 'networkidle' });
+  const next = await page.evaluate(() => ({ atReady: window.__themeAtReady, pressed: document.querySelector('.page-foot [aria-pressed="true"]')?.dataset.themeSet }));
+  await page.goto(`${base}/`, { waitUntil: 'load' });
+  const home = await page.evaluate(() => ({ theme: document.documentElement.dataset.theme ?? 'dark', bg: getComputedStyle(document.documentElement).backgroundColor }));
+  report(
+    switched.theme === 'light' && switched.stored === 'light' && switched.bg === 'rgb(246, 245, 241)' && next.atReady === 'light' && next.pressed === 'light' && home.theme === 'dark' && home.bg === 'rgb(5, 5, 7)',
+    'the theme switches, holds from the next page’s first paint, and leaves the homepage dark',
+    JSON.stringify({ switched, next, home }),
+  );
+  report(!errors.length, 'lines and themes: no errors', errors.join(' | '));
   await ctx.close();
 }
 

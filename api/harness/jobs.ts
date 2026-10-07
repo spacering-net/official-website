@@ -1,5 +1,6 @@
 import { uuidv7 } from '../ids';
 import { importRepo, type RepoConfig } from './importers/github';
+import { refreshAvatars } from './importers/avatars';
 import { importRegistryPage, recheckPackages } from './importers/registry';
 import { refreshStars } from './importers/stars';
 import { rescan } from './rescan';
@@ -18,7 +19,8 @@ export type Job =
   | { type: 'stars' }
   | { type: 'packages'; after?: number }
   | { type: 'rescan'; after?: number }
-  | { type: 'facets' };
+  | { type: 'facets' }
+  | { type: 'avatars'; after?: string };
 
 /** How long a running sync may go without progress before it is presumed dead. */
 const LEASE_MS = 30 * 60 * 1000;
@@ -74,6 +76,12 @@ export async function runJob(env: Env, job: Job): Promise<void> {
       const limit = 50;
       const { count, last } = await rescan(env, limit, job.after ?? 0);
       if (count >= limit) await env.HARNESS_JOBS.send({ type: 'rescan', after: last } satisfies Job);
+      return;
+    }
+    case 'avatars': {
+      // publishers' pictures, a batch at a time, in id order; the next batch follows while there is one
+      const next = await refreshAvatars(env, job.after ?? '');
+      if (next) await env.HARNESS_JOBS.send({ type: 'avatars', after: next } satisfies Job);
       return;
     }
     case 'facets': {
@@ -198,7 +206,8 @@ async function githubRepo(env: Env, id: string, force: boolean, part: number): P
 /**
  * Daily: look at every skill repository for a new commit, retry package
  * lookups that failed, check again what older rules checked, fill in missing
- * stars, recount the facets.
+ * stars, recount the facets, and look for publishers' pictures not looked
+ * for in 30 days.
  */
 export async function daily(env: Env): Promise<void> {
   const { results } = await env.HARNESS_DB.prepare("SELECT id FROM import_sources WHERE kind = 'github' AND enabled = 1").all<{ id: string }>();
@@ -208,6 +217,7 @@ export async function daily(env: Env): Promise<void> {
     { type: 'rescan' },
     { type: 'stars' },
     { type: 'facets' },
+    { type: 'avatars' },
   ];
   for (let i = 0; i < jobs.length; i += 100) await env.HARNESS_JOBS.sendBatch(jobs.slice(i, i + 100).map((body) => ({ body })));
 }

@@ -53,6 +53,7 @@ interface Row {
   p_kind: PublisherSummary['kind'];
   p_verified: number;
   p_user_id: string | null;
+  p_avatar: string | null;
   version: string | null;
   listed_reasons: string;
   license: string | null;
@@ -63,7 +64,7 @@ interface Row {
 const COLUMNS = `i.id, i.seq, i.name, i.kind, i.status, i.title_en, i.title_zh, i.summary_en, i.summary_zh, i.runtime, i.risk, i.reviewed,
   i.featured, i.source, i.repo_stars, i.stars, i.installs, i.quality, i.popularity, i.latest_revision, i.latest_version_id,
   i.published_at, i.version_at, i.listed_reasons, i.license, i.repository_url, i.website_url,
-  p.handle, p.name AS p_name, p.kind AS p_kind, p.verified AS p_verified, p.user_id AS p_user_id,
+  p.handle, p.name AS p_name, p.kind AS p_kind, p.verified AS p_verified, p.user_id AS p_user_id, p.avatar AS p_avatar,
   (SELECT v.version FROM item_versions v WHERE v.id = i.latest_version_id) AS version`;
 const FROM = 'items i JOIN publishers p ON p.id = i.publisher_id';
 
@@ -78,7 +79,7 @@ function summarize(r: Row, tags: string[]): ItemSummary {
     status: r.status === 'public' ? 'public' : 'listed',
     title: loc(r.title_en, r.title_zh),
     summary: loc(r.summary_en, r.summary_zh),
-    publisher: { handle: r.handle, name: r.p_name, kind: r.p_kind, verified: !!r.p_verified, unclaimed: r.p_kind !== 'user' && !r.p_user_id },
+    publisher: { handle: r.handle, name: r.p_name, kind: r.p_kind, verified: !!r.p_verified, unclaimed: r.p_kind !== 'user' && !r.p_user_id, avatar: r.p_avatar },
     tags,
     runtime: r.runtime,
     risk: r.risk,
@@ -370,12 +371,22 @@ export async function readmeKey(db: D1Database, handle: string, name: string): P
 export async function getPublisher(db: D1Database, handle: string): Promise<PublisherInfo | null> {
   const p = await db
     .prepare(
-      `SELECT p.id, p.handle, p.name, p.kind, p.verified, p.user_id, p.github_login, p.domain,
+      `SELECT p.id, p.handle, p.name, p.kind, p.verified, p.user_id, p.github_login, p.domain, p.avatar,
               (SELECT COUNT(*) FROM items i WHERE i.publisher_id = p.id AND i.status = 'public' AND i.visibility = 'public') AS items
          FROM publishers p WHERE p.handle = ?1`,
     )
     .bind(handle.toLowerCase())
-    .first<{ handle: string; name: string; kind: PublisherSummary['kind']; verified: number; user_id: string | null; github_login: string | null; domain: string | null; items: number }>();
+    .first<{
+      handle: string;
+      name: string;
+      kind: PublisherSummary['kind'];
+      verified: number;
+      user_id: string | null;
+      github_login: string | null;
+      domain: string | null;
+      avatar: string | null;
+      items: number;
+    }>();
   if (!p) return null;
   return {
     handle: p.handle,
@@ -383,6 +394,7 @@ export async function getPublisher(db: D1Database, handle: string): Promise<Publ
     kind: p.kind,
     verified: !!p.verified,
     unclaimed: p.kind !== 'user' && !p.user_id,
+    avatar: p.avatar,
     githubLogin: p.github_login,
     domain: p.domain,
     items: p.items,

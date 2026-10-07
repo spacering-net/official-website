@@ -86,14 +86,14 @@ const node = { x: +(slot.x * 1.24).toFixed(1), y: +(slot.y * 1.24 - 26).toFixed(
 
   .lost__orbit ellipse {
     fill: none;
-    stroke: rgb(236 234 244 / 0.16);
+    stroke: rgb(var(--corona-rgb) / 0.16);
     stroke-width: 1;
     stroke-dasharray: 14 3 2 3;
     vector-effect: non-scaling-stroke;
   }
 
   .lost__orbit .lost__inner {
-    stroke: rgb(236 234 244 / 0.08);
+    stroke: rgb(var(--corona-rgb) / 0.08);
   }
 
   .lost__slot {
@@ -105,7 +105,7 @@ const node = { x: +(slot.x * 1.24).toFixed(1), y: +(slot.y * 1.24 - 26).toFixed(
   }
 
   .lost__trail {
-    stroke: rgb(255 217 160 / 0.35);
+    stroke: rgb(var(--bead-rgb) / 0.4);
     stroke-width: 1;
     stroke-dasharray: 2 4;
     vector-effect: non-scaling-stroke;
@@ -130,7 +130,7 @@ const node = { x: +(slot.x * 1.24).toFixed(1), y: +(slot.y * 1.24 - 26).toFixed(
     line-height: 1;
     letter-spacing: -0.04em;
     color: transparent;
-    background: linear-gradient(180deg, var(--corona) 30%, rgb(236 234 244 / 0.25));
+    background: linear-gradient(180deg, var(--corona) 30%, rgb(var(--corona-rgb) / 0.25));
     -webkit-background-clip: text;
     background-clip: text;
     font-variant-numeric: tabular-nums;
@@ -183,7 +183,7 @@ const node = { x: +(slot.x * 1.24).toFixed(1), y: +(slot.y * 1.24 - 26).toFixed(
     padding: 0 18px 0 42px;
     border: 1px solid var(--hairline-strong);
     border-radius: 999px;
-    background: rgb(236 234 244 / 0.04);
+    background: var(--field);
     color: var(--corona);
     font: inherit;
     font-size: 15px;
@@ -199,8 +199,7 @@ const node = { x: +(slot.x * 1.24).toFixed(1), y: +(slot.y * 1.24 - 26).toFixed(
 
   .lost__search input:focus {
     outline: none;
-    border-color: rgb(255 217 160 / 0.6);
-    background: rgb(236 234 244 / 0.06);
-    box-shadow: 0 0 0 4px rgb(255 217 160 / 0.1);
+    border-color: rgb(var(--bead-rgb) / 0.6);
+    box-shadow: 0 0 0 4px rgb(var(--bead-rgb) / 0.12);
   }
 </style>

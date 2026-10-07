@@ -2,7 +2,7 @@
 /** /harness/<publisher>: who publishes, and what. */
 import Layout from '../../../../layouts/Harness.astro';
 import Browse from '../../../../components/harness/Browse.astro';
-import Monogram from '../../../../components/harness/Monogram.astro';
+import Avatar from '../../../../components/harness/Avatar.astro';
 import { harnessDicts } from '../../../../i18n/harness';
 import { browseState, cacheable, loadBrowse, loadPublisher, loadPublisherKinds, withQuery } from '../../../../lib/harness';
 
@@ -25,165 +25,98 @@ const filtered = !!(state.q || state.cursor || state.kind || state.sort !== 'pop
 const home = publisher.kind === 'github' && publisher.githubLogin ? `https://github.com/${publisher.githubLogin}` : publisher.domain ? `https://${publisher.domain}` : null;
 ---
 <Layout lang={lang} title={`${publisher.name} · Harness`} description={h.description} paths={paths} noindex={filtered || publisher.items === 0}>
-  <header class="hx who">
+  <header class="wrap who">
     <nav class="crumbs" aria-label="Breadcrumb">
       <a href={h.base}>Harness</a>
       <span aria-hidden="true">/</span>
       <span aria-current="page">{publisher.handle}</span>
     </nav>
-    <h1>{publisher.name}</h1>
-  </header>
-  <Browse lang={lang} path={path} state={{ ...state, runtime: undefined, tag: undefined }} list={list} tags={tags} counts={counts} catalog={false}>
-    <div class="card" slot="side">
-      <Monogram handle={publisher.handle} size={55} />
-      <p class="card__name">{publisher.name}</p>
-      <p class="card__handle">{publisher.handle}</p>
-      <dl class="card__facts">
-        <div>
-          <dt>{h.publisher.label}</dt>
-          <dd>{publisher.kind === 'domain' ? h.publisher.domain : h.publisher.github}</dd>
-        </div>
-        <div>
-          <dt>{h.browse.shelves}</dt>
-          <dd class="card__n">{publisher.items.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en')}</dd>
-        </div>
-      </dl>
-      {home && (
-        <a class="btn btn--ghost card__home" href={home} rel="nofollow ugc noopener" target="_blank">
-          {home.replace(/^https:\/\//, '')}
-          <svg class="btn__icon btn__icon--ext" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11l6-6M6 5h5v5"></path></svg>
-        </a>
-      )}
-      {publisher.unclaimed && <p class="card__note">{h.publisher.unclaimed}</p>}
+    <div class="who__main">
+      <Avatar handle={publisher.handle} avatar={publisher.avatar} size={72} />
+      <div class="who__text">
+        <h1>{publisher.name}</h1>
+        <p class="who__meta">
+          {publisher.name.toLowerCase() !== publisher.handle && <span class="who__handle">{publisher.handle}</span>}
+          <span>{publisher.kind === 'domain' ? h.publisher.domain : h.publisher.github}</span>
+          <span>{h.publisher.items(publisher.items)}</span>
+          {home && (
+            <a href={home} rel="nofollow ugc noopener" target="_blank">
+              {home.replace(/^https:\/\//, '')} <span aria-hidden="true">↗</span>
+            </a>
+          )}
+        </p>
+        {publisher.unclaimed && <p class="who__note">{h.publisher.unclaimed}</p>}
+      </div>
     </div>
-  </Browse>
+  </header>
+  <Browse lang={lang} path={path} state={{ ...state, runtime: undefined, tag: undefined }} list={list} tags={tags} counts={counts} catalog={false} />
 </Layout>
 
 <style>
   .who {
     padding-top: var(--s-5);
-    padding-bottom: var(--s-5);
+    padding-bottom: var(--s-6);
   }
 
-  .crumbs {
+  /* the picture beside the name, the name on the picture's middle line */
+  .who__main {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-3);
-    font-family: var(--f-mono);
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    color: var(--graphite);
+    align-items: center;
+    gap: var(--s-5);
+    margin-top: var(--s-5);
   }
 
-  .crumbs a {
-    color: var(--corona-64);
-    transition: color 0.2s;
-  }
-
-  .crumbs a:hover {
-    color: var(--corona);
+  .who__text {
+    min-width: 0;
   }
 
   h1 {
-    margin-top: var(--s-3);
-    font-size: clamp(32px, 4.4vw, 52px);
+    font-size: clamp(30px, 3.6vw, 44px);
     font-weight: 300;
-    line-height: 1.05;
+    line-height: 1.1;
     letter-spacing: -0.015em;
     overflow-wrap: anywhere;
   }
 
-  .card {
-    display: grid;
-    justify-items: start;
-    gap: var(--s-2);
-    padding: var(--s-5);
-    border: 1px solid var(--hairline);
-    border-radius: 13px;
-    background: linear-gradient(180deg, rgb(236 234 244 / 0.035), rgb(236 234 244 / 0.01));
-  }
-
-  .card__name {
-    margin-top: var(--s-3);
-    font-size: 19px;
-    line-height: 1.3;
-    color: var(--corona);
-    overflow-wrap: anywhere;
-  }
-
-  .card__handle {
-    font-family: var(--f-mono);
-    font-size: 12px;
-    color: var(--graphite);
-    overflow-wrap: anywhere;
-  }
-
-  .card__facts {
-    display: grid;
-    gap: var(--s-2);
-    width: 100%;
-    margin: var(--s-4) 0 var(--s-2);
-    padding-top: var(--s-4);
-    border-top: 1px solid var(--hairline);
-    font-size: 13.5px;
-  }
-
-  .card__facts div {
+  .who__meta {
     display: flex;
-    justify-content: space-between;
-    gap: var(--s-4);
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--s-2) var(--s-5);
+    margin-top: var(--s-3);
+    font-size: 14px;
+    color: var(--corona-64);
   }
 
-  .card__facts dt {
-    color: var(--graphite);
-  }
-
-  .card__facts dd {
-    margin: 0;
-    color: var(--corona-80);
-  }
-
-  .card__n {
+  .who__handle {
     font-family: var(--f-mono);
-  }
-
-  .card__home {
-    max-width: 100%;
-    height: 36px;
-    margin-top: var(--s-3);
-    padding: 0 var(--s-4);
-    font-size: 13px;
-    overflow: hidden;
-  }
-
-  .card__note {
-    margin-top: var(--s-3);
     font-size: 12.5px;
-    line-height: 1.6;
     color: var(--graphite);
   }
 
-  /* above the results, side by side: the mark, then the name */
-  @media (max-width: 1100px) {
-    .card {
-      grid-template-columns: auto minmax(0, 1fr);
-      align-items: center;
-      column-gap: var(--s-4);
+  .who__meta a {
+    color: var(--corona);
+    transition: color 0.2s;
+  }
+
+  .who__meta a:hover {
+    color: var(--bead-hot);
+  }
+
+  .who__note {
+    margin-top: var(--s-2);
+    font-size: 13px;
+    color: var(--graphite);
+  }
+
+  @media (max-width: 760px) {
+    .who__main {
+      align-items: flex-start;
+      gap: var(--s-4);
     }
 
-    .card :global(.mono-gram) {
-      --size: 44px !important;
-      grid-row: span 2;
-    }
-
-    .card__name {
-      margin-top: 0;
-    }
-
-    .card__facts,
-    .card__home,
-    .card__note {
-      grid-column: 1 / -1;
+    .who__main :global(.avatar) {
+      --size: 52px !important;
     }
   }
 </style>

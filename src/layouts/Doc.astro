@@ -18,7 +18,7 @@ const { lang, title, description, paths, updated } = Astro.props;
 const label = lang === 'en' ? 'Last updated' : '最后更新';
 ---
 <Page lang={lang} title={`${title} · SpaceRing`} description={description} paths={paths}>
-  <article class="doc">
+  <article class="wrap doc">
     <h1>{title}</h1>
     <p class="updated">{label}: {updated}</p>
     <slot />
@@ -26,13 +26,15 @@ const label = lang === 'en' ? 'Last updated' : '最后更新';
 </Page>
 
 <style>
+  /* on the column's left edge, under the HUD's brand, a line of prose wide */
   .doc {
-    max-width: 44rem;
-    margin: 0 auto;
-    padding: var(--s-6) var(--edge) 0;
-    box-sizing: content-box;
+    padding-top: var(--s-6);
     line-height: 1.75;
     color: var(--corona-80);
+  }
+
+  .doc > :global(*) {
+    max-width: 44rem;
   }
 
   h1 {
@@ -74,7 +76,7 @@ const label = lang === 'en' ? 'Last updated' : '最后更新';
   .doc :global(a) {
     color: var(--bead);
     text-decoration: underline;
-    text-decoration-color: rgb(255 217 160 / 0.35);
+    text-decoration-color: rgb(var(--bead-rgb) / 0.4);
     text-underline-offset: 3px;
   }
 </style>

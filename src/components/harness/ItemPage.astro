@@ -1,12 +1,12 @@
 ---
 /**
- * An item: what it is and who publishes it; beside it, how to install it,
- * what it needs at a glance and its details, staying in view; below, its
- * description, what it needs (declared beside detected), what the checks
- * found, its files and versions, with a bar to move between them.
+ * An item: what it is and who publishes it; beside it, how to install it, its
+ * publisher, what it needs at a glance and its details, staying in view;
+ * below, its description, what it needs (declared beside detected), what the
+ * checks found, its files and versions, with a bar to move between them.
  */
 import Copy from './Copy.astro';
-import Monogram from './Monogram.astro';
+import Avatar from './Avatar.astro';
 import { harnessDicts, pick } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
 import type { ItemDetail, VersionSummary } from '../../lib/harness';
@@ -77,17 +77,16 @@ const needs = {
   secrets: detected.secrets.length,
 };
 ---
-<div class="hx item">
+<div class="wrap item">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href={h.base}>Harness</a>
+    <span aria-hidden="true">/</span>
+    <a href={publisherPage}>{item.publisher.handle}</a>
+    <span aria-hidden="true">/</span>
+    <span aria-current="page">{item.name}</span>
+  </nav>
   <div class="layout">
     <div class="top">
-      <nav class="crumbs" aria-label="Breadcrumb">
-        <a href={h.base}>Harness</a>
-        <span aria-hidden="true">/</span>
-        <a href={publisherPage}>{item.publisher.handle}</a>
-        <span aria-hidden="true">/</span>
-        <span aria-current="page">{item.name}</span>
-      </nav>
-
       <header class="head">
         <p class="head__badges">
           <span class="badge badge--kind">{h.kind[item.kind]}</span>
@@ -104,7 +103,7 @@ const needs = {
         )}
         <p class="head__by">
           <a class="head__pub" href={publisherPage}>
-            <Monogram handle={item.publisher.handle} size={24} />
+            <Avatar handle={item.publisher.handle} avatar={item.publisher.avatar} size={24} />
             <span>{item.publisher.name}</span>
           </a>
           <span class="head__ref">
@@ -134,7 +133,7 @@ const needs = {
 
       {sections.some((s) => s.id === 'readme') && (
         <section class="section" id="readme" data-section>
-          <h2 class="section__title">{t.description}</h2>
+          <h2 class="eyebrow section__title">{t.description}</h2>
           {readme ? (
             <div class="readme" set:html={body} />
           ) : (
@@ -148,7 +147,7 @@ const needs = {
 
       {install.server && (
         <section class="section" id="server" data-section>
-          <h2 class="section__title">{t.server}</h2>
+          <h2 class="eyebrow section__title">{t.server}</h2>
           <div class="json">
             <Copy lang={lang} text={JSON.stringify(install.server, null, 2)} />
             <pre><code>{JSON.stringify(install.server, null, 2)}</code></pre>
@@ -157,7 +156,7 @@ const needs = {
       )}
 
       <section class="section" id="permissions" data-section>
-        <h2 class="section__title">{t.permissions}</h2>
+        <h2 class="eyebrow section__title">{t.permissions}</h2>
         <div class="perms" role="table" aria-label={t.permissions}>
           <div class="perms__row perms__row--head" role="row">
             <span role="columnheader"></span>
@@ -184,7 +183,7 @@ const needs = {
       </section>
 
       <section class="section" id="checks" data-section>
-        <h2 class="section__title">{t.checks}</h2>
+        <h2 class="eyebrow section__title">{t.checks}</h2>
         <div class={`verdict verdict--${item.risk}`}>
           <span class={`risk-dot risk-dot--${item.risk}`}></span>
           <div>
@@ -226,7 +225,7 @@ const needs = {
 
       {install.files.length > 0 && (
         <section class="section" id="files" data-section>
-          <h2 class="section__title">
+          <h2 class="eyebrow section__title">
             {t.files}
             <span class="section__aside">{t.filesTotal(install.files.length, size(totalSize))}</span>
           </h2>
@@ -265,7 +264,7 @@ const needs = {
 
       {versions.length > 0 && (
         <section class="section" id="versions" data-section>
-          <h2 class="section__title">{t.versions}</h2>
+          <h2 class="eyebrow section__title">{t.versions}</h2>
           <ol class="versions">
             {versions.slice(0, 20).map((v) => (
               <li class:list={[v.revision === item.latest.revision && 'is-latest']}>
@@ -320,32 +319,44 @@ const needs = {
           </p>
         </section>
 
+        <section class="panel publisher" aria-labelledby="publisher-title">
+          <h2 class="eyebrow" id="publisher-title">{h.publisher.label}</h2>
+          <a class="publisher__link" href={publisherPage}>
+            <Avatar handle={item.publisher.handle} avatar={item.publisher.avatar} size={40} />
+            <span class="publisher__text">
+              <span class="publisher__name">{item.publisher.name}</span>
+              <span class="publisher__all">{t.publisherAll}</span>
+            </span>
+            <svg class="publisher__go" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+          </a>
+        </section>
+
         <section class="panel glance" aria-labelledby="glance-title">
           <h2 class="eyebrow" id="glance-title">{t.safety}</h2>
-          <ul>
-            <li>
-              <span>{t.checks}</span>
-              <span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{t.risk[item.risk]}</span>
-            </li>
-            <li>
-              <span>{t.perms.runsCode}</span>
-              <code>{needs.runs.length ? needs.runs.join(', ') : t.nothing}</code>
-            </li>
-            <li>
-              <span>{t.perms.network}</span>
-              <code>{needs.hosts ? t.hosts(needs.hosts) : t.nothing}</code>
-            </li>
-            <li>
-              <span>{t.perms.secrets}</span>
-              <code>{needs.secrets ? t.credentials(needs.secrets) : t.nothing}</code>
-            </li>
-          </ul>
-          <a class="glance__more" href="#permissions">{t.permissions} →</a>
+          <dl class="facts-list">
+            <div>
+              <dt>{t.checks}</dt>
+              <dd><span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{t.risk[item.risk]}</span></dd>
+            </div>
+            <div>
+              <dt>{t.perms.runsCode}</dt>
+              <dd>{needs.runs.length ? <code>{needs.runs.join(', ')}</code> : <span class="muted">{t.nothing}</span>}</dd>
+            </div>
+            <div>
+              <dt>{t.perms.network}</dt>
+              <dd>{needs.hosts ? t.hosts(needs.hosts) : <span class="muted">{t.nothing}</span>}</dd>
+            </div>
+            <div>
+              <dt>{t.perms.secrets}</dt>
+              <dd>{needs.secrets ? t.credentials(needs.secrets) : <span class="muted">{t.nothing}</span>}</dd>
+            </div>
+          </dl>
+          <a class="panel__more" href="#permissions">{t.permissions} <span aria-hidden="true">→</span></a>
         </section>
 
         <section class="panel facts" aria-labelledby="facts-title">
           <h2 class="eyebrow" id="facts-title">{t.facts}</h2>
-          <dl>
+          <dl class="facts-list">
             {item.latest.version && (
               <div>
                 <dt>{t.version}</dt>
@@ -383,13 +394,6 @@ const needs = {
           </dl>
         </section>
 
-        <a class="panel publisher" href={publisherPage}>
-          <Monogram handle={item.publisher.handle} size={34} />
-          <span class="publisher__text">
-            <span class="publisher__name">{item.publisher.name}</span>
-            <span class="publisher__all">{t.publisherAll} →</span>
-          </span>
-        </a>
       </div>
     </aside>
   </div>
@@ -403,32 +407,19 @@ const needs = {
 <style>
   .item {
     --toc-h: 52px;
+    /* a line of prose: the summary, and the description's text */
+    --measure: 44rem;
     padding-top: var(--s-5);
   }
 
-  .crumbs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-3);
-    font-family: var(--f-mono);
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    color: var(--graphite);
-  }
+  /* ---------------------------------------------------------------- layout */
 
-  .crumbs a {
-    color: var(--corona-64);
-    transition: color 0.2s;
-  }
-
-  .crumbs a:hover {
-    color: var(--corona);
-  }
-
-  /* ------------------------------------------------------------------ head */
-
-  .head {
-    max-width: 58rem;
+  /* the head and the content, and beside both, from the top, the side */
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 22rem;
+    grid-template-rows: auto 1fr;
+    column-gap: var(--s-7);
     margin-top: var(--s-5);
   }
 
@@ -437,6 +428,39 @@ const needs = {
     grid-row: 1;
     min-width: 0;
   }
+
+  .main {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    margin-top: var(--s-6);
+  }
+
+  .side {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    min-width: 0;
+  }
+
+  .side__inner > * {
+    min-width: 0;
+  }
+
+  .side__inner {
+    position: sticky;
+    top: calc(var(--hud-h) + var(--s-5));
+    display: grid;
+    gap: var(--s-4);
+    max-height: calc(100dvh - var(--hud-h) - var(--s-6));
+    /* room for the focus ring of what sits on the panels' edges */
+    margin: -4px;
+    padding: 4px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  /* ------------------------------------------------------------------ head */
 
   .head__badges {
     display: flex;
@@ -448,12 +472,13 @@ const needs = {
     margin-top: var(--s-4);
     font-size: clamp(32px, 4.4vw, 54px);
     font-weight: 300;
-    line-height: 1.06;
+    line-height: 1.08;
     letter-spacing: -0.02em;
     overflow-wrap: anywhere;
   }
 
   .head__summary {
+    max-width: var(--measure);
     margin-top: var(--s-4);
   }
 
@@ -516,52 +541,14 @@ const needs = {
   }
 
   .notice {
-    max-width: 58rem;
+    max-width: var(--measure);
     margin-top: var(--s-5);
     padding: var(--s-4) var(--s-5);
-    border: 1px solid rgb(154 223 255 / 0.25);
+    border: 1px solid rgb(var(--ion-rgb) / 0.3);
     border-radius: 13px;
-    background: rgb(154 223 255 / 0.04);
+    background: rgb(var(--ion-rgb) / 0.05);
     font-size: 14px;
     color: var(--corona-64);
-  }
-
-  /* ---------------------------------------------------------------- layout */
-
-  .layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 22rem;
-    grid-template-rows: auto 1fr;
-    column-gap: var(--s-7);
-  }
-
-  .main {
-    grid-column: 1;
-    grid-row: 2;
-    min-width: 0;
-    margin-top: var(--s-6);
-  }
-
-  /* beside the head and the content, from the top of the page */
-  .side {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    min-width: 0;
-  }
-
-  .side__inner > * {
-    min-width: 0;
-  }
-
-  .side__inner {
-    position: sticky;
-    top: calc(var(--hud-h) + var(--s-5));
-    display: grid;
-    gap: var(--s-4);
-    max-height: calc(100dvh - var(--hud-h) - var(--s-6));
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    scrollbar-width: thin;
   }
 
   /* the bar of sections, under the HUD */
@@ -574,7 +561,7 @@ const needs = {
     height: var(--toc-h);
     align-items: stretch;
     overflow-x: auto;
-    background: rgb(5 5 7 / 0.86);
+    background: rgb(var(--void-rgb) / 0.86);
     border-bottom: 1px solid var(--hairline);
     -webkit-backdrop-filter: blur(18px) saturate(1.3);
     backdrop-filter: blur(18px) saturate(1.3);
@@ -638,19 +625,12 @@ const needs = {
     justify-content: space-between;
     gap: var(--s-4);
     margin-bottom: var(--s-5);
-    font-family: var(--f-mono);
-    font-size: 11.5px;
-    font-weight: 400;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--bead);
   }
 
   .section__aside {
     font-size: 11px;
     letter-spacing: 0.06em;
     text-transform: none;
-    color: var(--graphite);
   }
 
   .small {
@@ -674,13 +654,17 @@ const needs = {
     color: var(--bead);
   }
 
-  /* the description, rendered from its markdown */
+  /* The description, rendered from its markdown: its text keeps to a line
+     that reads well, its code, tables and rules to the column's edges. */
   .readme {
-    max-width: 48rem;
     font-size: 15.5px;
     line-height: 1.75;
     color: var(--corona-80);
     overflow-wrap: anywhere;
+  }
+
+  .readme :global(:is(p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6)) {
+    max-width: var(--measure);
   }
 
   .readme :global(> :first-child) {
@@ -743,7 +727,7 @@ const needs = {
   .readme :global(a) {
     color: var(--bead);
     text-decoration: underline;
-    text-decoration-color: rgb(255 217 160 / 0.35);
+    text-decoration-color: rgb(var(--bead-rgb) / 0.4);
     text-underline-offset: 3px;
   }
 
@@ -759,7 +743,7 @@ const needs = {
   .readme :global(code) {
     padding: 0.12em 0.36em;
     border-radius: 5px;
-    background: rgb(236 234 244 / 0.07);
+    background: rgb(var(--corona-rgb) / 0.07);
     font-size: 0.84em;
     color: var(--corona);
   }
@@ -769,7 +753,7 @@ const needs = {
     overflow-x: auto;
     border: 1px solid var(--hairline);
     border-radius: 10px;
-    background: rgb(0 0 0 / 0.35);
+    background: var(--well);
     line-height: 1.6;
   }
 
@@ -781,7 +765,7 @@ const needs = {
 
   .readme :global(blockquote) {
     padding: 0.2em 0 0.2em 1em;
-    border-left: 2px solid rgb(255 217 160 / 0.4);
+    border-left: 2px solid rgb(var(--bead-rgb) / 0.45);
     color: var(--corona-64);
   }
 
@@ -804,7 +788,7 @@ const needs = {
   .readme :global(th) {
     font-weight: 500;
     color: var(--corona);
-    background: rgb(236 234 244 / 0.03);
+    background: rgb(var(--corona-rgb) / 0.03);
   }
 
   .readme :global(hr) {
@@ -821,7 +805,7 @@ const needs = {
     position: absolute;
     top: var(--s-3);
     right: var(--s-3);
-    background: rgb(5 5 7 / 0.8);
+    background: var(--raised);
   }
 
   .json pre {
@@ -830,7 +814,7 @@ const needs = {
     overflow: auto;
     border: 1px solid var(--hairline);
     border-radius: 10px;
-    background: rgb(0 0 0 / 0.35);
+    background: var(--well);
     font-family: var(--f-mono);
     font-size: 12.5px;
     line-height: 1.6;
@@ -848,6 +832,7 @@ const needs = {
   .perms__row {
     display: grid;
     grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: baseline;
     gap: var(--s-4);
     padding: 11px var(--s-5);
     font-size: 14px;
@@ -858,7 +843,7 @@ const needs = {
   }
 
   .perms__row--head {
-    background: rgb(236 234 244 / 0.03);
+    background: rgb(var(--corona-rgb) / 0.03);
     font-family: var(--f-mono);
     font-size: 11px;
     letter-spacing: 0.12em;
@@ -884,7 +869,7 @@ const needs = {
   .perms__values code {
     padding: 1px 7px;
     border-radius: 5px;
-    background: rgb(236 234 244 / 0.06);
+    background: rgb(var(--corona-rgb) / 0.06);
     font-size: 12px;
     color: var(--corona-80);
     overflow-wrap: anywhere;
@@ -892,8 +877,8 @@ const needs = {
 
   .perms__values code.differs {
     color: var(--bead-hot);
-    background: rgb(255 217 160 / 0.1);
-    box-shadow: inset 0 0 0 1px rgb(255 217 160 / 0.35);
+    background: rgb(var(--bead-rgb) / 0.1);
+    box-shadow: inset 0 0 0 1px rgb(var(--bead-rgb) / 0.4);
   }
 
   /* what the checks found */
@@ -911,13 +896,13 @@ const needs = {
   }
 
   .verdict--medium {
-    border-color: rgb(255 217 160 / 0.35);
-    background: rgb(255 217 160 / 0.04);
+    border-color: rgb(var(--bead-rgb) / 0.4);
+    background: rgb(var(--bead-rgb) / 0.05);
   }
 
   .verdict--high {
-    border-color: rgb(255 111 134 / 0.4);
-    background: rgb(255 111 134 / 0.05);
+    border-color: rgb(var(--prominence-rgb) / 0.4);
+    background: rgb(var(--prominence-rgb) / 0.05);
   }
 
   .verdict__title {
@@ -1021,7 +1006,7 @@ const needs = {
     gap: var(--s-3);
     padding: 10px var(--s-5);
     color: var(--corona-80);
-    background: rgb(236 234 244 / 0.02);
+    background: rgb(var(--corona-rgb) / 0.025);
   }
 
   .tree__dir summary .tree__name {
@@ -1041,7 +1026,7 @@ const needs = {
   }
 
   .tree__files li + li {
-    border-top: 1px solid rgb(236 234 244 / 0.05);
+    border-top: 1px solid rgb(var(--corona-rgb) / 0.05);
   }
 
   .tree__name {
@@ -1055,7 +1040,7 @@ const needs = {
     border-radius: 4px;
     font-size: 10px;
     color: var(--bead);
-    background: rgb(255 217 160 / 0.1);
+    background: rgb(var(--bead-rgb) / 0.1);
   }
 
   .tree__size {
@@ -1112,6 +1097,19 @@ const needs = {
     margin-bottom: var(--s-4);
   }
 
+  .panel__more {
+    display: inline-flex;
+    gap: 6px;
+    margin-top: var(--s-4);
+    font-size: 13px;
+    color: var(--bead);
+    transition: color 0.2s;
+  }
+
+  .panel__more:hover {
+    color: var(--bead-hot);
+  }
+
   .install__actions {
     display: grid;
     gap: var(--s-3);
@@ -1152,93 +1150,32 @@ const needs = {
     color: var(--bead-hot);
   }
 
-  .glance ul {
-    display: grid;
-    gap: var(--s-3);
-    font-size: 13.5px;
-  }
-
-  .glance li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--s-4);
-    color: var(--corona-64);
-  }
-
-  .glance li code {
-    min-width: 0;
-    font-size: 12px;
-    color: var(--corona);
-    text-align: right;
-    overflow-wrap: anywhere;
-  }
-
-  .glance__more {
-    display: inline-block;
-    margin-top: var(--s-4);
-    font-size: 13px;
-    color: var(--bead);
-  }
-
-  .glance__more:hover {
-    color: var(--bead-hot);
-  }
-
-  .facts dl {
-    display: grid;
-    gap: var(--s-3);
-    font-size: 13.5px;
-  }
-
-  .facts dl div {
-    display: grid;
-    grid-template-columns: 5.5em minmax(0, 1fr);
-    gap: var(--s-4);
-  }
-
-  .facts dt {
-    color: var(--graphite);
-  }
-
-  .facts dd {
-    margin: 0;
-    color: var(--corona-80);
-    overflow-wrap: anywhere;
-  }
-
-  .facts dd code {
-    font-size: 12px;
-  }
-
-  .facts a {
-    color: var(--corona);
-    transition: color 0.2s;
-  }
-
-  .facts a:hover {
-    color: var(--bead-hot);
-  }
-
-  .publisher {
+  /* the publisher: its picture and name, to everything it publishes */
+  .publisher__link {
     display: flex;
     align-items: center;
     gap: var(--s-4);
-    transition: border-color 0.3s;
+    margin: calc(-1 * var(--s-3));
+    padding: var(--s-3);
+    border-radius: 10px;
+    transition: background-color 0.2s;
   }
 
-  .publisher:hover {
-    border-color: rgb(255 217 160 / 0.38);
+  .publisher__link:hover {
+    background: rgb(var(--corona-rgb) / 0.05);
   }
 
   .publisher__text {
     display: grid;
+    flex: 1;
     min-width: 0;
   }
 
   .publisher__name {
     color: var(--corona);
-    overflow-wrap: anywhere;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .publisher__all {
@@ -1246,8 +1183,19 @@ const needs = {
     color: var(--graphite);
   }
 
-  .publisher:hover .publisher__all {
+  .publisher__go {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    color: var(--graphite);
+    transition:
+      color 0.2s,
+      translate 0.35s var(--ease-out);
+  }
+
+  .publisher__link:hover .publisher__go {
     color: var(--bead);
+    translate: 2px 0;
   }
 
   /* the call to install, kept at hand on small screens once the panel scrolls away */
@@ -1263,7 +1211,8 @@ const needs = {
       grid-template-rows: none;
     }
 
-    /* the side's panels join the page: installing after the head, the details after the content */
+    /* the side's panels join the page: installing and the publisher after the
+       head, the rest after the content */
     .side,
     .side__inner {
       display: contents;
@@ -1284,13 +1233,23 @@ const needs = {
       margin-top: var(--s-6);
     }
 
-    .glance {
+    /* a panel the page's width: its buttons as wide as their words */
+    .install__actions {
+      grid-template-columns: repeat(auto-fit, minmax(0, max-content));
+    }
+
+    .install__actions .btn {
+      width: auto;
+      padding-inline: var(--s-6);
+    }
+
+    .publisher {
       order: -1;
       margin-top: var(--s-4);
     }
 
-    .facts,
-    .publisher {
+    .glance,
+    .facts {
       order: 1;
       margin-top: var(--s-4);
     }
@@ -1312,7 +1271,7 @@ const needs = {
       align-items: center;
       gap: var(--s-4);
       padding: var(--s-3) var(--edge) calc(var(--s-3) + env(safe-area-inset-bottom));
-      background: rgb(5 5 7 / 0.9);
+      background: rgb(var(--void-rgb) / 0.9);
       border-top: 1px solid var(--hairline);
       -webkit-backdrop-filter: blur(18px) saturate(1.3);
       backdrop-filter: blur(18px) saturate(1.3);
@@ -1339,6 +1298,14 @@ const needs = {
   @media (max-width: 760px) {
     .head__summary p {
       font-size: 15.5px;
+    }
+
+    .install__actions {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .install__actions .btn {
+      width: 100%;
     }
 
     .perms__row {

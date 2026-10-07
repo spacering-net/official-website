@@ -37,7 +37,9 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | Database schema | `db/migrations/` and Harness's `db/harness/` (add new files only; do not edit existing migrations; run `pnpm db:migrate:remote` before pushing) |
 | Harness: imports, checks, search and the API | `api/harness/` (the API's shapes: `api/harness/schemas.ts`, published at `/api/harness/v1/openapi.json`) |
 | Harness pages and their copy | `src/pages/[...lang]/harness/`, `src/components/harness/`, `src/i18n/harness.ts` |
-| The frame of every page but the homepage (HUD, menu, sign-in, footer) | `src/layouts/Page.astro`, `src/client/page.ts` |
+| The frame of every page but the homepage (HUD, menu, sign-in, footer; one column, `--page-max`) | `src/layouts/Page.astro`, `src/client/page.ts` |
+| Light and dark on every page but the homepage (which stays dark): the light palette, the switch, the choice applied before the first paint | `:root[data-theme='light']` in `src/styles/site.css`, `src/components/ThemeSwitch.astro`, `src/client/theme.js` |
+| Publishers' pictures (GitHub avatars, sites' icons; kept in R2, looked for again every 30 days by the daily jobs) | `api/harness/importers/avatars.ts`, `src/components/harness/Avatar.astro` |
 | Products with pages of their own (the HUD links to them; the rest are homepage chapters) | `PRODUCT_PAGES` in `src/i18n/index.ts` |
 | The not-found page, per language (`404.html`, `zh/404.html`; also for Harness addresses with nothing behind them) | `src/components/NotFound.astro`, `src/pages/404.astro`, `src/pages/zh/404.astro` |
 | The engraving inside the band | `inscribe()` in `src/client/scene/ring.ts`, `src/client/account.ts` |
@@ -62,7 +64,7 @@ pnpm qa:jump    # jumps across several chapters project only the start and end c
 pnpm qa:switch  # language switch hand-over: same chapter, no intro replay, no flash
 pnpm qa:menu    # menu on short screens: scrolls, locks the page, Esc and focus return; pauses the scene, no live blur
 pnpm qa:fit     # panels fit between the HUD and the bottom edge at every size
-pnpm qa:pages   # the other pages: shared HUD, menu and sign-in, what sticks while scrolling, Harness's in-place search and filters
+pnpm qa:pages   # the other pages: shared HUD, menu and sign-in, what sticks while scrolling, Harness's in-place search and filters, shared edges, the light theme
 pnpm qa:perf    # frame times at 1x and 2x pixel ratio
 pnpm og         # re-renders the share images; then convert them to public/og.jpg and og-zh.jpg
 ```

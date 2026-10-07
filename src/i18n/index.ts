@@ -129,6 +129,13 @@ export interface Dict {
     home: string;
     harness: string;
   };
+  /** the theme switch, on every page but the homepage */
+  theme: {
+    label: string;
+    light: string;
+    dark: string;
+    system: string;
+  };
   menu: {
     label: string;
     destinations: string;
@@ -325,6 +332,12 @@ const en: Dict = {
     lede: 'The address may be mistyped, or what was here has moved on. The ring is still where you left it.',
     home: 'Back to the ring',
     harness: 'Browse Harness',
+  },
+  theme: {
+    label: 'Theme',
+    light: 'Light',
+    dark: 'Dark',
+    system: 'As the system',
   },
   menu: {
     label: 'Site menu',
@@ -529,6 +542,12 @@ const zh: Dict = {
     lede: '可能是地址输错了，也可能这里的内容已经搬走。戒指还在原处。',
     home: '回到戒指',
     harness: '逛逛 Harness',
+  },
+  theme: {
+    label: '外观',
+    light: '浅色',
+    dark: '深色',
+    system: '跟随系统',
   },
   menu: {
     label: '站点菜单',

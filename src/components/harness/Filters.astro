@@ -94,15 +94,18 @@ const open = folded.some((t) => t.id === state.tag);
     gap: 1px;
   }
 
+  /* each row's text on the heading's line; its mark hangs into the gutter */
   .facet {
     position: relative;
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: var(--s-4);
-    padding: 7px var(--s-3) 7px var(--s-4);
+    margin-inline: -10px;
+    padding: 7px 10px;
     border-radius: 8px;
     font-size: 14.5px;
+    line-height: 1.4;
     color: var(--corona-64);
     transition:
       color 0.2s,
@@ -112,7 +115,7 @@ const open = folded.some((t) => t.id === state.tag);
   .facet::before {
     content: '';
     position: absolute;
-    left: 3px;
+    left: 2px;
     top: 50%;
     width: 4px;
     height: 4px;
@@ -124,12 +127,12 @@ const open = folded.some((t) => t.id === state.tag);
 
   .facet:hover {
     color: var(--corona);
-    background: rgb(236 234 244 / 0.04);
+    background: rgb(var(--corona-rgb) / 0.05);
   }
 
   .facet[aria-current] {
     color: var(--bead-hot);
-    background: rgb(255 217 160 / 0.06);
+    background: rgb(var(--bead-rgb) / 0.08);
   }
 
   .facet[aria-current]::before {
@@ -140,6 +143,7 @@ const open = folded.some((t) => t.id === state.tag);
   .facet__n {
     font-family: var(--f-mono);
     font-size: 11px;
+    font-variant-numeric: tabular-nums;
     color: var(--graphite);
   }
 
@@ -162,7 +166,7 @@ const open = folded.some((t) => t.id === state.tag);
   .tags__more summary {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 7px;
     padding: var(--s-2) 0;
     font-size: 13px;
     color: var(--corona-64);

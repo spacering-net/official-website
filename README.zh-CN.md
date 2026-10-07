@@ -37,7 +37,9 @@ Harness 的导入按计划任务运行。本地手动触发（队列在开发服
 | 数据库表结构 | `db/migrations/` 和 Harness 的 `db/harness/`（只增不改；推送前先运行 `pnpm db:migrate:remote`） |
 | Harness 的导入、检查、搜索和接口 | `api/harness/`（接口的数据结构在 `api/harness/schemas.ts`，发布在 `/api/harness/v1/openapi.json`） |
 | Harness 的页面和文案 | `src/pages/[...lang]/harness/`、`src/components/harness/`、`src/i18n/harness.ts` |
-| 首页以外所有页面的外壳（HUD、菜单、登录、页脚） | `src/layouts/Page.astro`、`src/client/page.ts` |
+| 首页以外所有页面的外壳（HUD、菜单、登录、页脚；同一栏宽，`--page-max`） | `src/layouts/Page.astro`、`src/client/page.ts` |
+| 首页以外页面的深浅色（首页始终是深色）：浅色色板、切换按钮、首帧前套用所选外观 | `src/styles/site.css` 里的 `:root[data-theme='light']`、`src/components/ThemeSwitch.astro`、`src/client/theme.js` |
+| 发布者头像（GitHub 头像、网站图标；存在 R2，每日任务每 30 天重新查找一次） | `api/harness/importers/avatars.ts`、`src/components/harness/Avatar.astro` |
 | 有独立页面的产品（HUD 直接链接过去；其余仍是首页的章节） | `src/i18n/index.ts` 里的 `PRODUCT_PAGES` |
 | 404 页，分语言（`404.html`、`zh/404.html`；Harness 里不存在的地址也用它） | `src/components/NotFound.astro`、`src/pages/404.astro`、`src/pages/zh/404.astro` |
 | 戒身内壁的刻字 | `src/client/scene/ring.ts` 的 `inscribe()`，`src/client/account.ts` |
@@ -62,7 +64,7 @@ pnpm qa:jump    # 跨幕跳转只投射起点和终点
 pnpm qa:switch  # 语言切换接力：同一幕、不重播开场、画面不闪
 pnpm qa:menu    # 矮屏菜单可滚动、背景锁定、Esc 与焦点归还；展开时场景暂停、不用实时模糊
 pnpm qa:fit     # 各尺寸下面板是否完整落在 HUD 与屏幕底边之间
-pnpm qa:pages   # 首页以外的页面：共用的 HUD、菜单与登录，滚动时吸顶的部分，Harness 的页内搜索与筛选
+pnpm qa:pages   # 首页以外的页面：共用的 HUD、菜单与登录，滚动时吸顶的部分，Harness 的页内搜索与筛选，对齐的边线，浅色模式
 pnpm qa:perf    # 帧时间（1 倍与 2 倍像素比）
 pnpm og         # 重新生成分享图，之后转成 public/og.jpg 与 og-zh.jpg
 ```

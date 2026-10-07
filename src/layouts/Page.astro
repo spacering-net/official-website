@@ -13,6 +13,8 @@ import Hud from '../components/Hud.astro';
 import OrbitMenu from '../components/OrbitMenu.astro';
 import Account from '../components/Account.astro';
 import SiteFooter from '../components/SiteFooter.astro';
+// a file of its own, never inlined: these pages allow scripts from this site only
+import themeScript from '../client/theme.js?url&no-inline';
 import { SITE } from '../config';
 import { dicts, PRODUCT_PAGES, type Lang } from '../i18n';
 
@@ -46,6 +48,8 @@ const skip = lang === 'en' ? 'Skip to content' : '跳到正文';
     <link rel="alternate" hreflang="x-default" href={`${SITE.url}${paths.en}`} />
     <meta name="theme-color" content="#050507" />
     <meta name="color-scheme" content="dark" />
+    {/* light or dark before the first paint; a file, as these pages allow no inline scripts */}
+    <script is:inline src={themeScript}></script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

@@ -2,6 +2,7 @@
 /** The foot of every page but the homepage (whose finale has its own). */
 import Logo from './Logo.astro';
 import LangSwitch from './LangSwitch.astro';
+import ThemeSwitch from './ThemeSwitch.astro';
 import { SITE } from '../config';
 import { PRODUCT_PAGES, type Dict } from '../i18n';
 
@@ -25,7 +26,10 @@ const github = t.menu.external[1];
       <a href={SITE.codeg.docs} target="_blank" rel="noopener">{docs.name} <span aria-hidden="true">↗</span></a>
       <a href={SITE.orgUrl} target="_blank" rel="noopener">{github.name} <span aria-hidden="true">↗</span></a>
     </nav>
-    <LangSwitch t={t} href={alternate} />
+    <div class="page-foot__prefs">
+      <LangSwitch t={t} href={alternate} />
+      <ThemeSwitch t={t} />
+    </div>
     <p class="page-foot__legal">
       <span>© {new Date().getFullYear()} SpaceRing · spacering.net</span>
       <a href={`${t.path}privacy/`}>{t.open.privacy}</a>
@@ -40,13 +44,19 @@ const github = t.menu.external[1];
     border-top: 1px solid var(--hairline);
   }
 
-  /* the brand and the links, then the languages and the small print */
+  /* the brand and the links, then the languages, the theme and the small print */
   .page-foot__inner {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: var(--s-5) var(--s-6);
-    padding: var(--s-6) var(--edge) var(--s-5);
+    padding: var(--s-6) var(--page-pad) var(--s-5);
+  }
+
+  .page-foot__prefs {
+    display: flex;
+    align-items: center;
+    gap: var(--s-5);
   }
 
   .page-foot__links,

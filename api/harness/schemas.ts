@@ -21,6 +21,10 @@ export const Publisher = z
     kind: z.enum(['github', 'domain', 'user']),
     verified: z.boolean(),
     unclaimed: z.boolean().openapi({ description: 'Imported under this account; its owner has not signed in to claim it yet.' }),
+    avatar: z
+      .string()
+      .nullable()
+      .openapi({ example: '/api/avatars/0199b5e2-6c4f-7d1a-9f2e-3c8a1b5d7e90/4f1c2a9e8b7d6c5a.png', description: "The publisher's picture, kept on this site: a GitHub account's avatar or a domain's icon. Null if it has none." }),
   })
   .openapi('Publisher');
 

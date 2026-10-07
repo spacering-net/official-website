@@ -1,6 +1,7 @@
 ---
 import Logo from './Logo.astro';
 import AccountButton from './AccountButton.astro';
+import ThemeSwitch from './ThemeSwitch.astro';
 import { dicts, CHAPTER_IDS, PRODUCT_PAGES, type Dict } from '../i18n';
 import { SITE } from '../config';
 import { MARK_BAND, MARK_CRESCENT } from './mark';
@@ -41,7 +42,7 @@ const ticks = Array.from({ length: 12 }, (_, i) => {
 const docs = t.menu.external[0];
 const github = t.menu.external[1];
 ---
-<div class="orbit-menu" id="orbit-menu" role="dialog" aria-modal="true" aria-label={t.menu.label} data-menu data-lenis-prevent>
+<div class:list={['orbit-menu', page && 'orbit-menu--page']} id="orbit-menu" role="dialog" aria-modal="true" aria-label={t.menu.label} data-menu data-lenis-prevent>
   <canvas class="orbit-menu__backdrop" aria-hidden="true" data-menu-backdrop></canvas>
   <div class="orbit-menu__top">
     <a class="brand" href={t.path} aria-label={t.nav.home}>
@@ -101,6 +102,7 @@ const github = t.menu.external[1];
   <div class="orbit-menu__foot mono">
     <span>spacering.net</span>
     <AccountButton t={t} />
+    {page && <ThemeSwitch t={t} />}
     <a class="lang-switch" href={page?.alternate ?? other.path} hreflang={other.htmlLang} lang={other.htmlLang} data-lang-switch={other.lang}>{t.nav.langSwitch}</a>
   </div>
 </div>

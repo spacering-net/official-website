@@ -74,6 +74,9 @@ export class R2 {
     const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
     this.objects.set(key, bytes);
   }
+  async delete(keys) {
+    for (const key of [keys].flat()) this.objects.delete(key);
+  }
   async get(key) {
     await this.onGet?.(key);
     const bytes = this.objects.get(key);
@@ -87,6 +90,7 @@ export function testEnv() {
   return {
     HARNESS_DB: new D1(),
     HARNESS_FILES: new R2(),
+    MEDIA: new R2(),
     HARNESS_JOBS: { send: async (body) => sent.push(body), sendBatch: async (msgs) => sent.push(...msgs.map((m) => m.body)) },
     GITHUB_TOKEN: '',
     sent,

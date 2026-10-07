@@ -1,21 +1,31 @@
 /* ==========================================================================
    Harness: what its pages share, on top of site.css. The browse, item and
-   publisher layouts keep their own styles in their components.
+   publisher layouts keep their own styles in their components. Pages keep
+   to the frame's column (.wrap); what sticks while the page scrolls sits
+   under the HUD (var(--hud-h)).
    ========================================================================== */
 
-/* the width of a Harness page, inside the site's frame (layouts/Page.astro);
-   what sticks while the page scrolls sits under the HUD (var(--hud-h)) */
-.hx {
-  width: 100%;
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0 var(--edge);
+:root {
+  /* cards and panels: a breath of light on the void, white on paper */
+  --card-bg: linear-gradient(180deg, rgb(236 234 244 / 0.035), rgb(236 234 244 / 0.012));
+  --card-lift: 0 22px 44px -28px rgb(255 217 160 / 0.4);
+  /* one width for every label column (the panels' facts, the publisher's) */
+  --label-w: 7.5rem;
+  /* the sidebar beside the results, and the search above it */
+  --side-w: 18rem;
+}
+
+:root[data-theme='light'] {
+  --card-bg: #fff;
+  --card-lift: 0 16px 36px -24px rgb(23 22 28 / 0.3);
 }
 
 /* a small uppercase label, in the HUD's voice */
 .eyebrow {
   font-family: var(--f-mono);
   font-size: 11px;
+  font-weight: 400;
+  line-height: 1.6;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--graphite);
@@ -31,13 +41,33 @@
   color: var(--graphite);
 }
 
-/* frosted panes, as on the homepage but quieter */
 .panel {
   border: 1px solid var(--hairline);
   border-radius: 13px;
-  background:
-    linear-gradient(180deg, rgb(236 234 244 / 0.035), rgb(236 234 244 / 0.012)),
-    var(--void);
+  background: var(--card-bg);
+}
+
+/* the path to a page: Harness / publisher / name */
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: 20px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 20px;
+  letter-spacing: 0.04em;
+  color: var(--graphite);
+}
+
+.crumbs a {
+  color: var(--corona-64);
+  transition: color 0.2s;
+}
+
+.crumbs a:hover {
+  color: var(--corona);
 }
 
 /* ------------------------------------------------------------------ badges */
@@ -60,8 +90,8 @@
 
 .badge--kind {
   color: var(--bead);
-  border-color: rgb(255 217 160 / 0.32);
-  background: rgb(255 217 160 / 0.05);
+  border-color: rgb(var(--bead-rgb) / 0.4);
+  background: rgb(var(--bead-rgb) / 0.06);
 }
 
 .badge--risk-low {
@@ -70,18 +100,18 @@
 
 .badge--risk-medium {
   color: var(--bead);
-  border-color: rgb(255 217 160 / 0.5);
+  border-color: rgb(var(--bead-rgb) / 0.5);
 }
 
 .badge--risk-high {
   color: var(--prominence);
-  border-color: rgb(255 111 134 / 0.5);
-  background: rgb(255 111 134 / 0.06);
+  border-color: rgb(var(--prominence-rgb) / 0.5);
+  background: rgb(var(--prominence-rgb) / 0.06);
 }
 
 .badge--listed {
   color: var(--ion);
-  border-color: rgb(154 223 255 / 0.35);
+  border-color: rgb(var(--ion-rgb) / 0.4);
 }
 
 /* a dot before a risk level, in its colour */
@@ -95,12 +125,12 @@
 
 .risk-dot--medium {
   background: var(--bead);
-  box-shadow: 0 0 6px rgb(255 217 160 / 0.6);
+  box-shadow: 0 0 6px rgb(var(--bead-rgb) / 0.6);
 }
 
 .risk-dot--high {
   background: var(--prominence);
-  box-shadow: 0 0 6px rgb(255 111 134 / 0.7);
+  box-shadow: 0 0 6px rgb(var(--prominence-rgb) / 0.7);
 }
 
 /* ------------------------------------------------------------------- chips */
@@ -109,12 +139,13 @@
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-3);
+  gap: 7px;
   height: 32px;
   padding: 0 var(--s-4);
   border: 1px solid var(--hairline);
   border-radius: 999px;
   font-size: 14px;
+  line-height: 1;
   color: var(--corona-64);
   white-space: nowrap;
   transition:
@@ -130,8 +161,8 @@
 
 .chip[aria-current] {
   color: var(--bead-hot);
-  border-color: rgb(255 217 160 / 0.5);
-  background: rgb(255 217 160 / 0.07);
+  border-color: rgb(var(--bead-rgb) / 0.5);
+  background: rgb(var(--bead-rgb) / 0.08);
 }
 
 .chip__n {
@@ -141,7 +172,7 @@
 }
 
 .chip[aria-current] .chip__n {
-  color: rgb(255 217 160 / 0.75);
+  color: var(--bead);
 }
 
 /* ------------------------------------------------------------- copy button */
@@ -162,7 +193,7 @@
 
 .copy:hover {
   color: var(--corona);
-  background: rgb(236 234 244 / 0.06);
+  background: rgb(var(--corona-rgb) / 0.07);
 }
 
 /* until a script can copy */
@@ -197,10 +228,11 @@
   align-items: center;
   gap: var(--s-3);
   min-width: 0;
-  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  height: 42px;
+  padding: 0 var(--s-2) 0 var(--s-4);
   border: 1px solid var(--hairline);
   border-radius: 10px;
-  background: rgb(0 0 0 / 0.35);
+  background: var(--well);
 }
 
 .cmd code {
@@ -216,4 +248,64 @@
 
 .cmd code::-webkit-scrollbar {
   display: none;
+}
+
+/* ------------------------------------------------------------ facts lists */
+
+/* label | value rows, the labels in one column wherever they appear */
+.facts-list {
+  display: grid;
+  gap: var(--s-3);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.facts-list > div {
+  display: grid;
+  grid-template-columns: var(--label-w) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s-4);
+}
+
+.facts-list dt {
+  color: var(--graphite);
+}
+
+.facts-list dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--corona-80);
+  overflow-wrap: anywhere;
+}
+
+.facts-list dd code {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  color: var(--corona);
+}
+
+.facts-list a {
+  color: var(--corona);
+  transition: color 0.2s;
+}
+
+.facts-list a:hover {
+  color: var(--bead-hot);
+}
+
+/* --------------------------------------------------------------- avatars */
+
+/* the tints of a publisher's letter, until it has a picture (harness/Avatar.astro) */
+:root {
+  --tint-1: var(--bead);
+  --tint-2: var(--ion);
+  --tint-3: var(--corona);
+  --tint-4: #c9b6ff;
+  --tint-5: #9fe3c1;
+  --tint-6: var(--prominence);
+}
+
+:root[data-theme='light'] {
+  --tint-4: #6a4bc4;
+  --tint-5: #23805a;
 }
