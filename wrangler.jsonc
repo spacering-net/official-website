@@ -66,6 +66,9 @@
       }
     ]
   },
+  // A skill repository is unpacked, checked and packed in one job, which can
+  // take more than the default 30 seconds of CPU: allow the most there is.
+  "limits": { "cpu_ms": 300000 },
   "ratelimits": [
     // sign-in endpoints write to the database: a few dozen requests a minute per address
     {
