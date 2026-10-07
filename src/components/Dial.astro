@@ -1,0 +1,33 @@
+---
+import type { Dict } from '../i18n';
+import { CHAPTER_IDS } from '../i18n';
+
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const R = 300;
+const n = t.dial.length;
+const STEP = Math.min(36, 240 / (n - 1));
+const items = t.dial.map((label, i) => {
+  const y = (i - (n - 1) / 2) * STEP;
+  const x = R - Math.sqrt(R * R - y * y);
+  const a = (Math.asin(y / R) * 180) / Math.PI;
+  return { label, x: +x.toFixed(2), y: +y.toFixed(2), a: +a.toFixed(2), id: CHAPTER_IDS[i] };
+});
+const W = 30;
+const H = 260;
+const first = items[0];
+const lastItem = items[items.length - 1];
+const arc = `M${W - first.x} ${H / 2 + first.y} A${R} ${R} 0 0 1 ${W - lastItem.x} ${H / 2 + lastItem.y}`;
+---
+<nav class="dial" aria-label={t.nav.chapters}>
+  <svg class="dial__arc" viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true"><path d={arc}></path></svg>
+  {items.map((it, i) => (
+    <a class="dial__item" href={`#${it.id}`} data-goto={i} style={`--x:${it.x};--y:${it.y};--a:${it.a}`}>
+      <span class="dial__label">{it.label}</span>
+      <span class="dial__tick" aria-hidden="true"></span>
+    </a>
+  ))}
+  <span class="dial__bead" aria-hidden="true" style={`--bx:${first.x};--by:${first.y}`}></span>
+</nav>

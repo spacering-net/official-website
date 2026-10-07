@@ -1,0 +1,10 @@
+# Local secrets for `wrangler dev`. Copy to .dev.vars (git-ignored) and fill in.
+# Production values are set with `wrangler secret put <NAME>`.
+SITE_URL=http://localhost:4321
+# 32+ random bytes, e.g. node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+BETTER_AUTH_SECRET=
+# OAuth apps for local development, with callback URLs on localhost:4321
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

@@ -1,0 +1,26 @@
+---
+import type { Dict } from '../../i18n';
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const h = t.harness.holo;
+---
+<div class="holo" aria-hidden="true">
+  <span class="holo__tag">{t.status.preview}</span>
+  <div class="holo__bar"><span>{h.label}</span><span>{h.summary}</span></div>
+  <ul>
+    {h.rows.map((row, i) => (
+      <li class="listing" style={`--i:${i}`}>
+        <span class="listing__kind">{row.kind}</span>
+        <span class="listing__slug">{row.slug}</span>
+        <span class="listing__desc">{row.desc}</span>
+        <span class="listing__n">↓ {row.installs}</span>
+      </li>
+    ))}
+  </ul>
+  <div class="equip">
+    <span>{h.equipping} → {t.assistantName}</span>
+    <span class="equip__bar"></span>
+  </div>
+</div>

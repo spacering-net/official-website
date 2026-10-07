@@ -1,0 +1,188 @@
+---
+/**
+ * Text pages (privacy policy, terms): standalone and light, with no scene and
+ * no intro, in the site's type and colours. Each has a twin in the other
+ * language.
+ */
+import '@fontsource-variable/jost';
+import '@fontsource/ibm-plex-mono/400.css';
+import Logo from '../components/Logo.astro';
+import { SITE } from '../config';
+import { dicts, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  /** this page's path under each language, e.g. { en: '/privacy/', zh: '/zh/privacy/' } */
+  paths: Record<Lang, string>;
+  updated: string;
+}
+const { lang, title, description, paths, updated } = Astro.props;
+const t = dicts[lang];
+const other = lang === 'en' ? 'zh' : 'en';
+const labels = {
+  en: { home: 'SpaceRing home', updated: 'Last updated', switch: '中文', privacy: 'Privacy Policy', terms: 'Terms of Service' },
+  zh: { home: 'SpaceRing 首页', updated: '最后更新', switch: 'English', privacy: '隐私政策', terms: '用户协议' },
+}[lang];
+const base = lang === 'en' ? '/' : '/zh/';
+---
+<!doctype html>
+<html lang={t.htmlLang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · SpaceRing</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={`${SITE.url}${paths[lang]}`} />
+    <link rel="alternate" hreflang="en" href={`${SITE.url}${paths.en}`} />
+    <link rel="alternate" hreflang="zh-CN" href={`${SITE.url}${paths.zh}`} />
+    <link rel="alternate" hreflang="x-default" href={`${SITE.url}${paths.en}`} />
+    <meta name="theme-color" content="#050507" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href={base} aria-label={labels.home}><Logo class="mark" /><span aria-hidden="true">SpaceRing</span></a>
+      <a class="lang" href={paths[other]} hreflang={dicts[other].htmlLang} lang={dicts[other].htmlLang}>{labels.switch}</a>
+    </header>
+    <main>
+      <h1>{title}</h1>
+      <p class="updated">{labels.updated}: {updated}</p>
+      <slot />
+    </main>
+    <footer>
+      <a href={`${base}privacy/`}>{labels.privacy}</a>
+      <a href={`${base}terms/`}>{labels.terms}</a>
+      <span>© {new Date().getFullYear()} SpaceRing · spacering.net</span>
+    </footer>
+  </body>
+</html>
+
+<!-- global: the mark is drawn inside the Logo component, beyond this page's scope -->
+<style is:global>
+  body {
+    margin: 0;
+    background: #050507;
+    color: rgb(236 234 244 / 0.82);
+    font-family: 'Jost Variable', 'Jost', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  header,
+  main,
+  footer {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 0 21px;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 89px;
+  }
+
+  header a,
+  footer a {
+    color: rgb(236 234 244 / 0.64);
+    text-decoration: none;
+    transition: color 0.3s;
+  }
+
+  header a:hover,
+  footer a:hover {
+    color: #eceaf4;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    color: #eceaf4;
+  }
+
+  .mark {
+    width: 28px;
+    height: 28px;
+    fill: #eceaf4;
+  }
+
+  .lang,
+  .updated,
+  footer {
+    font-family: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+  }
+
+  main {
+    padding-top: 34px;
+    padding-bottom: 55px;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(30px, 5vw, 42px);
+    font-weight: 300;
+    line-height: 1.2;
+    color: #eceaf4;
+  }
+
+  .updated {
+    margin: 13px 0 34px;
+    color: #8b8a99;
+  }
+
+  h2 {
+    margin: 34px 0 8px;
+    font-size: 19px;
+    font-weight: 500;
+    color: #eceaf4;
+  }
+
+  p,
+  ul {
+    margin: 0 0 13px;
+  }
+
+  ul {
+    padding-left: 1.2em;
+  }
+
+  li {
+    margin-bottom: 5px;
+  }
+
+  main a {
+    color: #ffd9a0;
+  }
+
+  footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 13px 21px;
+    padding-top: 21px;
+    padding-bottom: 34px;
+    border-top: 1px solid rgb(236 234 244 / 0.1);
+    color: #8b8a99;
+  }
+
+  footer span {
+    margin-left: auto;
+  }
+
+  a:focus-visible {
+    outline: 1px solid #ffd9a0;
+    outline-offset: 3px;
+  }
+</style>

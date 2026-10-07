@@ -1,0 +1,52 @@
+---
+import Doc from '../layouts/Doc.astro';
+const paths = { en: '/privacy/', zh: '/zh/privacy/' };
+---
+<Doc lang="en" title="Privacy Policy" description="What SpaceRing collects when you sign in, why, where it is kept, and how to have it deleted." paths={paths} updated="October 6, 2026">
+  <p>This policy explains what SpaceRing (spacering.net, “we”) collects when you sign in, why, where it is kept, and what you can ask of us. Browsing the site without signing in sends us nothing about you: there are no analytics or advertising cookies.</p>
+
+  <h2>What we collect</h2>
+  <p>When you sign in with GitHub or Google, we receive from them, and keep, your account ID at that service, your name, your email address (and whether it is verified) and your profile picture. We add:</p>
+  <ul>
+    <li>your ring number (SRN), an internal ID, the time your account was created and the language you signed up in;</li>
+    <li>for each browser you are signed in on, a session with its IP address and browser identification (user agent);</li>
+    <li>a security log of sign-ins and account changes, in which IP addresses are kept only as a keyed hash.</li>
+  </ul>
+  <p>We do not keep the access tokens GitHub or Google issue at sign-in, and we read nothing else from those accounts.</p>
+
+  <h2>Why</h2>
+  <ul>
+    <li>To sign you in and keep you signed in.</li>
+    <li>To show you your ring number and profile.</li>
+    <li>To keep accounts safe: spotting misuse and looking into problems.</li>
+  </ul>
+
+  <h2>Where it is kept</h2>
+  <p>The site and your data are hosted by Cloudflare: account data in a database in Cloudflare’s Asia-Pacific region, profile pictures in Cloudflare storage, and requests handled across Cloudflare’s global network. Your information is therefore stored and processed outside mainland China; by signing in you agree to this transfer. GitHub and Google handle the sign-in itself under their own privacy policies.</p>
+
+  <h2>How long</h2>
+  <ul>
+    <li>A session ends 30 days after you last use it and is then deleted; signing out ends it at once.</li>
+    <li>Records of a sign-in in progress last a few minutes.</li>
+    <li>The security log is kept for 12 months.</li>
+    <li>Your account is kept until you ask us to delete it. Deleting removes your name, email address, picture, sign-in methods and sessions; your ring number is retired and never given to anyone else.</li>
+  </ul>
+
+  <h2>Cookies and local storage</h2>
+  <p>Signing in uses cookies it cannot work without: session cookies, and a short-lived cookie during sign-in. Your browser also keeps your ring number, name and picture in local storage, so the ring can be engraved as soon as the page opens; signing out clears them. The site remembers your language choice the same way.</p>
+
+  <h2>Your rights</h2>
+  <p>You can ask to see, correct, export or delete your information, or withdraw your consent, by writing to <a href="mailto:privacy@spacering.net">privacy@spacering.net</a>. We reply within 15 working days. You can also stop at any time and revoke SpaceRing’s access in your GitHub or Google settings.</p>
+
+  <h2>Children</h2>
+  <p>SpaceRing is not meant for children under 14. If you are under 14, please do not sign in.</p>
+
+  <h2>Security</h2>
+  <p>Connections are encrypted (HTTPS), session cookies cannot be read by scripts on the page, and Cloudflare encrypts the data it stores. No system is perfectly secure; if something goes wrong, we will tell the people affected promptly.</p>
+
+  <h2>Changes</h2>
+  <p>When this policy changes, the date above changes with it. Significant changes are announced on the site before they apply.</p>
+
+  <h2>Contact</h2>
+  <p><a href="mailto:privacy@spacering.net">privacy@spacering.net</a></p>
+</Doc>

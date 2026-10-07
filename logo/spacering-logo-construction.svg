@@ -1,0 +1,110 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 835" width="940" height="835">
+<style>.logo{fill:#e4e4e4}.c{fill:none;stroke:#000;stroke-width:1}.p{fill:none;stroke:#000;stroke-width:1;stroke-dasharray:1.5 3}.ax{fill:none;stroke:#000;stroke-width:.75;stroke-dasharray:14 3 2 3}.cl{fill:none;stroke:#000;stroke-width:.75;stroke-dasharray:14 3 2 3}.t{stroke:#000;stroke-width:1}.lbl{font:13px "PingFang SC","Helvetica Neue",Arial,sans-serif;fill:#000}.sm{font:11px "PingFang SC","Helvetica Neue",Arial,sans-serif;fill:#555}.g{font:600 12px "PingFang SC","Helvetica Neue",Arial,sans-serif;fill:#000}.h{font:600 15px "PingFang SC","Helvetica Neue",Arial,sans-serif;fill:#000}</style>
+<rect width="940" height="835" fill="#fff"/>
+<text class="h" x="40" y="40" text-anchor="start">SpaceRing 标志构造图</text>
+<g class="logo" transform="translate(40 44)"><path fill-rule="evenodd" d="M447.95 366.91A221.8 192.09 30 0 1 159.82 422.36A221.8 192.09 30 0 1 63.78 145.11A221.8 192.09 30 0 1 351.91 89.66A221.8 192.09 30 0 1 447.95 366.91ZM416.77 323.09A172.89 149.73 30 0 0 341.91 106.98A172.89 149.73 30 0 0 117.32 150.2A172.89 149.73 30 0 0 192.18 366.31A172.89 149.73 30 0 0 416.77 323.09ZM188.32 413A20 10 30 0 0 176 394.34A20 10 30 0 0 153.68 393A20 10 30 0 0 166 411.66A20 10 30 0 0 188.32 413Z"/><path d="M134.69 146.1A160.53 137.37 30 0 1 411.63 305.99A172.89 149.73 30 0 0 134.69 146.1Z"/></g>
+<ellipse class="c" cx="295.86" cy="300.01" rx="221.8" ry="192.09" transform="rotate(30 295.86 300.01)"/>
+<ellipse class="c" cx="307.04" cy="280.65" rx="172.89" ry="149.73" transform="rotate(30 307.04 280.65)"/>
+<ellipse class="c" cx="211" cy="447" rx="20" ry="10" transform="rotate(30 211 447)"/>
+<path class="c"  d="M147.82 214.54A172.89 149.73 30 0 1 359.55 189.71A172.89 149.73 30 0 1 443.91 385.49"/>
+<path class="p"  d="M476.77 378.64A195.98 169.73 30 0 1 222.18 427.64A195.98 169.73 30 0 1 137.32 182.66"/>
+<path class="cl" stroke-dashoffset="13.49" d="M287.37 474.15A195.98 169.73 30 0 1 149.3 394.44"/>
+<line class="ax"  x1="92.44" y1="156.75" x2="521.65" y2="404.55"/>
+<line class="ax" stroke-dashoffset="11.19" x1="406.91" y1="107.68" x2="179.82" y2="501.01"/>
+<circle cx="307.04" cy="280.65" r="2.6" fill="#fff" stroke="#000"/>
+<text class="lbl" x="321.04" y="275.65" text-anchor="start">O</text>
+<circle cx="295.86" cy="300.01" r="2.6" fill="#fff" stroke="#000"/>
+<text class="lbl" x="269.86" y="309.01" text-anchor="start">O′</text>
+<line class="t"  x1="307.04" y1="280.65" x2="377.04" y2="280.65"/>
+<path class="c" d="M355.04 280.65A48 48 0 0 1 348.61 304.65"/>
+<text class="lbl" x="365.04" y="297.65" text-anchor="start">旋转 30°</text>
+<line class="t"  x1="384.11" y1="129.16" x2="399.7" y2="138.16"/>
+<line class="t"  x1="374.11" y1="146.48" x2="389.7" y2="155.48"/>
+<line class="t"  x1="367.93" y1="157.18" x2="383.52" y2="166.18"/>
+<line class="t"  x1="351.75" y1="185.21" x2="367.34" y2="194.21"/>
+<line class="t"  x1="224.39" y1="405.81" x2="239.97" y2="414.81"/>
+<line class="t"  x1="214.39" y1="423.14" x2="229.97" y2="432.14"/>
+<line class="t"  x1="208.21" y1="433.84" x2="223.79" y2="442.84"/>
+<line class="t"  x1="198.21" y1="451.16" x2="213.79" y2="460.16"/>
+<line class="t"  x1="192.03" y1="461.86" x2="207.61" y2="470.86"/>
+<text class="lbl" x="390.15" y="193.7" text-anchor="start">φu</text>
+<line class="t"  x1="191.38" y1="76.28" x2="217.38" y2="106.28"/>
+<text class="sm" x="187.38" y="80.28" text-anchor="end">外轮廓</text>
+<line class="t"  x1="63.62" y1="299.28" x2="117.62" y2="269.28"/>
+<text class="sm" x="59.62" y="303.28" text-anchor="end">戒面外沿</text>
+<line class="t"  x1="182.74" y1="261.76" x2="140.74" y2="243.76"/>
+<text class="sm" x="186.74" y="265.76" text-anchor="start">近端戒口内沿</text>
+<line class="t"  x1="276.13" y1="195.17" x2="240.13" y2="165.17"/>
+<text class="sm" x="280.13" y="199.17" text-anchor="start">远端戒口内沿</text>
+<line class="t"  x1="286" y1="418.34" x2="216" y2="438.34"/>
+<text class="sm" x="290" y="422.34" text-anchor="start">圆点 2u × u</text>
+<line class="t"  x1="313.37" y1="530.15" x2="287.37" y2="474.15"/>
+<text class="sm" x="317.37" y="534.15" text-anchor="start">外侧曲面中线</text>
+<text class="sm" x="171.82" y="517.01" text-anchor="end">短轴 = 对称轴</text>
+<text class="sm" x="527.65" y="408.55" text-anchor="start">长轴</text>
+<text class="h" x="60" y="640" text-anchor="start">线型</text>
+<line class="c"  x1="60" y1="664" x2="106" y2="664"/>
+<text class="sm" x="118" y="668" text-anchor="start">圆周投影与标志轮廓</text>
+<line class="p"  x1="60" y1="688" x2="106" y2="688"/>
+<text class="sm" x="118" y="692" text-anchor="start">戒面外沿，标志中不画出</text>
+<line class="ax"  x1="60" y1="712" x2="106" y2="712"/>
+<text class="sm" x="118" y="716" text-anchor="start">轴线与中线</text>
+<text class="h" x="650" y="74" text-anchor="start">短轴上的比例</text>
+<text class="sm" x="650" y="94" text-anchor="start">按实际尺寸绘制，开口段省略</text>
+<rect x="660" y="120" width="22" height="20" fill="#e4e4e4" stroke="#000" stroke-width=".75"/>
+<text class="lbl" x="692" y="135" text-anchor="start">u</text>
+<text class="sm" x="730" y="135" text-anchor="start">戒身背面</text>
+<rect x="660" y="140" width="22" height="12.36" fill="#fff" stroke="#000" stroke-width=".75"/>
+<text class="lbl" x="692" y="151.18" text-anchor="start">u/φ</text>
+<text class="sm" x="730" y="151.18" text-anchor="start">缝隙</text>
+<rect x="660" y="152.36" width="22" height="32.36" fill="#e4e4e4" stroke="#000" stroke-width=".75"/>
+<text class="lbl" x="692" y="173.54" text-anchor="start">φu</text>
+<text class="sm" x="730" y="173.54" text-anchor="start">内壁月牙</text>
+<line x1="671" y1="184.72" x2="671" y2="214.72" stroke="#000" stroke-dasharray="2 3"/>
+<line x1="662" y1="200.72" x2="680" y2="192.72" stroke="#000"/>
+<line x1="662" y1="206.72" x2="680" y2="198.72" stroke="#000"/>
+<text class="sm" x="692" y="203.72" text-anchor="start">开口，省略</text>
+<rect x="660" y="214.72" width="22" height="20" fill="#e4e4e4" stroke="#000" stroke-width=".75"/>
+<text class="lbl" x="692" y="229.72" text-anchor="start">u</text>
+<text class="sm" x="730" y="229.72" text-anchor="start">戒面</text>
+<rect x="660" y="234.72" width="22" height="12.36" fill="#e4e4e4" stroke="#000" stroke-width=".75"/>
+<text class="lbl" x="692" y="245.9" text-anchor="start">u/φ</text>
+<text class="sm" x="730" y="245.9" text-anchor="start"></text>
+<rect x="660" y="247.08" width="22" height="20" fill="#fff" stroke="#000" stroke-width=".75"/>
+<text class="lbl" x="692" y="262.08" text-anchor="start">u</text>
+<text class="sm" x="730" y="262.08" text-anchor="start">圆点</text>
+<rect x="660" y="267.08" width="22" height="12.36" fill="#e4e4e4" stroke="#000" stroke-width=".75"/>
+<text class="lbl" x="692" y="278.26" text-anchor="start">u/φ</text>
+<text class="sm" x="730" y="278.26" text-anchor="start"></text>
+<path class="c" d="M655 214.72H650V279.44H655"/>
+<text class="lbl" x="644" y="252.08" text-anchor="end">2φu</text>
+<text class="sm" x="644" y="268.08" text-anchor="end">戒身正面</text>
+<path class="c" d="M771 214.72H776V247.08H771"/>
+<text class="lbl" x="783" y="235.9" text-anchor="start">φu</text>
+<path class="c" d="M813 234.72H818V279.44H813"/>
+<text class="lbl" x="825" y="258.08" text-anchor="start">√5u</text>
+<text class="sm" x="825" y="274.08" text-anchor="start">外侧曲面</text>
+<text class="h" x="650" y="337.44" text-anchor="start">构造规则</text>
+<text class="g" x="650" y="371.44" text-anchor="start">整体</text>
+<text class="sm" x="658" y="391.44" text-anchor="start">φ = (1+√5)/2 ≈ 1.618，u = 20（512 画布）</text>
+<text class="sm" x="658" y="411.44" text-anchor="start">戒面平面与画面成 30°</text>
+<text class="sm" x="658" y="431.44" text-anchor="start">与戒面平行的圆周，投影为 b/a = cos30° 的椭圆</text>
+<text class="sm" x="658" y="451.44" text-anchor="start">整体旋转 30°，沿短轴镜像对称</text>
+<text class="g" x="650" y="475.44" text-anchor="start">戒身与月牙</text>
+<text class="sm" x="658" y="495.44" text-anchor="start">O：近端戒口中心；远端戒口沿短轴前移 √5u</text>
+<text class="sm" x="658" y="515.44" text-anchor="start">O′：两戒口中心的中点</text>
+<text class="sm" x="658" y="535.44" text-anchor="start">外轮廓以 O′ 为心，过真实轮廓在短轴上的两端</text>
+<text class="sm" x="658" y="555.44" text-anchor="start">外轮廓半长轴 A = φ⁵u；两侧较实物加厚</text>
+<text class="sm" x="658" y="575.44" text-anchor="start">月牙 = 近端内沿内收 u/φ，再减去远端内沿</text>
+<text class="sm" x="658" y="595.44" text-anchor="start">内收近似等距，误差小于 0.01u；外沿非同比椭圆</text>
+<text class="sm" x="658" y="615.44" text-anchor="start">缝隙 + 月牙 = √5u = 外侧曲面投影宽</text>
+<text class="g" x="650" y="639.44" text-anchor="start">圆点</text>
+<text class="sm" x="658" y="659.44" text-anchor="start">外侧曲面上直径 2u 的正圆</text>
+<text class="sm" x="658" y="679.44" text-anchor="start">该处曲面与画面成 60°，投影为 2u × u</text>
+<text class="sm" x="658" y="699.44" text-anchor="start">投影椭圆 b/a = sin30°</text>
+<text class="sm" x="658" y="719.44" text-anchor="start">中心在对称轴与外侧曲面中线的交点</text>
+<text class="sm" x="658" y="739.44" text-anchor="start">外侧曲面中线与外轮廓同心于 O′</text>
+<text class="sm" x="658" y="759.44" text-anchor="start">两侧到外侧曲面边界各留 u/φ</text>
+<text class="sm" x="658" y="779.44" text-anchor="start">正面三段 φu : u : u/φ，公比 1/φ</text>
+<text class="sm" x="658" y="799.44" text-anchor="start">曲面弯曲造成的轮廓偏差约 0.04u，忽略</text>
+</svg>

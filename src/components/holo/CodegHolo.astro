@@ -1,0 +1,26 @@
+---
+import type { Dict } from '../../i18n';
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const h = t.codeg.holo;
+---
+<div class="holo" aria-hidden="true">
+  <div class="holo__bar"><span>{h.title}</span><span>{h.summary}</span></div>
+  <ul>
+    {h.rows.map((row) => {
+      const [add, del] = row.diff.split(' ');
+      return (
+        <li class="session" data-done={row.done ? '' : undefined} style={`--p:${row.p}`}>
+          <span class="session__agent">{row.agent}</span>
+          <span class="session__task">{row.task}</span>
+          <span class="session__state">{row.state}</span>
+          <span class="session__diff">{add ? <><ins>{add}</ins> <del>{del}</del></> : '—'}</span>
+          <span class="session__bar"><i></i></span>
+        </li>
+      );
+    })}
+  </ul>
+  <div class="holo__foot">{h.platforms}</div>
+</div>

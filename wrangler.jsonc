@@ -1,0 +1,50 @@
+// Cloudflare Workers serves the static build in dist/, and runs api/index.ts
+// for /api/* only (accounts, sign-in, avatars). Pushes to main are built and
+// deployed by Cloudflare, which does not migrate D1: apply new migrations first
+// with `pnpm db:migrate:remote`. `pnpm run deploy` does both from this machine.
+{
+  "name": "official-website",
+  "main": "./api/index.ts",
+  "compatibility_date": "2026-10-06",
+  // Better Auth keeps per-request state in AsyncLocalStorage
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    // unknown addresses get dist/404.html, with a 404 status
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "spacering",
+      "database_id": "614d6988-d884-4329-b252-425fab92a776",
+      "migrations_dir": "db/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "spacering-media"
+    }
+  ],
+  // sign-in endpoints write to the database: a few dozen requests a minute per address
+  "ratelimits": [
+    {
+      "name": "AUTH_LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    }
+  ],
+  "vars": {
+    "SITE_URL": "https://spacering.net"
+  },
+  // daily: clear expired sign-in states and sessions (api/index.ts, scheduled)
+  "triggers": {
+    "crons": ["23 3 * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

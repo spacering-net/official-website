@@ -1,0 +1,10 @@
+---
+/** Opens the account dialog: "Sign in", or the ring number once signed in. */
+import type { Dict } from '../i18n';
+
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+---
+<button class="account-btn" type="button" aria-haspopup="dialog" aria-controls="account-dialog" data-account-open data-sign-in={t.account.signIn} data-label={t.account.label}>{t.account.signIn}</button>

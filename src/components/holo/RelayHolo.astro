@@ -1,0 +1,51 @@
+---
+import type { Dict } from '../../i18n';
+import { MARK_BAND, MARK_CRESCENT, MARK_NODE } from '../mark';
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const h = t.relay.holo;
+const cx = 190;
+const cy = 80;
+const rx = 112;
+const ry = 56;
+const MARK = 34;
+const nodes = h.nodes.map((node, i) => {
+  const a = ((-60 + i * 60) * Math.PI) / 180;
+  const x = +(cx + rx * Math.cos(a)).toFixed(1);
+  const y = +(cy + ry * Math.sin(a)).toFixed(1);
+  // a relayed link hops through a relay point halfway along
+  const hop = node.relayed ? { x: +((cx + x) / 2).toFixed(1), y: +((cy + y) / 2).toFixed(1) } : null;
+  return { ...node, x, y, right: x > cx, hop };
+});
+---
+<div class="holo" aria-hidden="true">
+  <span class="holo__tag">{t.status.preview}</span>
+  <svg class="graph" viewBox="0 0 380 164">
+    <ellipse class="graph__orbit" cx={cx} cy={cy} rx={rx} ry={ry}></ellipse>
+    {nodes.map((n) => <path class:list={['graph__edge', n.hop && 'graph__edge--relayed']} d={`M${cx} ${cy}L${n.x} ${n.y}`}></path>)}
+    {nodes.map((n) => n.hop && (
+      <rect class="graph__hop" x={n.hop.x - 3} y={n.hop.y - 3} width="6" height="6" transform={`rotate(45 ${n.hop.x} ${n.hop.y})`}></rect>
+    ))}
+    {nodes.map((n) => {
+      const x = n.right ? n.x + 9 : n.x - 9;
+      const anchor = n.right ? 'start' : 'end';
+      return (
+        <g>
+          <circle class="graph__node" cx={n.x} cy={n.y} r="4"></circle>
+          <text class="graph__label" x={x} y={n.y + 1} text-anchor={anchor}>{n.name}</text>
+          <text class="graph__ms" x={x} y={n.y + 12} text-anchor={anchor}>{n.ms} ms</text>
+        </g>
+      );
+    })}
+    <circle class="graph__halo" cx={cx} cy={cy} r="21"></circle>
+    <g transform={`translate(${cx - MARK / 2} ${cy - MARK / 2}) scale(${MARK / 512})`}>
+      <path class="graph__mark" fill-rule="evenodd" d={MARK_BAND}></path>
+      <path class="graph__mark" d={MARK_CRESCENT}></path>
+      <ellipse class="graph__node-cut" cx={MARK_NODE.x} cy={MARK_NODE.y} rx={MARK_NODE.rx} ry={MARK_NODE.ry} transform={`rotate(${MARK_NODE.angle} ${MARK_NODE.x} ${MARK_NODE.y})`}></ellipse>
+    </g>
+    <text class="graph__label" x={cx} y={cy + 36} text-anchor="middle">{h.hub}</text>
+  </svg>
+  <div class="holo__foot">{h.caption}</div>
+</div>

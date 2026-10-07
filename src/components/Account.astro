@@ -1,0 +1,41 @@
+---
+/**
+ * Sign-in and the signed-in card, in one modal dialog (see client/account.ts).
+ * The buttons that open it live in the HUD and the orbit menu (AccountButton).
+ */
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import type { Dict } from '../i18n';
+
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const a = t.account;
+---
+<dialog class="account" id="account-dialog" aria-label={a.title} data-account-dialog data-label-in={a.label} data-label-out={a.title}>
+  <button class="account__close" type="button" aria-label={a.close} data-account-close>
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+  </button>
+
+  <div class="account__view" data-account-view="out">
+    <Logo class="account__mark" />
+    <h2 class="account__title">{a.title}</h2>
+    <p class="account__lede">{a.lede}</p>
+    <p class="account__error" role="alert" data-account-error hidden>{a.failed}</p>
+    <div class="account__providers">
+      <button class="btn btn--primary account__provider" type="button" data-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>
+      <button class="btn btn--ghost account__provider" type="button" data-provider="google" data-busy={a.redirecting}><Icon name="google" /><span>{a.google}</span></button>
+    </div>
+    {a.note && <p class="account__note">{a.note}</p>}
+    <p class="account__consent">{a.consent[0]}<a href={`${t.path}terms/`}>{a.consent[1]}</a>{a.consent[2]}<a href={`${t.path}privacy/`}>{a.consent[3]}</a>{a.consent[4]}</p>
+  </div>
+
+  <div class="account__view" data-account-view="in" hidden>
+    <img class="account__avatar" alt="" width="55" height="55" data-account-avatar hidden />
+    <p class="account__number mono"><span>SRN</span> <b data-account-number></b></p>
+    <p class="account__name" data-account-name></p>
+    <p class="account__error" role="alert" data-account-signout-error hidden>{a.signOutFailed}</p>
+    <button class="btn btn--ghost account__signout" type="button" data-account-signout>{a.signOut}</button>
+  </div>
+</dialog>

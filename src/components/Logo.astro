@@ -1,0 +1,14 @@
+---
+/** The SpaceRing mark: band with the node cut out, plus the inner-wall crescent. */
+import { MARK_BAND, MARK_CRESCENT } from './mark';
+
+interface Props {
+  class?: string;
+  title?: string;
+}
+const { class: className, title } = Astro.props;
+---
+<svg class={className} viewBox="0 0 512 512" role={title ? 'img' : undefined} aria-label={title} aria-hidden={title ? undefined : 'true'}>
+  <path fill-rule="evenodd" d={MARK_BAND}></path>
+  <path d={MARK_CRESCENT}></path>
+</svg>

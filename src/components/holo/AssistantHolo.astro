@@ -1,0 +1,31 @@
+---
+import type { Dict } from '../../i18n';
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const h = t.assistant.holo;
+---
+<div class="holo" aria-hidden="true">
+  <span class="holo__tag">{t.status.preview}</span>
+  <div class="holo__bar">
+    <span class="aide"><span class="aide__orb"></span><b>{t.assistantName}</b> · {h.role}</span>
+    <span>{h.online}</span>
+  </div>
+  <ul>
+    {h.rows.map((row) => (
+      <li class="task" data-kind={row.kind} style={row.p === undefined ? undefined : `--p:${row.p}`}>
+        <span class="task__time">{row.time}</span>
+        <span class="task__text">{row.text}</span>
+        {row.kind === 'ask' ? (
+          <span class="task__ask"><span class="chip chip--yes">{h.approve}</span><span class="chip">{h.later}</span></span>
+        ) : row.kind === 'working' ? (
+          <span class="task__state"><span class="session__bar"><i></i></span>{Math.round((row.p ?? 0) * 100)}%</span>
+        ) : (
+          <span class="task__state">{h.done}</span>
+        )}
+      </li>
+    ))}
+  </ul>
+  <div class="holo__foot">{h.memory}</div>
+</div>

@@ -1,0 +1,96 @@
+---
+import Logo from './Logo.astro';
+import AccountButton from './AccountButton.astro';
+import { dicts, CHAPTER_IDS, type Dict } from '../i18n';
+import { SITE } from '../config';
+import { MARK_BAND, MARK_CRESCENT } from './mark';
+
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+const other = dicts[t.lang === 'en' ? 'zh' : 'en'];
+const COS30 = Math.cos(Math.PI / 6);
+const K = Math.sqrt((1 + Math.sqrt(5)) / 2); // √φ
+// One orbit per product, in page order; radii grow by √φ.
+const orbits = t.menu.items.map((item, i) => ({
+  ...item,
+  goto: CHAPTER_IDS.indexOf(item.key as (typeof CHAPTER_IDS)[number]),
+  r: +(80 * Math.pow(K, i)).toFixed(2),
+  a0: +(((i * 137.5 + 205) % 360) * (Math.PI / 180)).toFixed(3),
+}));
+const outer = orbits[orbits.length - 1].r;
+const ticks = Array.from({ length: 12 }, (_, i) => {
+  const a = (i * 30 * Math.PI) / 180;
+  const x = Math.cos(a);
+  const y = Math.sin(a) * COS30;
+  const r1 = outer + 8;
+  const r2 = outer + (i % 3 === 0 ? 20 : 14);
+  return { x1: +(x * r1).toFixed(2), y1: +(y * r1).toFixed(2), x2: +(x * r2).toFixed(2), y2: +(y * r2).toFixed(2) };
+});
+const docs = t.menu.external[0];
+const github = t.menu.external[1];
+---
+<div class="orbit-menu" id="orbit-menu" role="dialog" aria-modal="true" aria-label={t.menu.label} data-menu data-lenis-prevent>
+  <canvas class="orbit-menu__backdrop" aria-hidden="true" data-menu-backdrop></canvas>
+  <div class="orbit-menu__top">
+    <a class="brand" href={t.path} aria-label={t.nav.home}>
+      <Logo class="brand__mark" />
+      <span class="brand__word" aria-hidden="true">SpaceRing</span>
+    </a>
+    <button class="menu-btn menu-close" type="button" aria-label={t.nav.closeMenu} data-menu-close>
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M4.5 4.5l11 11M15.5 4.5l-11 11"></path></svg>
+    </button>
+  </div>
+
+  <div class="orbit-menu__grid">
+    <nav class="orbit-menu__nav" aria-label={t.menu.destinations}>
+      <p class="orbit-menu__heading mono">{t.menu.destinations}</p>
+      <ol class="orbit-menu__list">
+        {orbits.map((item, i) => (
+          <li class="menu-item-in" style={`--i:${i}`}>
+            <a class="menu-link" href={`#${item.key}`} data-goto={item.goto} data-node={item.key}>
+              <span class="menu-link__name">{item.name}</span>
+              <span class:list={['status', item.status === 'live' && 'status--live']}>{t.status[item.status]}</span>
+              <span class="menu-link__desc">{item.desc}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
+      <div class="orbit-menu__elsewhere menu-item-in" style={`--i:${orbits.length}`}>
+        <a class="ext-link" href={SITE.codeg.docs} target="_blank" rel="noopener">{docs.name} <small>{docs.desc}</small> <span aria-hidden="true">↗</span></a>
+        <a class="ext-link" href={SITE.orgUrl} target="_blank" rel="noopener">{github.name} <small>{github.desc}</small> <span aria-hidden="true">↗</span></a>
+      </div>
+    </nav>
+
+    <div class="orbit-menu__chart menu-item-in" style="--i:2">
+      <svg class="orrery" viewBox="-300 -270 600 540" role="img" aria-label={t.menu.chartLabel}>
+        <g transform="rotate(30)">
+          <line class="orrery__axis" x1={-outer - 40} y1="0" x2={outer + 40} y2="0"></line>
+          <line class="orrery__axis" x1="0" y1={-outer * COS30 - 40} x2="0" y2={outer * COS30 + 40}></line>
+          {orbits.map((o) => (
+            <ellipse class="orrery__orbit" data-key={o.key} data-status={o.status} cx="0" cy="0" rx={o.r} ry={+(o.r * COS30).toFixed(2)}></ellipse>
+          ))}
+          {ticks.map((k) => <line class="orrery__tick" x1={k.x1} y1={k.y1} x2={k.x2} y2={k.y2}></line>)}
+        </g>
+        <g class="orrery__mark" transform="translate(-34 -34) scale(0.1328)">
+          <path fill-rule="evenodd" d={MARK_BAND}></path>
+          <path d={MARK_CRESCENT}></path>
+        </g>
+        {orbits.map((o) => (
+          <g class="orrery__body" data-key={o.key} data-r={o.r} data-a0={o.a0}>
+            <circle class="orrery__halo" data-key={o.key} data-status={o.status} r="13"></circle>
+            <circle class="orrery__node" data-status={o.status} r="4.5"></circle>
+            <text class="orrery__label" data-key={o.key} x="12" y="4">{t.dial[o.goto]}</text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  </div>
+
+  <div class="orbit-menu__foot mono">
+    <span>spacering.net</span>
+    <AccountButton t={t} />
+    <a class="lang-switch" href={other.path} hreflang={other.htmlLang} lang={other.htmlLang} data-lang-switch={other.lang}>{t.nav.langSwitch}</a>
+  </div>
+</div>

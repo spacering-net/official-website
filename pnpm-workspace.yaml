@@ -1,0 +1,8 @@
+# pnpm before 10.5 rejects this file without a packages field, and that is what
+# Cloudflare's build image runs, whatever its log says. The site is the only package.
+packages:
+  - '.'
+
+allowBuilds:
+  esbuild: true
+  workerd: true

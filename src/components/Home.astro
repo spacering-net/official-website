@@ -1,0 +1,167 @@
+---
+import Base from '../layouts/Base.astro';
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import Hud from './Hud.astro';
+import Dial from './Dial.astro';
+import OrbitMenu from './OrbitMenu.astro';
+import Account from './Account.astro';
+import SpaceHolo from './holo/SpaceHolo.astro';
+import AssistantHolo from './holo/AssistantHolo.astro';
+import HarnessHolo from './holo/HarnessHolo.astro';
+import RelayHolo from './holo/RelayHolo.astro';
+import SignetHolo from './holo/SignetHolo.astro';
+import CodegHolo from './holo/CodegHolo.astro';
+import { dicts, CHAPTER_IDS, type Lang } from '../i18n';
+import { SITE, repoUrl, releasesUrl } from '../config';
+import { getCodegStats, compact } from '../lib/github';
+
+interface Props {
+  lang: Lang;
+}
+const t = dicts[Astro.props.lang];
+const stats = await getCodegStats();
+const codegRepo = repoUrl(SITE.codeg.repo);
+const year = new Date().getFullYear();
+const at = (id: string) => CHAPTER_IDS.indexOf(id as (typeof CHAPTER_IDS)[number]);
+const finale = CHAPTER_IDS.length - 1;
+
+// Planned products in scroll order. Panels alternate sides so the ring always has room.
+const planned = [
+  { key: 'space', side: 'right', copy: t.space, Holo: SpaceHolo },
+  { key: 'assistant', side: 'left', copy: t.assistant, Holo: AssistantHolo },
+  { key: 'harness', side: 'right', copy: t.harness, Holo: HarnessHolo },
+  { key: 'relay', side: 'left', copy: t.relay, Holo: RelayHolo },
+  { key: 'signet', side: 'right', copy: t.signet, Holo: SignetHolo },
+] as const;
+
+// The finale's roadmap: what has shipped first, then the rest in page order.
+const roadmap = [...t.menu.items].sort((a, b) => Number(b.status === 'live') - Number(a.status === 'live'));
+const isLong = (title: string) => title.length > 10;
+---
+<Base t={t}>
+  <canvas class="scene" id="scene" aria-hidden="true"></canvas>
+  <div class="fallback-ring" aria-hidden="true"><Logo /></div>
+
+  <Hud t={t} />
+  <Dial t={t} />
+  <OrbitMenu t={t} />
+  <Account t={t} />
+
+  <div class="telemetry" aria-hidden="true">
+    <span>θ <b data-tel="theta">210.0°</b></span>
+    <span>T+<b data-tel="clock">00:00:00</b></span>
+  </div>
+  <div class="scroll-cue mono" aria-hidden="true">
+    <span>{t.hero.scroll}</span>
+    <span class="scroll-cue__line"></span>
+  </div>
+  <p class="loader mono" aria-hidden="true"><span>{t.loader}</span><span class="loader__pct" data-loader-pct>000</span></p>
+  <button class="skip-intro mono" type="button" data-skip-intro>{t.nav.skip}</button>
+
+  <main class="runway" style={`--chapters:${CHAPTER_IDS.length}`}>
+    <span class="svh-probe" aria-hidden="true"></span>
+    <div class="stage">
+      <section class="chapter hero" id="top" data-chapter="0" data-side="left" aria-labelledby="hero-title">
+        <div class="hero__body scan" data-projection>
+          <p class="hero__eyebrow mono"><span class="hero__brand">spacering.net</span> <span>SRN</span></p>
+          <h1 class="hero__title" id="hero-title"><span>{t.hero.title[0]}</span><span>{t.hero.title[1]}</span></h1>
+          <p class="hero__lede">{t.hero.lede.map((line, i) => <>{i > 0 && ' '}<span>{line}</span></>)}</p>
+          <div class="hero__actions">
+            <a class="btn btn--primary" href={`#${CHAPTER_IDS[1]}`} data-goto="1">{t.hero.primary}<Icon name="arrow" /></a>
+            <a class="btn btn--ghost" href={SITE.orgUrl} target="_blank" rel="noopener"><Icon name="github" />{t.hero.secondary}</a>
+          </div>
+        </div>
+      </section>
+
+      {planned.map(({ key, side, copy, Holo }) => (
+        <section class="chapter" id={key} data-chapter={at(key)} data-side={side} aria-labelledby={`${key}-title`}>
+          <article class="projection" data-projection>
+            <div class="projection__edge" aria-hidden="true"></div>
+          <div class="projection__glint" aria-hidden="true"></div>
+            <div class="projection__frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="projection__scanline" aria-hidden="true"></div>
+            <div class="projection__body scan">
+              <p class="projection__meta mono">
+                <span class="status">{t.status.planned}</span>
+                <span>{copy.tag}</span>
+              </p>
+              <h2 class:list={['projection__title', isLong(copy.title) && 'projection__title--long']} id={`${key}-title`}>{copy.title}</h2>
+              <p class="projection__kicker">{copy.kicker}</p>
+              <p class="projection__text">{copy.body}</p>
+              <Holo t={t} />
+            </div>
+          </article>
+        </section>
+      ))}
+
+      <section class="chapter" id="codeg" data-chapter={at('codeg')} data-side="left" aria-labelledby="codeg-title">
+        <article class="projection" data-projection>
+          <div class="projection__edge" aria-hidden="true"></div>
+          <div class="projection__glint" aria-hidden="true"></div>
+          <div class="projection__frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="projection__scanline" aria-hidden="true"></div>
+          <div class="projection__body scan">
+            <p class="projection__meta mono">
+              <span class="status status--live">{t.status.live}</span>
+              <span>{t.codeg.tag}</span>
+              <span>{stats.version}</span>
+              <span class="meta--wide">{stats.license}</span>
+              <span class="meta--wide">★ {compact(stats.stars)} {t.codeg.stats.stars}</span>
+            </p>
+            <h2 class="projection__title" id="codeg-title">{t.codeg.title}</h2>
+            <p class="projection__kicker">{t.codeg.kicker}</p>
+            <p class="projection__text">{t.codeg.body}</p>
+            <CodegHolo t={t} />
+            <div class="projection__actions">
+              <a class="btn btn--primary" href={codegRepo} target="_blank" rel="noopener"><Icon name="github" />{t.codeg.actions.github}</a>
+              <a class="btn btn--ghost" href={SITE.codeg.docs} target="_blank" rel="noopener">{t.codeg.actions.docs}<Icon name="external" /></a>
+              <a class="btn btn--ghost btn--extra" href={releasesUrl(SITE.codeg.repo)} target="_blank" rel="noopener">{t.codeg.actions.download}<Icon name="external" /></a>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="chapter" id="open-source" data-chapter={finale} data-side="center" aria-labelledby="open-title">
+        <article class="projection" data-projection>
+          <div class="projection__edge" aria-hidden="true"></div>
+          <div class="projection__glint" aria-hidden="true"></div>
+          <div class="projection__frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <div class="projection__scanline" aria-hidden="true"></div>
+          <div class="projection__body scan">
+            <p class="projection__meta mono"><span>github.com/{SITE.org}</span></p>
+            <h2 class="projection__title" id="open-title">{t.open.title}</h2>
+            <p class="projection__text">{t.open.body}</p>
+            <nav class="roadmap" aria-label={t.open.roadmap}>
+              <p class="roadmap__legend mono" aria-hidden="true">
+                <span>{t.open.roadmap}</span>
+                <span class="roadmap__key roadmap__key--live">{t.status.live}</span>
+                <span class="roadmap__key">{t.status.planned}</span>
+              </p>
+              <ol class="roadmap__track" style={`--n:${roadmap.length}`}>
+                {roadmap.map((item) => (
+                  <li>
+                    <a class="roadmap__item" href={`#${item.key}`} data-goto={at(item.key)} data-status={item.status}>
+                      <span class="roadmap__node" aria-hidden="true"></span>
+                      <span class="roadmap__name">{t.dial[at(item.key)]}</span>
+                      <span class="sr-only">{t.status[item.status]}</span>
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+            <div class="projection__actions">
+              <a class="btn btn--primary" href={SITE.orgUrl} target="_blank" rel="noopener"><Icon name="github" />{t.open.actions.org}</a>
+              <a class="btn btn--ghost" href={codegRepo} target="_blank" rel="noopener"><Icon name="star" />{t.open.actions.star}</a>
+            </div>
+            <p class="site-foot mono">© {year} {t.open.footer} · <a href={`${t.path}privacy/`}>{t.open.privacy}</a> · <a href={`${t.path}terms/`}>{t.open.terms}</a></p>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    import '../client/main';
+  </script>
+</Base>
