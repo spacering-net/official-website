@@ -1,0 +1,51 @@
+-- The first tags, in both languages, with the words that put an item under
+-- each. Matching is on the item's name, title and summary: English words as
+-- whole words, ignoring case; Chinese as written. An item gets at most three
+-- tags, those it matches best (api/harness/tags.ts). Tag names go into the
+-- search index too, which is how a Chinese query finds an English item before
+-- the model writes listings in both languages.
+
+INSERT INTO tags (id, name_en, name_zh, match, sort, created_at) VALUES
+  ('database', 'Databases', '数据库', '["database","databases","sql","postgres","postgresql","mysql","sqlite","mongodb","redis","supabase","clickhouse","duckdb","bigquery","snowflake","dynamodb","neo4j","数据库"]', 10, '2026-10-07T00:00:00.000Z'),
+  ('search', 'Search', '搜索', '["web search","search engine","google search","bing","brave search","tavily","exa","serp","搜索"]', 20, '2026-10-07T00:00:00.000Z'),
+  ('browser', 'Browser automation', '浏览器自动化', '["browser","browsers","playwright","puppeteer","selenium","headless","chromium","浏览器"]', 30, '2026-10-07T00:00:00.000Z'),
+  ('scraping', 'Web scraping', '网页抓取', '["scrape","scraping","scraper","crawler","crawl","crawling","firecrawl","爬虫","抓取"]', 40, '2026-10-07T00:00:00.000Z'),
+  ('git', 'Git and GitHub', 'Git 与 GitHub', '["git","github","gitlab","bitbucket","pull request","pull requests","代码仓库"]', 50, '2026-10-07T00:00:00.000Z'),
+  ('files', 'Files', '文件', '["filesystem","file system","file management","files","文件"]', 60, '2026-10-07T00:00:00.000Z'),
+  ('documents', 'Documents', '文档', '["pdf","docx","word document","documents","markdown","文档"]', 70, '2026-10-07T00:00:00.000Z'),
+  ('office', 'Office', '办公', '["excel","spreadsheet","spreadsheets","powerpoint","pptx","xlsx","slides","google docs","google sheets","表格","幻灯片","办公"]', 80, '2026-10-07T00:00:00.000Z'),
+  ('email', 'Email', '邮件', '["email","emails","gmail","outlook","smtp","imap","mailbox","邮件","邮箱"]', 90, '2026-10-07T00:00:00.000Z'),
+  ('calendar', 'Calendar', '日历', '["calendar","calendars","scheduling","appointments","日历","日程"]', 100, '2026-10-07T00:00:00.000Z'),
+  ('messaging', 'Messaging', '即时通讯', '["slack","discord","telegram","whatsapp","microsoft teams","wechat","lark","feishu","dingtalk","微信","飞书","钉钉","即时通讯"]', 110, '2026-10-07T00:00:00.000Z'),
+  ('notes', 'Notes and knowledge', '笔记与知识库', '["notion","obsidian","notes","note-taking","knowledge base","wiki","confluence","evernote","笔记","知识库"]', 120, '2026-10-07T00:00:00.000Z'),
+  ('memory', 'Memory', '记忆', '["memory","long-term memory","persistent memory","记忆"]', 130, '2026-10-07T00:00:00.000Z'),
+  ('project-management', 'Project management', '项目管理', '["jira","linear","asana","trello","clickup","project management","issue tracker","项目管理"]', 140, '2026-10-07T00:00:00.000Z'),
+  ('crm', 'CRM and sales', '客户与销售', '["crm","salesforce","hubspot","pipedrive","sales","leads","客户管理","销售"]', 150, '2026-10-07T00:00:00.000Z'),
+  ('payments', 'Payments', '支付', '["payment","payments","stripe","paypal","invoice","invoices","invoicing","billing","checkout","支付","发票"]', 160, '2026-10-07T00:00:00.000Z'),
+  ('finance', 'Finance', '金融', '["finance","financial","stock","stocks","trading","market data","crypto","cryptocurrency","bitcoin","accounting","金融","股票","财务","会计"]', 170, '2026-10-07T00:00:00.000Z'),
+  ('cloud', 'Cloud', '云服务', '["aws","azure","gcp","google cloud","cloudflare","vercel","netlify","云服务"]', 180, '2026-10-07T00:00:00.000Z'),
+  ('devops', 'DevOps', '运维', '["kubernetes","k8s","docker","terraform","ci/cd","devops","ansible","helm","deployment","deployments","运维","部署"]', 190, '2026-10-07T00:00:00.000Z'),
+  ('monitoring', 'Monitoring', '监控', '["monitoring","observability","logging","sentry","datadog","grafana","prometheus","metrics","监控","日志"]', 200, '2026-10-07T00:00:00.000Z'),
+  ('security', 'Security', '安全', '["security","vulnerability","vulnerabilities","cve","threat intelligence","malware analysis","安全","漏洞"]', 210, '2026-10-07T00:00:00.000Z'),
+  ('testing', 'Testing', '测试', '["testing","unit tests","test automation","e2e","end-to-end tests","qa","测试"]', 220, '2026-10-07T00:00:00.000Z'),
+  ('frontend', 'Frontend', '前端', '["react","vue","svelte","angular","frontend","front-end","tailwind","css","next.js","nextjs","前端"]', 230, '2026-10-07T00:00:00.000Z'),
+  ('mobile', 'Mobile', '移动开发', '["ios","android","react native","swiftui","flutter","expo","mobile app","移动开发","安卓"]', 240, '2026-10-07T00:00:00.000Z'),
+  ('design', 'Design', '设计', '["figma","ui design","ux","design system","design tokens","设计"]', 250, '2026-10-07T00:00:00.000Z'),
+  ('images', 'Images', '图像', '["image","images","photo","photos","image generation","stable diffusion","midjourney","图片","图像","绘图"]', 260, '2026-10-07T00:00:00.000Z'),
+  ('video', 'Video', '视频', '["video","videos","youtube","ffmpeg","视频"]', 270, '2026-10-07T00:00:00.000Z'),
+  ('audio', 'Audio and speech', '音频与语音', '["audio","speech","voice","text-to-speech","tts","transcription","transcribe","whisper","music","语音","音频","音乐"]', 280, '2026-10-07T00:00:00.000Z'),
+  ('translation', 'Translation', '翻译', '["translate","translation","translator","localization","i18n","翻译","本地化"]', 290, '2026-10-07T00:00:00.000Z'),
+  ('writing', 'Writing', '写作', '["writing","copywriting","blog","blogging","essay","proofreading","editing","写作","文案"]', 300, '2026-10-07T00:00:00.000Z'),
+  ('data-analysis', 'Data analysis', '数据分析', '["data analysis","analytics","pandas","csv","data visualization","charts","jupyter","数据分析","可视化","图表"]', 310, '2026-10-07T00:00:00.000Z'),
+  ('research', 'Research', '研究', '["research","papers","arxiv","scholar","academic","scientific","literature review","研究","论文","学术"]', 320, '2026-10-07T00:00:00.000Z'),
+  ('maps', 'Maps and places', '地图与位置', '["maps","map","geolocation","geocoding","places","gps","地图","位置"]', 330, '2026-10-07T00:00:00.000Z'),
+  ('weather', 'Weather', '天气', '["weather","forecast","forecasts","天气"]', 340, '2026-10-07T00:00:00.000Z'),
+  ('news', 'News', '新闻', '["news","rss","headlines","新闻"]', 350, '2026-10-07T00:00:00.000Z'),
+  ('social', 'Social media', '社交媒体', '["twitter","reddit","linkedin","instagram","facebook","tiktok","bluesky","mastodon","social media","微博","小红书","社交媒体"]', 360, '2026-10-07T00:00:00.000Z'),
+  ('ecommerce', 'E-commerce', '电商', '["shopify","ecommerce","e-commerce","woocommerce","amazon seller","online store","电商"]', 370, '2026-10-07T00:00:00.000Z'),
+  ('legal', 'Legal', '法律', '["legal","law","legislation","contract","contracts","compliance","gdpr","法律","合同","合规"]', 380, '2026-10-07T00:00:00.000Z'),
+  ('health', 'Health', '健康', '["health","medical","clinical","fitness","healthcare","健康","医疗"]', 390, '2026-10-07T00:00:00.000Z'),
+  ('education', 'Education', '教育', '["education","learning","course","courses","tutor","tutoring","quiz","教育","学习"]', 400, '2026-10-07T00:00:00.000Z'),
+  ('coding', 'Coding', '编程', '["code review","refactoring","refactor","debugging","linting","programming","编程","代码审查"]', 410, '2026-10-07T00:00:00.000Z'),
+  ('agents', 'Agents', '智能体', '["multi-agent","subagent","subagents","agent orchestration","agent workflow","智能体"]', 420, '2026-10-07T00:00:00.000Z'),
+  ('ai-models', 'AI models', '模型', '["llm","llms","openai","gemini","deepseek","ollama","hugging face","huggingface","embeddings","大模型","模型"]', 430, '2026-10-07T00:00:00.000Z');

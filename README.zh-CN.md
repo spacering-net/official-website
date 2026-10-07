@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-SpaceRing（网络空间戒指）官网。页面由 Astro 静态构建，3D 场景用 three.js；登录与用户数据由同一个 Cloudflare Worker 提供（Hono + Better Auth，数据在 D1，头像在 R2）。
+SpaceRing（网络空间戒指）官网。大部分页面由 Astro 静态构建，3D 场景用 three.js。同一个 Cloudflare Worker 负责提供这些页面、`/api` 下的接口（登录用 Hono 和 Better Auth，数据在 D1，头像在 R2），以及 Harness：技能、MCP 服务等能力的市场。Harness 的页面由 Worker 按需渲染，数据在它自己的 D1 数据库和 R2 存储桶里，导入走 Cloudflare Queues。
 
 ## 开发
 
@@ -10,19 +10,16 @@ SpaceRing（网络空间戒指）官网。页面由 Astro 静态构建，3D 场�
 
 ```bash
 pnpm install
-pnpm dev        # http://localhost:4321 ，中文版 /zh/
-pnpm build      # 输出静态站点到 dist/
-pnpm preview    # 本地预览 dist/
-pnpm check      # 类型检查（网站与 Worker）
-```
-
-登录和 `/api` 由 Worker 提供，本地另开一个终端：
-
-```bash
 cp .dev.vars.example .dev.vars   # 第一次：填 BETTER_AUTH_SECRET
 pnpm db:migrate                  # 第一次及每次新增迁移后：本地 D1 建表
-pnpm dev:api                     # :8787；pnpm dev 会把 /api 转发过去
+pnpm dev        # http://localhost:4321 ，中文版 /zh/；Worker 和 /api 也在里面运行
+pnpm build      # 网站输出到 dist/client，Worker 输出到 dist/server
+pnpm preview    # 本地预览构建结果，包括 Worker
+pnpm check      # 类型检查（网站与 Worker）
+pnpm test       # Harness 的单元测试
 ```
+
+Harness 的导入按计划任务运行。本地手动触发（队列在开发服务器里运行）：每小时的注册表同步用 `curl 'http://localhost:4321/cdn-cgi/handler/scheduled?cron=17+*+*+*+*'`，每天的任务（技能仓库、星标、计数）用 `cron=23+3+*+*+*`。`.dev.vars` 里放一个 `GITHUB_TOKEN` 可以提高 GitHub 的额度，星标也要靠它刷新：细粒度令牌的仓库访问选「Public repositories」（只读），不加任何权限就够了。
 
 ## 常改的地方
 
@@ -37,8 +34,12 @@ pnpm dev:api                     # :8787；pnpm dev 会把 /api 转发过去
 | 开场节奏 | `src/client/intro.ts` |
 | 每幕戒指的位置 | `src/client/chapters.ts` 的 `layouts()` |
 | 登录、会话、戒指编号 | `api/auth.ts`、`api/ring-number.ts` |
-| 数据库表结构 | `db/migrations/`（只增不改；推送前先运行 `pnpm db:migrate:remote`） |
+| 数据库表结构 | `db/migrations/` 和 Harness 的 `db/harness/`（只增不改；推送前先运行 `pnpm db:migrate:remote`） |
+| Harness 的导入、检查、搜索和接口 | `api/harness/`（接口的数据结构在 `api/harness/schemas.ts`，发布在 `/api/harness/v1/openapi.json`） |
+| Harness 的页面和文案 | `src/pages/[...lang]/harness/`、`src/components/harness/`、`src/i18n/harness.ts` |
 | 戒身内壁的刻字 | `src/client/scene/ring.ts` 的 `inscribe()`，`src/client/account.ts` |
+
+Harness 规则检查的具体规则放在数据库里，不在本仓库。新建的数据库里没有规则，只做内置的检查。
 
 ## 调试参数
 

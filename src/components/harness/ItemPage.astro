@@ -1,0 +1,496 @@
+---
+/**
+ * An item: what it is and who publishes it, how to install it, what it needs
+ * (declared beside detected), what the checks found, its description, files
+ * and versions.
+ */
+import { harnessDicts, pick } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+import type { ItemDetail, VersionSummary } from '../../lib/harness';
+import { compact } from '../../lib/github';
+
+interface Props {
+  lang: Lang;
+  item: ItemDetail;
+  /** the description, rendered and made safe when the version was made */
+  readme: string | null;
+  versions: VersionSummary[];
+}
+const { lang, item, readme, versions } = Astro.props;
+const h = harnessDicts[lang];
+const t = h.item;
+const title = pick(item.title, lang) ?? item.name;
+const summary = pick(item.summary, lang);
+const install = item.install;
+const perms = ['runsCode', 'installs', 'installScripts', 'network', 'secrets', 'paths', 'tools'] as const;
+const declared = item.permissions.declared;
+const detected = item.permissions.detected;
+const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+const findingName = (f: ItemDetail['checks']['findings'][number]) => (f.check === 'rule' ? `${t.rule} · ${f.category ?? f.rule}` : (t.findings[f.check] ?? f.check));
+const place = (f: { path?: string; line?: number }) => (f.path ? `${f.path}${f.line ? `:${f.line}` : ''}` : '');
+// what deserves a warning first; low-severity marks (common commands, long lines) folded away
+const order = { high: 0, medium: 1, low: 2 } as const;
+const notable = item.checks.findings.filter((f) => f.severity !== 'low').sort((a, b) => order[a.severity] - order[b.severity]);
+const minor = item.checks.findings.filter((f) => f.severity === 'low');
+const sourceTree = install.source ? `https://github.com/${install.source.repository}/tree/${install.source.commit}/${install.source.path}` : null;
+const launch = (install.packages ?? []).map((p) =>
+  p.registryType === 'npm'
+    ? `npx -y ${p.identifier}${p.version ? `@${p.version}` : ''}`
+    : p.registryType === 'pypi'
+      ? `uvx ${p.identifier}${p.version ? `==${p.version}` : ''}`
+      : p.registryType === 'oci'
+        ? `docker run -i --rm ${p.identifier}${p.version ? `:${p.version}` : ''}`
+        : `${p.registryType}: ${p.identifier}${p.version ? ` ${p.version}` : ''}`,
+);
+const remotes = ((install.server?.remotes as { url?: string; type?: string }[] | undefined) ?? []).filter((r) => r.url);
+---
+<nav class="crumbs mono" aria-label="Breadcrumb">
+  <a href={h.base}>Harness</a> / <a href={`${h.base}${item.publisher.handle}`}>{item.publisher.handle}</a> / <span>{item.name}</span>
+</nav>
+
+<header class="head">
+  <p class="badges">
+    <span class="badge kind">{h.kind[item.kind]}</span>
+    <span class={`badge risk-${item.risk}`}>{t.risk[item.risk]}</span>
+    {item.status === 'listed' && <span class="badge listed">{t.listed}</span>}
+    {item.publisher.unclaimed && <span class="badge">{h.card.unclaimed}</span>}
+  </p>
+  <h1>{title}</h1>
+  {summary && <p class="lede">{summary}</p>}
+  <p class="by">
+    {t.by} <a href={`${h.base}${item.publisher.handle}`}>{item.publisher.name}</a>
+    <span class="mono muted">{item.ref}</span>
+  </p>
+</header>
+
+{item.status === 'listed' && (
+  <p class="notice">
+    {t.listedNote} {item.listedReasons.map((r) => t.reasons[r] ?? r).join(lang === 'zh' ? '；' : '; ')}
+  </p>
+)}
+
+<div class="layout">
+  <div class="main">
+    <section>
+      <h2>{t.install}</h2>
+      <p class="actions">
+        <a class="button" href={`codeg://harness/install?ref=${encodeURIComponent(item.ref)}`}>{t.openInCodeg}</a>
+        {install.archive && <a class="button quiet" href={install.archive.url} download>{t.download} · {size(install.archive.size)}</a>}
+      </p>
+      {launch.length > 0 && <pre class="code">{launch.join('\n')}</pre>}
+      {remotes.length > 0 && <pre class="code">{remotes.map((r) => `${r.type ?? 'remote'}  ${r.url}`).join('\n')}</pre>}
+      {install.source && (
+        <p class="muted small">
+          {t.notHosted} <a href={sourceTree} rel="nofollow ugc noopener" target="_blank">{t.commit} {install.source.commit.slice(0, 7)}</a>
+        </p>
+      )}
+      {install.files.length > 0 && <p class="muted small">{t.codegNote}</p>}
+    </section>
+
+    <section>
+      <h2>{t.permissions}</h2>
+      <table class="perms">
+        <thead>
+          <tr><th></th><th>{t.declared}</th><th>{t.detected}</th></tr>
+        </thead>
+        <tbody>
+          {perms.map((k) => {
+            const d = declared[k];
+            const found = detected[k];
+            const extra = d ? found.filter((x) => !d.includes(x)) : [];
+            return (
+              <tr>
+                <th scope="row">{t.perms[k]}</th>
+                <td class="mono">{d === undefined ? <span class="muted">—</span> : d.length ? d.join(', ') : <span class="muted">{t.nothing}</span>}</td>
+                <td class="mono">
+                  {found.length ? found.map((x, i) => <span class={extra.includes(x) ? 'differs' : undefined}>{i ? ', ' : ''}{x}</span>) : <span class="muted">{t.nothing}</span>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>{t.checks}</h2>
+      <p>
+        <span class={`badge risk-${item.risk}`}>{t.risk[item.risk]}</span> {t.riskNote[item.risk]}
+      </p>
+      <p class="muted small">{item.reviewed ? t.reviewed : t.notReviewed} · {t.modelOff}</p>
+      {notable.length > 0 && (
+        <ul class="findings">
+          {notable.map((f) => (
+            <li>
+              <span class={`badge risk-${f.severity}`}>{t.risk[f.severity]}</span> {findingName(f)} <span class="mono muted">{place(f)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {minor.length > 0 && (
+        <details class="minor">
+          <summary class="small">{t.minorFindings(minor.length)}</summary>
+          <ul class="findings">
+            {minor.map((f) => (
+              <li>
+                {findingName(f)} <span class="mono muted">{place(f)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {item.checks.secrets > 0 && <p class="muted small">{t.secretsFound(item.checks.secrets)}</p>}
+      {item.checks.dropped.length > 0 && (
+        <p class="muted small">
+          {t.dropped}: <span class="mono">{item.checks.dropped.map((d) => d.path).join(', ')}</span>
+        </p>
+      )}
+    </section>
+
+    {readme && (
+      <section>
+        <h2>{t.description}</h2>
+        <div class="readme" set:html={readme} />
+      </section>
+    )}
+
+    {install.server && (
+      <section>
+        <h2>{t.server}</h2>
+        <pre class="code json">{JSON.stringify(install.server, null, 2)}</pre>
+      </section>
+    )}
+
+    {install.files.length > 0 && (
+      <section>
+        <h2>{t.files}</h2>
+        <details open={install.files.length <= 12}>
+          <summary class="mono">{t.filesCount(install.files.length)}</summary>
+          <ul class="files mono">
+            {install.files.map((f) => (
+              <li>
+                <span>{f.path}</span>
+                <span class="muted">{size(f.size)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      </section>
+    )}
+  </div>
+
+  <aside class="side">
+    <dl>
+      {item.latest.version && (
+        <>
+          <dt>{t.version}</dt>
+          <dd class="mono">{item.latest.version}</dd>
+        </>
+      )}
+      <dt>{t.revision}</dt>
+      <dd class="mono">{item.latest.revision}</dd>
+      <dt>{t.updated}</dt>
+      <dd>{h.date(item.latest.publishedAt)}</dd>
+      <dt>{t.license}</dt>
+      <dd class="mono">{item.license ?? <span class="muted">{t.noLicense}</span>}</dd>
+      <dt>{t.runtime}</dt>
+      <dd>{h.runtime.names[item.runtime] ?? item.runtime}</dd>
+      <dt>{t.source}</dt>
+      <dd>
+        {item.sourceUrl ? <a href={item.sourceUrl} rel="nofollow ugc noopener" target="_blank">{t.sources[item.source]}</a> : t.sources[item.source]}
+      </dd>
+      {item.repositoryUrl && (
+        <>
+          <dt>{t.repository}</dt>
+          <dd class="mono">
+            <a href={item.repositoryUrl} rel="nofollow ugc noopener" target="_blank">{item.repositoryUrl.replace(/^https:\/\/(www\.)?(github\.com\/)?/, '')}</a>
+            {item.repoStars !== null && <span class="muted"> · ★ {compact(item.repoStars)}</span>}
+          </dd>
+        </>
+      )}
+      {item.websiteUrl && (
+        <>
+          <dt>{t.website}</dt>
+          <dd class="mono"><a href={item.websiteUrl} rel="nofollow ugc noopener" target="_blank">{item.websiteUrl.replace(/^https:\/\/(www\.)?/, '')}</a></dd>
+        </>
+      )}
+    </dl>
+    {versions.length > 0 && (
+      <>
+        <h2>{t.versions}</h2>
+        <ol class="versions mono">
+          {versions.slice(0, 12).map((v) => (
+            <li>
+              <span>#{v.revision}{v.version ? ` · ${v.version}` : ''}</span>
+              <span class="muted">{h.date(v.publishedAt)}</span>
+            </li>
+          ))}
+        </ol>
+      </>
+    )}
+  </aside>
+</div>
+
+<style>
+  .crumbs {
+    margin: 0 0 21px;
+    color: var(--graphite);
+  }
+
+  .crumbs a {
+    color: var(--dim);
+    text-decoration: none;
+  }
+
+  .head h1 {
+    margin: 13px 0 8px;
+    font-size: clamp(30px, 5vw, 44px);
+    font-weight: 300;
+    overflow-wrap: anywhere;
+  }
+
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .lede {
+    max-width: 46rem;
+    margin: 0 0 13px;
+    font-size: 18px;
+    color: var(--dim);
+  }
+
+  .by {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 13px;
+    align-items: baseline;
+    margin: 0;
+    color: var(--graphite);
+  }
+
+  .notice {
+    margin: 21px 0 0;
+    padding: 13px 16px;
+    border: 1px solid rgb(154 223 255 / 0.25);
+    border-radius: 10px;
+    color: var(--dim);
+    font-size: 14.5px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 17rem;
+    gap: 34px 55px;
+    margin-top: 34px;
+  }
+
+  .layout > * {
+    min-width: 0;
+  }
+
+  section + section {
+    margin-top: 34px;
+  }
+
+  h2 {
+    margin: 0 0 13px;
+    font-size: 13px;
+    font-family: var(--mono);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--bead);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 13px;
+  }
+
+  .button {
+    display: inline-block;
+    padding: 9px 18px;
+    border: 1px solid rgb(255 217 160 / 0.5);
+    border-radius: 10px;
+    color: var(--bead);
+    text-decoration: none;
+  }
+
+  .button:hover {
+    background: rgb(255 217 160 / 0.08);
+  }
+
+  .button.quiet {
+    border-color: var(--line);
+    color: var(--dim);
+  }
+
+  .small {
+    font-size: 13.5px;
+  }
+
+  .code {
+    margin: 0 0 13px;
+    padding: 13px 16px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgb(236 234 244 / 0.03);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--corona);
+  }
+
+  .json {
+    max-height: 28rem;
+  }
+
+  .perms {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  .perms th,
+  .perms td {
+    padding: 8px 8px 8px 0;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .perms thead th {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--graphite);
+  }
+
+  .perms tbody th {
+    width: 11rem;
+    font-weight: 400;
+    color: var(--dim);
+  }
+
+  .differs {
+    color: var(--bead);
+  }
+
+  .findings {
+    display: grid;
+    gap: 6px;
+    margin: 13px 0;
+    padding: 0;
+    list-style: none;
+    font-size: 14.5px;
+  }
+
+  .minor .findings {
+    font-size: 13.5px;
+    color: var(--dim);
+  }
+
+  .readme {
+    max-width: 46rem;
+    overflow-wrap: anywhere;
+  }
+
+  .readme :global(h1),
+  .readme :global(h2),
+  .readme :global(h3) {
+    margin: 1.4em 0 0.5em;
+    font-family: inherit;
+    font-size: 1.15em;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--corona);
+  }
+
+  .readme :global(pre) {
+    padding: 13px 16px;
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .readme :global(code) {
+    font-family: var(--mono);
+    font-size: 0.875em;
+  }
+
+  .readme :global(table) {
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+
+  .readme :global(td),
+  .readme :global(th) {
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+  }
+
+  .files {
+    margin: 13px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .files li,
+  .versions li {
+    display: flex;
+    justify-content: space-between;
+    gap: 13px;
+    padding: 4px 0;
+    border-bottom: 1px solid var(--line);
+    overflow-wrap: anywhere;
+  }
+
+  summary {
+    cursor: pointer;
+    color: var(--dim);
+  }
+
+  .side dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 16px;
+    margin: 0 0 34px;
+    font-size: 14px;
+  }
+
+  .side dt {
+    color: var(--graphite);
+  }
+
+  .side dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .versions {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  @media (max-width: 860px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .side {
+      order: -1;
+    }
+  }
+</style>

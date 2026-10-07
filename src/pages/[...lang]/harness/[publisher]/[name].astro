@@ -1,0 +1,22 @@
+---
+/** /harness/<publisher>/<name>: one item. */
+import Layout from '../../../../layouts/Harness.astro';
+import ItemPage from '../../../../components/harness/ItemPage.astro';
+import { harnessDicts, pick } from '../../../../i18n/harness';
+import { cacheable, loadItem } from '../../../../lib/harness';
+
+export const prerender = false;
+
+const lang = Astro.params.lang === undefined ? 'en' : Astro.params.lang === 'zh' ? 'zh' : null;
+const { publisher, name } = Astro.params;
+const data = lang && publisher && name ? await loadItem(publisher, name) : null;
+if (!lang || !data) return new Response(null, { status: 404 });
+const h = harnessDicts[lang];
+const { item } = data;
+cacheable(Astro.response.headers);
+const title = pick(item.title, lang) ?? item.name;
+const paths = { en: `/harness/${item.ref}`, zh: `/zh/harness/${item.ref}` };
+---
+<Layout lang={lang} title={`${title} · ${item.publisher.handle} · Harness`} description={pick(item.summary, lang) ?? h.description} paths={paths} noindex={item.status !== 'public'}>
+  <ItemPage lang={lang} item={item} readme={data.readme} versions={data.versions} />
+</Layout>

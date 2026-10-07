@@ -1,0 +1,58 @@
+---
+/** /harness/<publisher>: who publishes, and what. */
+import Layout from '../../../../layouts/Harness.astro';
+import Browse from '../../../../components/harness/Browse.astro';
+import { harnessDicts } from '../../../../i18n/harness';
+import { browseState, cacheable, loadBrowse, loadPublisher, withQuery } from '../../../../lib/harness';
+
+export const prerender = false;
+
+const lang = Astro.params.lang === undefined ? 'en' : Astro.params.lang === 'zh' ? 'zh' : null;
+const publisher = lang && Astro.params.publisher ? await loadPublisher(Astro.params.publisher) : null;
+if (!lang || !publisher) return new Response(null, { status: 404 });
+const h = harnessDicts[lang];
+const path = `${h.base}${publisher.handle}`;
+const state = browseState(Astro.url);
+const { list, tags, counts } = await loadBrowse(state, publisher.handle);
+cacheable(Astro.response.headers);
+const paths = {
+  en: withQuery(`/harness/${publisher.handle}`, state, { cursor: state.cursor }),
+  zh: withQuery(`/zh/harness/${publisher.handle}`, state, { cursor: state.cursor }),
+};
+const filtered = !!(state.q || state.cursor || state.kind || state.sort !== 'popular');
+---
+<Layout lang={lang} title={`${publisher.name} · Harness`} description={h.description} paths={paths} noindex={filtered || publisher.items === 0}>
+  <section class="who">
+    <p class="mono muted">
+      {publisher.kind === 'domain' ? h.publisher.domain : h.publisher.github} · {publisher.handle}
+    </p>
+    <h1>{publisher.name}</h1>
+    <p class="mono count">{h.publisher.items(publisher.items)}</p>
+    {publisher.unclaimed && <p class="muted">{h.publisher.unclaimed}</p>}
+    {publisher.kind === 'github' && publisher.githubLogin && (
+      <p><a href={`https://github.com/${publisher.githubLogin}`} rel="nofollow ugc noopener" target="_blank">github.com/{publisher.githubLogin}</a></p>
+    )}
+  </section>
+  <Browse lang={lang} path={path} state={state} list={list} tags={tags} counts={counts} catalog={false} />
+</Layout>
+
+<style>
+  .who {
+    margin: 13px 0 34px;
+  }
+
+  .who h1 {
+    margin: 8px 0;
+    font-size: clamp(30px, 5vw, 44px);
+    font-weight: 300;
+    overflow-wrap: anywhere;
+  }
+
+  .who p {
+    margin: 4px 0;
+  }
+
+  .count {
+    color: var(--bead);
+  }
+</style>

@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-The website of SpaceRing, the cyberspace ring. The pages are a static Astro build with a three.js scene. Sign-in and user data come from the same Cloudflare Worker (Hono and Better Auth, with data in D1 and profile pictures in R2).
+The website of SpaceRing, the cyberspace ring. Most pages are a static Astro build with a three.js scene. One Cloudflare Worker serves them, the API under `/api` (Hono and Better Auth for sign-in, with data in D1 and profile pictures in R2), and Harness: the marketplace of skills, MCP servers and more, whose pages the Worker renders on demand from its own D1 database and R2 bucket, with imports running on Cloudflare Queues.
 
 ## Development
 
@@ -10,19 +10,16 @@ Requires Node 22.12+ and pnpm.
 
 ```bash
 pnpm install
-pnpm dev        # http://localhost:4321, Chinese at /zh/
-pnpm build      # builds the static site into dist/
-pnpm preview    # serves dist/ locally
-pnpm check      # type-checks the site and the Worker
-```
-
-Sign-in and `/api` come from the Worker. Run it in a second terminal:
-
-```bash
 cp .dev.vars.example .dev.vars   # first time: fill in BETTER_AUTH_SECRET
 pnpm db:migrate                  # first time and after each new migration: creates the local D1 tables
-pnpm dev:api                     # :8787; pnpm dev forwards /api to it
+pnpm dev        # http://localhost:4321, Chinese at /zh/; the Worker and /api run inside it
+pnpm build      # builds the site into dist/client and the Worker into dist/server
+pnpm preview    # serves the build, Worker included
+pnpm check      # type-checks the site and the Worker
+pnpm test       # Harness unit tests
 ```
+
+Harness imports run on a schedule. Locally, start them by hand (the queue runs in the dev server): the hourly registry sync with `curl 'http://localhost:4321/cdn-cgi/handler/scheduled?cron=17+*+*+*+*'`, the daily jobs (skill repositories, stars, counts) with `cron=23+3+*+*+*`. A `GITHUB_TOKEN` in `.dev.vars` raises GitHub's rate limit, and star counts need it: a fine-grained token with "Public repositories" (read-only) access and no permissions is enough.
 
 ## Where to change things
 
@@ -37,8 +34,12 @@ pnpm dev:api                     # :8787; pnpm dev forwards /api to it
 | Intro timing | `src/client/intro.ts` |
 | Where the ring sits in each chapter | `layouts()` in `src/client/chapters.ts` |
 | Sign-in, sessions, ring numbers | `api/auth.ts`, `api/ring-number.ts` |
-| Database schema | `db/migrations/` (add new files only; do not edit existing migrations; run `pnpm db:migrate:remote` before pushing) |
+| Database schema | `db/migrations/` and Harness's `db/harness/` (add new files only; do not edit existing migrations; run `pnpm db:migrate:remote` before pushing) |
+| Harness: imports, checks, search and the API | `api/harness/` (the API's shapes: `api/harness/schemas.ts`, published at `/api/harness/v1/openapi.json`) |
+| Harness pages and their copy | `src/pages/[...lang]/harness/`, `src/components/harness/`, `src/i18n/harness.ts` |
 | The engraving inside the band | `inscribe()` in `src/client/scene/ring.ts`, `src/client/account.ts` |
+
+Harness's rule checks take their patterns from the database, not from this repository; a fresh database has none and relies on the built-in checks.
 
 ## Debug parameters
 

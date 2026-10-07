@@ -1,7 +1,10 @@
+import { handle } from '@astrojs/cloudflare/handler';
 import { Hono } from 'hono';
 import { getAuth } from './auth';
 import { serveAvatar } from './avatars';
 import { withRequest } from './context';
+import { daily as harnessDaily, runJob, startRegistrySync, type Job } from './harness/jobs';
+import { harnessApi } from './harness/routes';
 
 const api = new Hono<{ Bindings: Env }>().basePath('/api');
 
@@ -32,26 +35,57 @@ api.get('/me', async (c) => {
 
 api.get('/avatars/*', (c) => serveAvatar(c.env, c.req.path.slice('/api/avatars/'.length)));
 
+api.route('/harness/v1', harnessApi);
+
 api.notFound((c) => c.json({ error: 'not_found' }, 404));
 api.onError((err, c) => {
   console.error('[api]', err);
   return c.json({ error: 'server_error' }, 500);
 });
 
+// Pages rendered on demand show content from packages (descriptions, checked
+// and rendered safe): they run no script of ours either, so allow none at all.
+const PAGE_HEADERS = {
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+};
+
+/**
+ * A page rendered on demand (Harness, the sitemap). The same for every
+ * reader, so a page that says it is public is kept at each Cloudflare
+ * location for its s-maxage (the Cache API) and served from there.
+ */
+async function page(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  const cache = request.method === 'GET' ? caches.default : null;
+  const key = new Request(request.url, { method: 'GET' });
+  const hit = await cache?.match(key);
+  if (hit) return hit;
+  const rendered = await handle(request, env, ctx);
+  const res = new Response(rendered.body, rendered);
+  for (const [k, v] of Object.entries(PAGE_HEADERS)) res.headers.set(k, v);
+  if (cache && res.status === 200 && /\bpublic\b/.test(res.headers.get('Cache-Control') ?? '')) ctx.waitUntil(cache.put(key, res.clone()));
+  return res;
+}
+
 export default {
   fetch(request, env, ctx) {
     const { pathname } = new URL(request.url);
-    // Only /api/* is routed here (run_worker_first); anything else that
-    // reaches the script is a static file or the 404 page.
-    if (pathname !== '/api' && !pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
+    // Static pages never reach the script. What does (run_worker_first) is
+    // the API, or a page rendered on demand, which Astro renders; it serves
+    // files and the 404 page for anything else.
+    if (pathname !== '/api' && !pathname.startsWith('/api/')) return page(request, env, ctx);
     return withRequest(ctx, () => api.fetch(request, env, ctx));
   },
 
   /**
-   * Daily: drop expired sign-in states and sessions, and audit entries older
-   * than a year (the privacy policy promises both). ISO times compare as text.
+   * Hourly: sync Harness with the MCP Registry. Daily: drop expired sign-in
+   * states and sessions, and audit entries older than a year (the privacy
+   * policy promises both); then Harness's daily jobs. ISO times compare as text.
    */
-  async scheduled(_event, env) {
+  async scheduled(event, env) {
+    if (event.cron === '17 * * * *') return startRegistrySync(env);
     const now = new Date();
     const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString();
     const [states, sessions, events] = await env.DB.batch([
@@ -62,5 +96,19 @@ export default {
     console.info(
       `[api] cleanup: ${states.meta.changes} expired states, ${sessions.meta.changes} expired sessions, ${events.meta.changes} old audit entries`,
     );
+    await harnessDaily(env);
+  },
+
+  /** Harness's background jobs (api/harness/jobs.ts), one at a time; a failed one is retried a minute later. */
+  async queue(batch, env) {
+    for (const message of batch.messages) {
+      try {
+        await runJob(env, message.body as Job);
+        message.ack();
+      } catch (err) {
+        console.error('[harness] job failed', JSON.stringify(message.body).slice(0, 200), err);
+        message.retry();
+      }
+    }
   },
 } satisfies ExportedHandler<Env>;

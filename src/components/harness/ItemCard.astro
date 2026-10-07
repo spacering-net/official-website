@@ -1,0 +1,100 @@
+---
+/** One item in a list: kind, name, summary, where it runs and its tags. */
+import type { ItemSummary, TagInfo } from '../../lib/harness';
+import { harnessDicts, pick } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+import { compact } from '../../lib/github';
+
+interface Props {
+  item: ItemSummary;
+  lang: Lang;
+  tags: Map<string, TagInfo>;
+}
+const { item, lang, tags } = Astro.props;
+const h = harnessDicts[lang];
+const title = pick(item.title, lang) ?? item.name;
+const summary = pick(item.summary, lang);
+---
+<li class="card">
+  <a href={`${h.base}${item.ref}`}>
+    <span class="card__top">
+      <span class="badge kind">{h.kind[item.kind]}</span>
+      {item.status === 'listed' && <span class="badge listed">{h.card.listed}</span>}
+      {item.risk !== 'low' && <span class={`badge risk-${item.risk}`}>{h.item.risk[item.risk]}</span>}
+      {item.repoStars !== null && item.repoStars > 0 && <span class="card__stars mono" title={h.card.stars}>★ {compact(item.repoStars)}</span>}
+    </span>
+    <span class="card__title">{title}</span>
+    <span class="card__ref mono">{item.ref}</span>
+    {summary && <span class="card__summary">{summary}</span>}
+    <span class="card__foot">
+      <span class="mono">{h.runtime.names[item.runtime] ?? item.runtime}</span>
+      {item.tags.slice(0, 3).map((t) => <span class="card__tag">{tags.get(t)?.name[lang] ?? t}</span>)}
+    </span>
+  </a>
+</li>
+
+<style>
+  .card a {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 18px 18px 16px;
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    color: inherit;
+    text-decoration: none;
+    transition:
+      border-color 0.3s,
+      background-color 0.3s;
+  }
+
+  .card a:hover {
+    border-color: rgb(255 217 160 / 0.4);
+    background: rgb(236 234 244 / 0.02);
+  }
+
+  .card__top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .card__stars {
+    margin-left: auto;
+    color: var(--graphite);
+  }
+
+  .card__title {
+    margin-top: 6px;
+    font-size: 18px;
+    color: var(--corona);
+    overflow-wrap: anywhere;
+  }
+
+  .card__ref {
+    color: var(--graphite);
+    overflow-wrap: anywhere;
+  }
+
+  .card__summary {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 14.5px;
+    color: var(--dim);
+  }
+
+  .card__foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 13px;
+    margin-top: auto;
+    padding-top: 8px;
+    font-size: 12.5px;
+    color: var(--graphite);
+  }
+</style>

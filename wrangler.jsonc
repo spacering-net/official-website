@@ -1,7 +1,12 @@
-// Cloudflare Workers serves the static build in dist/, and runs api/index.ts
-// for /api/* only (accounts, sign-in, avatars). Pushes to main are built and
-// deployed by Cloudflare, which does not migrate D1: apply new migrations first
-// with `pnpm db:migrate:remote`. `pnpm run deploy` does both from this machine.
+// Cloudflare Workers serves the static pages built into dist/client, and runs
+// api/index.ts for the API under /api/*, the on-demand Harness pages and the
+// sitemap (run_worker_first), the cron triggers and the job queue. `astro build`
+// bundles the script with the Astro adapter and writes the deployable config
+// to dist/server/wrangler.json, which `wrangler deploy` picks up.
+//
+// Pushes to main are built and deployed by Cloudflare, which does not migrate
+// D1: apply new migrations first with `pnpm db:migrate:remote`. `pnpm run
+// deploy` does both from this machine.
 {
   "name": "official-website",
   "main": "./api/index.ts",
@@ -9,11 +14,12 @@
   // Better Auth keeps per-request state in AsyncLocalStorage
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "./dist",
     "binding": "ASSETS",
-    // unknown addresses get dist/404.html, with a 404 status
+    // unknown addresses get 404.html, with a 404 status
     "not_found_handling": "404-page",
-    "run_worker_first": ["/api/*"]
+    // Everything else is a file, served without running the script. Pages
+    // rendered on demand must be listed here, or they get the 404 page.
+    "run_worker_first": ["/api/*", "/harness", "/harness/*", "/zh/harness", "/zh/harness/*", "/sitemap.xml", "/sitemap-harness-*"]
   },
   "d1_databases": [
     {
@@ -21,28 +27,69 @@
       "database_name": "spacering",
       "database_id": "614d6988-d884-4329-b252-425fab92a776",
       "migrations_dir": "db/migrations"
+    },
+    // The Harness catalog, apart from the accounts: its search index (FTS5)
+    // cannot be exported, its imports must not queue ahead of sign-ins, and it
+    // can be rebuilt from its sources while the accounts cannot.
+    {
+      "binding": "HARNESS_DB",
+      "database_name": "harness",
+      "database_id": "8ce376fc-d4b4-4363-9f61-218965fd8f81",
+      "migrations_dir": "db/harness"
     }
   ],
   "r2_buckets": [
     {
       "binding": "MEDIA",
       "bucket_name": "spacering-media"
+    },
+    // Harness files by content hash: blobs/, archives/, and later readme/,
+    // icons/ and uploads/ (uploads/ expires after a day, a bucket lifecycle rule)
+    {
+      "binding": "HARNESS_FILES",
+      "bucket_name": "spacering-harness"
     }
   ],
-  // sign-in endpoints write to the database: a few dozen requests a minute per address
+  // Harness imports and checks run here, one job per invocation and two at a
+  // time, away from requests. A failed job is retried a minute later, five
+  // times, then parked in the dead-letter queue.
+  "queues": {
+    "producers": [{ "binding": "HARNESS_JOBS", "queue": "harness-jobs" }],
+    "consumers": [
+      {
+        "queue": "harness-jobs",
+        "max_batch_size": 1,
+        "max_retries": 5,
+        "retry_delay": 60,
+        "max_concurrency": 2,
+        "dead_letter_queue": "harness-jobs-dlq"
+      }
+    ]
+  },
   "ratelimits": [
+    // sign-in endpoints write to the database: a few dozen requests a minute per address
     {
       "name": "AUTH_LIMIT",
       "namespace_id": "1001",
       "simple": { "limit": 30, "period": 60 }
+    },
+    // anonymous Harness reads, per address
+    {
+      "name": "HARNESS_LIMIT",
+      "namespace_id": "1002",
+      "simple": { "limit": 300, "period": 60 }
     }
   ],
   "vars": {
-    "SITE_URL": "https://spacering.net"
+    "SITE_URL": "https://spacering.net",
+    // The model review of Harness versions (docs: section 7). Off: versions are
+    // listed on the strength of the rule checks alone.
+    "HARNESS_REVIEW": "off"
   },
-  // daily: clear expired sign-in states and sessions (api/index.ts, scheduled)
   "triggers": {
-    "crons": ["23 3 * * *"]
+    // daily: clear expired sign-in states and sessions, refresh Harness skill
+    // repos and recount facets; hourly: Harness registry sync (api/index.ts)
+    "crons": ["23 3 * * *", "17 * * * *"]
   },
   "observability": {
     "enabled": true

@@ -8,3 +8,6 @@ GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+# Optional: Harness imports from GitHub. A fine-grained token with "Public repositories"
+# (read-only) access and no permissions; it raises the rate limit, and star counts need it.
+GITHUB_TOKEN=

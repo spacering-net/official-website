@@ -1,0 +1,250 @@
+---
+/**
+ * Browsing and search: kind tabs, sort, runtimes and tags, a page of items
+ * and a link to the next. Plain links and one form, so it all works without
+ * scripts. Used by the Harness home page and by publisher pages (`path`).
+ */
+import ItemCard from './ItemCard.astro';
+import { harnessDicts } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+import { withQuery, type BrowseState, type ItemList, type TagInfo } from '../../lib/harness';
+
+interface Props {
+  lang: Lang;
+  /** the page's own path, without its query */
+  path: string;
+  state: BrowseState;
+  list: ItemList;
+  tags: TagInfo[];
+  counts: Record<string, number>;
+  /** counts and kinds come from the whole catalog; a publisher page has its own list only */
+  catalog: boolean;
+}
+const { lang, path, state, list, tags, counts, catalog } = Astro.props;
+const h = harnessDicts[lang];
+const tagMap = new Map(tags.map((t) => [t.id, t]));
+// kinds with nothing in them yet are left out, once the facets have been counted at all
+const counted = Object.keys(counts).some((k) => k.startsWith('kind:'));
+const kinds = (['all', 'skill', 'mcp', 'prompt', 'assistant', 'connector'] as const).filter(
+  (k) => k === 'all' || !catalog || !counted || (counts[`kind:${k}`] ?? 0) > 0 || state.kind === k,
+);
+const runtimes = Object.entries(counts)
+  .filter(([k, n]) => k.startsWith('runtime:') && n > 0)
+  .map(([k, n]) => ({ id: k.slice('runtime:'.length), n }))
+  .sort((a, b) => b.n - a.n);
+const topTags = tags.filter((t) => t.count > 0).sort((a, b) => b.count - a.count).slice(0, 18);
+if (state.tag && !topTags.some((t) => t.id === state.tag) && tagMap.has(state.tag)) topTags.push(tagMap.get(state.tag)!);
+---
+<form class="search" action={path} method="get" role="search">
+  <label class="visually-hidden" for="harness-q">{h.search.label}</label>
+  <input id="harness-q" name="q" type="search" value={state.q} placeholder={h.search.placeholder} maxlength="200" autocomplete="off" />
+  {state.kind && <input type="hidden" name="kind" value={state.kind} />}
+  <button type="submit">{h.search.submit}</button>
+</form>
+
+<nav class="kinds" aria-label={h.search.label}>
+  {kinds.map((k) => {
+    const value = k === 'all' ? undefined : k;
+    const n = catalog ? counts[k === 'all' ? 'all' : `kind:${k}`] : undefined;
+    return (
+      <a href={withQuery(path, state, { kind: value })} aria-current={state.kind === value ? 'page' : undefined}>
+        {h.kinds[k]}
+        {n !== undefined && <span class="mono">{n.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en')}</span>}
+      </a>
+    );
+  })}
+</nav>
+
+<div class="filters">
+  {!state.q && (
+    <p class="filter">
+      <span class="filter__label mono">{h.sort.label}</span>
+      {(['popular', 'new', 'updated'] as const).map((s) => (
+        <a href={withQuery(path, state, { sort: s === 'popular' ? undefined : s })} aria-current={state.sort === s ? 'true' : undefined}>
+          {h.sort[s]}
+        </a>
+      ))}
+    </p>
+  )}
+  {catalog && runtimes.length > 1 && (
+    <p class="filter">
+      <span class="filter__label mono">{h.runtime.label}</span>
+      <a href={withQuery(path, state, { runtime: undefined })} aria-current={!state.runtime ? 'true' : undefined}>{h.runtime.any}</a>
+      {runtimes.map((r) => (
+        <a href={withQuery(path, state, { runtime: r.id })} aria-current={state.runtime === r.id ? 'true' : undefined}>
+          {h.runtime.names[r.id] ?? r.id}
+        </a>
+      ))}
+    </p>
+  )}
+  {catalog && topTags.length > 0 && (
+    <p class="filter tags">
+      <span class="filter__label mono">{h.tags.label}</span>
+      <a href={withQuery(path, state, { tag: undefined })} aria-current={!state.tag ? 'true' : undefined}>{h.tags.all}</a>
+      {topTags.map((t) => (
+        <a href={withQuery(path, state, { tag: t.id })} aria-current={state.tag === t.id ? 'true' : undefined}>
+          {t.name[lang]}
+        </a>
+      ))}
+    </p>
+  )}
+</div>
+
+{state.q && (
+  <p class="summary">
+    {h.search.results(list.approxTotal ?? list.items.length, state.q)} · <a href={withQuery(path, state, { q: undefined })}>{h.search.clear}</a>
+  </p>
+)}
+
+{list.items.length ? (
+  <ul class="grid">
+    {list.items.map((item) => <ItemCard item={item} lang={lang} tags={tagMap} />)}
+  </ul>
+) : (
+  <div class="empty">
+    <p>{h.search.none}</p>
+    {state.q && <p class="muted">{h.search.noneHint}</p>}
+  </div>
+)}
+
+{(list.next || state.cursor) && (
+  <nav class="pages">
+    {state.cursor && <a href={withQuery(path, state, {})}>{h.first}</a>}
+    {list.next && <a class="next" href={withQuery(path, state, { cursor: list.next })} rel="next">{h.more} →</a>}
+  </nav>
+)}
+
+<style>
+  .search {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 21px;
+  }
+
+  .search input {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: rgb(236 234 244 / 0.03);
+    color: var(--corona);
+    font: inherit;
+    font-size: 16px;
+  }
+
+  .search input::placeholder {
+    color: var(--graphite);
+  }
+
+  .search button {
+    padding: 0 21px;
+    border: 1px solid rgb(255 217 160 / 0.4);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--bead);
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .search button:hover {
+    background: rgb(255 217 160 / 0.08);
+  }
+
+  .kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 13px;
+  }
+
+  .kinds a,
+  .filter a {
+    color: var(--dim);
+    text-decoration: none;
+  }
+
+  .kinds a {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 6px 14px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 14.5px;
+  }
+
+  .kinds a .mono {
+    color: var(--graphite);
+  }
+
+  .kinds a:hover,
+  .filter a:hover {
+    color: var(--corona);
+  }
+
+  .kinds a[aria-current] {
+    border-color: rgb(255 217 160 / 0.5);
+    color: var(--bead);
+  }
+
+  .filters {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 21px;
+  }
+
+  .filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 13px;
+    margin: 0;
+    font-size: 14px;
+  }
+
+  .filter__label {
+    min-width: 6.5em;
+    color: var(--graphite);
+  }
+
+  .filter a[aria-current] {
+    color: var(--bead);
+  }
+
+  .summary {
+    margin: 0 0 13px;
+    color: var(--dim);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+    gap: 13px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .empty {
+    padding: 55px 0;
+    text-align: center;
+  }
+
+  .pages {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 34px;
+  }
+
+  .pages .next {
+    margin-left: auto;
+  }
+
+  @media (max-width: 640px) {
+    .filter__label {
+      min-width: 0;
+      width: 100%;
+    }
+  }
+</style>

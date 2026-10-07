@@ -1,0 +1,57 @@
+---
+/** /harness/ and /zh/harness/: browse and search the catalog. */
+import Layout from '../../../layouts/Harness.astro';
+import Browse from '../../../components/harness/Browse.astro';
+import { harnessDicts } from '../../../i18n/harness';
+import { browseState, cacheable, loadBrowse, withQuery } from '../../../lib/harness';
+
+export const prerender = false;
+
+const lang = Astro.params.lang === undefined ? 'en' : Astro.params.lang === 'zh' ? 'zh' : null;
+if (!lang) return new Response(null, { status: 404 });
+const h = harnessDicts[lang];
+const state = browseState(Astro.url);
+const { list, tags, counts } = await loadBrowse(state);
+cacheable(Astro.response.headers);
+const paths = { en: withQuery('/harness/', state, { cursor: state.cursor }), zh: withQuery('/zh/harness/', state, { cursor: state.cursor }) };
+const filtered = !!(state.q || state.cursor || state.runtime || state.tag || state.sort !== 'popular');
+---
+<Layout lang={lang} title={state.q ? `${state.q} · Harness` : `Harness · SpaceRing`} description={h.description} paths={paths} noindex={filtered}>
+  <section class="hero">
+    <h1>Harness</h1>
+    <p class="kicker">{h.kicker}</p>
+    <p class="lede">{h.lede}</p>
+    {counts.all !== undefined && <p class="count mono">{h.count(counts.all)}</p>}
+  </section>
+  <Browse lang={lang} path={h.base} state={state} list={list} tags={tags} counts={counts} catalog />
+</Layout>
+
+<style>
+  .hero {
+    margin: 13px 0 34px;
+  }
+
+  .hero h1 {
+    margin: 0;
+    font-size: clamp(38px, 7vw, 64px);
+    font-weight: 300;
+    letter-spacing: -0.01em;
+  }
+
+  .kicker {
+    margin: 8px 0 0;
+    font-size: clamp(18px, 2.4vw, 22px);
+    color: var(--corona);
+  }
+
+  .lede {
+    max-width: 40rem;
+    margin: 8px 0 0;
+    color: var(--dim);
+  }
+
+  .count {
+    margin: 13px 0 0;
+    color: var(--bead);
+  }
+</style>
