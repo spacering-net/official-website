@@ -1,69 +1,71 @@
 # spacering.net
 
-SpaceRing（网络空间戒指）官网。页面由 Astro 静态构建，3D 场景用 three.js；登录与用户数据由同一个 Cloudflare Worker 提供（Hono + Better Auth，数据在 D1，头像在 R2）。
+English | [简体中文](README.zh-CN.md)
 
-## 开发
+The website of SpaceRing, the cyberspace ring. The pages are a static Astro build with a three.js scene. Sign-in and user data come from the same Cloudflare Worker (Hono and Better Auth, with data in D1 and profile pictures in R2).
 
-需要 Node 22.12+ 和 pnpm。
+## Development
+
+Requires Node 22.12+ and pnpm.
 
 ```bash
 pnpm install
-pnpm dev        # http://localhost:4321 ，中文版 /zh/
-pnpm build      # 输出静态站点到 dist/
-pnpm preview    # 本地预览 dist/
-pnpm check      # 类型检查（网站与 Worker）
+pnpm dev        # http://localhost:4321, Chinese at /zh/
+pnpm build      # builds the static site into dist/
+pnpm preview    # serves dist/ locally
+pnpm check      # type-checks the site and the Worker
 ```
 
-登录和 `/api` 由 Worker 提供，本地另开一个终端：
+Sign-in and `/api` come from the Worker. Run it in a second terminal:
 
 ```bash
-cp .dev.vars.example .dev.vars   # 第一次：填 BETTER_AUTH_SECRET
-pnpm db:migrate                  # 第一次及每次新增迁移后：本地 D1 建表
-pnpm dev:api                     # :8787；pnpm dev 会把 /api 转发过去
+cp .dev.vars.example .dev.vars   # first time: fill in BETTER_AUTH_SECRET
+pnpm db:migrate                  # first time and after each new migration: creates the local D1 tables
+pnpm dev:api                     # :8787; pnpm dev forwards /api to it
 ```
 
-## 常改的地方
+## Where to change things
 
-| 想改什么 | 文件 |
+| What | Where |
 | --- | --- |
-| 中英文案、产品名、示例助手的名字 | `src/i18n/index.ts` |
-| 各幕的投影示意 | `src/components/holo/` |
-| 仓库、文档地址，统计兜底值 | `src/config.ts` |
-| 色板、字号、间距 | `src/styles/global.css` 顶部变量 |
-| 戒指尺寸、材质与戒身脉络 | `src/client/scene/ring.ts` |
-| 星环粒子 | `src/client/scene/disk.ts` |
-| 开场节奏 | `src/client/intro.ts` |
-| 每幕戒指的位置 | `src/client/chapters.ts` 的 `layouts()` |
-| 登录、会话、戒指编号 | `api/auth.ts`、`api/ring-number.ts` |
-| 数据库表结构 | `db/migrations/`（只增不改；推送前先运行 `pnpm db:migrate:remote`） |
-| 戒身内壁的刻字 | `src/client/scene/ring.ts` 的 `inscribe()`，`src/client/account.ts` |
+| Copy in both languages, product names, the sample assistant's name | `src/i18n/index.ts` |
+| The projected previews in each chapter | `src/components/holo/` |
+| Repository and docs links, fallback stats | `src/config.ts` |
+| Palette, type sizes, spacing | the variables at the top of `src/styles/global.css` |
+| Ring size, materials and the veins on the band | `src/client/scene/ring.ts` |
+| The particle disk around the ring | `src/client/scene/disk.ts` |
+| Intro timing | `src/client/intro.ts` |
+| Where the ring sits in each chapter | `layouts()` in `src/client/chapters.ts` |
+| Sign-in, sessions, ring numbers | `api/auth.ts`, `api/ring-number.ts` |
+| Database schema | `db/migrations/` (add new files only; do not edit existing migrations; run `pnpm db:migrate:remote` before pushing) |
+| The engraving inside the band | `inscribe()` in `src/client/scene/ring.ts`, `src/client/account.ts` |
 
-## 调试参数
+## Debug parameters
 
-- `?quality=high|medium|low`：强制画质档位。
-- `?off=bloom,nebula,corona,disk,glow,stars,iri,final,ring`：关闭单项效果，用于排查性能。
-- `?capture`：隐藏界面元素，用于生成分享图。
+- `?quality=high|medium|low`: forces a quality tier.
+- `?off=bloom,nebula,corona,disk,glow,stars,iri,final,ring`: turns off individual effects, to track down performance problems.
+- `?capture`: hides the interface, for rendering share images.
 
-## 视觉检查脚本
+## Visual checks
 
-脚本用 Playwright 驱动本机 Chrome，先运行 `pnpm build && pnpm preview`。截图保存在 `shots/`（已忽略）。
+The scripts drive the local Chrome with Playwright. Run `pnpm build && pnpm preview` first. Screenshots go to `shots/` (git-ignored).
 
 ```bash
-pnpm qa:shots   # 开场与各幕截图（桌面）
-pnpm qa:modes   # 无 WebGL、减少动态效果、键盘焦点
-pnpm qa:nav     # 深链接、焦点、刻度盘、顶部导航高亮、语言切换
-pnpm qa:jump    # 跨幕跳转只投射起点和终点
-pnpm qa:switch  # 语言切换接力：同一幕、不重播开场、画面不闪
-pnpm qa:menu    # 矮屏菜单可滚动、背景锁定、Esc 与焦点归还；展开时场景暂停、不用实时模糊
-pnpm qa:fit     # 各尺寸下面板是否完整落在 HUD 与屏幕底边之间
-pnpm qa:perf    # 帧时间（1 倍与 2 倍像素比）
-pnpm og         # 重新生成分享图，之后转成 public/og.jpg 与 og-zh.jpg
+pnpm qa:shots   # intro and chapter screenshots (desktop)
+pnpm qa:modes   # no WebGL, reduced motion, keyboard focus
+pnpm qa:nav     # deep links, focus, chapter dial, HUD nav highlight, language switch
+pnpm qa:jump    # jumps across several chapters project only the start and end chapters
+pnpm qa:switch  # language switch hand-over: same chapter, no intro replay, no flash
+pnpm qa:menu    # menu on short screens: scrolls, locks the page, Esc and focus return; pauses the scene, no live blur
+pnpm qa:fit     # panels fit between the HUD and the bottom edge at every size
+pnpm qa:perf    # frame times at 1x and 2x pixel ratio
+pnpm og         # re-renders the share images; then convert them to public/og.jpg and og-zh.jpg
 ```
 
-## 品牌素材
+## Brand assets
 
-`logo/` 下是标志源文件与构造图。favicon 来自同一组路径。
+`logo/` holds the logo sources and the construction drawing. The favicons are built from the same vector paths.
 
-## 许可证
+## License
 
-代码以 MIT 协议开源，见 [LICENSE](LICENSE)。SpaceRing 的名称与标志（`logo/`、站点图标和分享图）不在授权范围内。
+The code is released under the MIT License; see [LICENSE](LICENSE). The SpaceRing name and logo (`logo/`, the site icons and the share images) are not covered.
