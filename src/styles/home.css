@@ -86,6 +86,17 @@ html.lenis body {
   fill: var(--corona);
 }
 
+/* ------------------------------------------------------------------- HUD */
+
+/* The stars drift behind the HUD's words here: a little night around each
+   letter keeps them from cutting through it. */
+.hud .nav__link,
+.hud .account-btn {
+  text-shadow:
+    0 0 3px var(--void),
+    0 0 8px var(--void);
+}
+
 /* ------------------------------------------------------------------ dial */
 
 .dial {

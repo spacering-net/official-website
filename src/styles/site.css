@@ -40,6 +40,9 @@
   --selection-fg: #fff;
   /* what is typed into: the search boxes */
   --field: rgb(236 234 244 / 0.04);
+  /* the HUD's words at rest, its links and the account: small light type on
+     the night reads fainter than the same tint in ink on paper, so a step up */
+  --hud-fg: var(--corona-80);
   /* fine white grain for frosted glass */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .4 -.14'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
 
@@ -237,7 +240,7 @@ ul {
   font-size: 11.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--corona-64);
+  color: var(--hud-fg);
   white-space: nowrap;
   transition: color 0.3s;
 }
@@ -294,7 +297,7 @@ ul {
   font-size: 11.5px;
   letter-spacing: 0.08em;
   white-space: nowrap;
-  color: var(--corona-64);
+  color: var(--hud-fg);
   transition: color 0.3s;
 }
 
@@ -1107,6 +1110,7 @@ html.menu-open {
   --btn-hover: #000;
   --selection-fg: #17161c;
   --field: #fff;
+  --hud-fg: var(--corona-64);
 }
 
 /* switching: every colour at once, none of them easing on its own */
