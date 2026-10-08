@@ -10,3 +10,11 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - '@astrojs/cloudflare@14.3.4'
   - '@astrojs/internal-helpers@0.12.0'
+
+# miniflare (the Workers runtime behind wrangler and the Cloudflare plugin) pins
+# sharp 0.35.4, whose bundled librsvg is vulnerable (GHSA-wq5f-xc86-pv6w); 0.35.5
+# fixes it. pnpm 11 reads overrides only from here and the pnpm in Cloudflare's
+# build image only from package.json, so "resolutions" there holds the same one
+# and the two must match. Drop both once miniflare depends on 0.35.5 or later.
+overrides:
+  sharp@<0.35.5: 0.35.5

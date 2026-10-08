@@ -48,6 +48,9 @@
     "typescript": "~5.9.2",
     "wrangler": "^4.147.0"
   },
+  "resolutions": {
+    "sharp@<0.35.5": "0.35.5"
+  },
   "engines": {
     "node": ">=22.12.0"
   }
