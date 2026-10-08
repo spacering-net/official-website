@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-The website of SpaceRing, the cyberspace ring. Most pages are a static Astro build with a three.js scene. One Cloudflare Worker serves them, the API under `/api` (Hono and Better Auth for sign-in, with data in D1 and profile pictures in R2), and Harness: the marketplace of skills, MCP servers and more, whose pages the Worker renders on demand from its own D1 database and R2 bucket, with imports running on Cloudflare Queues.
+The website of SpaceRing, the cyberspace ring. Most pages are a static Astro build with a three.js scene. One Cloudflare Worker serves them, the API under `/api` (Hono and Better Auth for sign-in, with data in D1 and profile pictures in R2), the ring cards their holders choose to share (a page each, and a picture for link previews that the Worker renders with resvg and MozJPEG), and Harness: the marketplace of skills, MCP servers and more, whose pages the Worker renders on demand from its own D1 database and R2 bucket, with imports running on Cloudflare Queues.
 
 ## Development
 
@@ -16,7 +16,7 @@ pnpm dev        # http://localhost:4321, Chinese at /zh/; the Worker and /api ru
 pnpm build      # builds the site into dist/client and the Worker into dist/server
 pnpm preview    # serves the build, Worker included
 pnpm check      # type-checks the site and the Worker
-pnpm test       # Harness unit tests
+pnpm test       # unit tests: Harness, ring cards
 ```
 
 Harness imports run on a schedule. Locally, start them by hand (the queue runs in the dev server): the hourly registry sync with `curl 'http://localhost:4321/cdn-cgi/handler/scheduled?cron=17+*+*+*+*'`, the daily jobs (skill repositories, stars, counts) with `cron=23+3+*+*+*`. A `GITHUB_TOKEN` in `.dev.vars` raises GitHub's rate limit, and star counts need it: a fine-grained token with "Public repositories" (read-only) access and no permissions is enough.
@@ -43,6 +43,9 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | Products with pages of their own (the HUD links to them; the rest are homepage chapters) | `PRODUCT_PAGES` in `src/i18n/index.ts` |
 | The not-found page, per language (`404.html`, `zh/404.html`; also for Harness addresses with nothing behind them) | `src/components/NotFound.astro`, `src/pages/404.astro`, `src/pages/zh/404.astro` |
 | The engraving inside the band | `inscribe()` in `src/client/scene/ring.ts`, `src/client/account.ts` |
+| The ring card's drawing: one SVG for the account dialog's preview, the card's page and its picture | `src/lib/ring-card.ts` |
+| Ring cards: sharing, the pictures and the page, the dialog's card view | `api/rings/`, `src/pages/[...lang]/ring/`, `src/client/card.ts` |
+| The ring card's art, its engraving and fonts (bump `CARD_REVISION` in `src/lib/ring-card.ts` after changing them) | `public/ring-card/` and `src/lib/ring-card-still.ts`, made from the homepage's scene by `node scripts/ring-card-art.mjs` (with `pnpm dev` running), and `node --import ./tests/harness/register.mjs scripts/ring-card-fonts.mjs` |
 
 Harness's rule checks take their patterns from the database, not from this repository; a fresh database has none and relies on the built-in checks.
 
@@ -75,4 +78,4 @@ pnpm og         # re-renders the share images; then convert them to public/og.jp
 
 ## License
 
-The code is released under the MIT License; see [LICENSE](LICENSE). The SpaceRing name and logo (`logo/`, the site icons and the share images) are not covered.
+The code is released under the MIT License; see [LICENSE](LICENSE). The SpaceRing name and logo (`logo/`, the site icons, the share images and the ring card's art) are not covered. The fonts in `public/ring-card/fonts/` are under the SIL Open Font License (the `OFL-*.txt` files beside them).

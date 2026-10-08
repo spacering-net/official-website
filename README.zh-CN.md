@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-SpaceRing（网络空间戒指）官网。大部分页面由 Astro 静态构建，3D 场景用 three.js。同一个 Cloudflare Worker 负责提供这些页面、`/api` 下的接口（登录用 Hono 和 Better Auth，数据在 D1，头像在 R2），以及 Harness：技能、MCP 服务等能力的市场。Harness 的页面由 Worker 按需渲染，数据在它自己的 D1 数据库和 R2 存储桶里，导入走 Cloudflare Queues。
+SpaceRing（网络空间戒指）官网。大部分页面由 Astro 静态构建，3D 场景用 three.js。同一个 Cloudflare Worker 负责提供这些页面、`/api` 下的接口（登录用 Hono 和 Better Auth，数据在 D1，头像在 R2）、用户选择分享的戒指卡片（每张一个页面，外加一张用于链接预览的图片，由 Worker 用 resvg 和 MozJPEG 渲染），以及 Harness：技能、MCP 服务等能力的市场。Harness 的页面由 Worker 按需渲染，数据在它自己的 D1 数据库和 R2 存储桶里，导入走 Cloudflare Queues。
 
 ## 开发
 
@@ -16,7 +16,7 @@ pnpm dev        # http://localhost:4321 ，中文版 /zh/；Worker 和 /api 也�
 pnpm build      # 网站输出到 dist/client，Worker 输出到 dist/server
 pnpm preview    # 本地预览构建结果，包括 Worker
 pnpm check      # 类型检查（网站与 Worker）
-pnpm test       # Harness 的单元测试
+pnpm test       # 单元测试：Harness、戒指卡片
 ```
 
 Harness 的导入按计划任务运行。本地手动触发（队列在开发服务器里运行）：每小时的注册表同步用 `curl 'http://localhost:4321/cdn-cgi/handler/scheduled?cron=17+*+*+*+*'`，每天的任务（技能仓库、星标、计数）用 `cron=23+3+*+*+*`。`.dev.vars` 里放一个 `GITHUB_TOKEN` 可以提高 GitHub 的额度，星标也要靠它刷新：细粒度令牌的仓库访问选「Public repositories」（只读），不加任何权限就够了。
@@ -43,6 +43,9 @@ Harness 的导入按计划任务运行。本地手动触发（队列在开发服
 | 有独立页面的产品（HUD 直接链接过去；其余仍是首页的章节） | `src/i18n/index.ts` 里的 `PRODUCT_PAGES` |
 | 404 页，分语言（`404.html`、`zh/404.html`；Harness 里不存在的地址也用它） | `src/components/NotFound.astro`、`src/pages/404.astro`、`src/pages/zh/404.astro` |
 | 戒身内壁的刻字 | `src/client/scene/ring.ts` 的 `inscribe()`，`src/client/account.ts` |
+| 戒指卡片的画面：账号对话框的预览、卡片页面和卡片图片共用同一份 SVG | `src/lib/ring-card.ts` |
+| 戒指卡片的分享、图片和页面，以及对话框里的卡片视图 | `api/rings/`、`src/pages/[...lang]/ring/`、`src/client/card.ts` |
+| 戒指卡片的背景图、刻字与字体（改动后把 `src/lib/ring-card.ts` 里的 `CARD_REVISION` 加一） | `public/ring-card/` 和 `src/lib/ring-card-still.ts`：`node scripts/ring-card-art.mjs` 从首页的 3D 场景截取（需先运行 `pnpm dev`），字体由 `node --import ./tests/harness/register.mjs scripts/ring-card-fonts.mjs` 下载 |
 
 Harness 规则检查的具体规则放在数据库里，不在本仓库。新建的数据库里没有规则，只做内置的检查。
 
@@ -75,4 +78,4 @@ pnpm og         # 重新生成分享图，之后转成 public/og.jpg 与 og-zh.j
 
 ## 许可证
 
-代码以 MIT 协议开源，见 [LICENSE](LICENSE)。SpaceRing 的名称与标志（`logo/`、站点图标和分享图）不在授权范围内。
+代码以 MIT 协议开源，见 [LICENSE](LICENSE)。SpaceRing 的名称与标志（`logo/`、站点图标、分享图和戒指卡片的背景图）不在授权范围内。`public/ring-card/fonts/` 里的字体采用 SIL Open Font License（见同目录的 `OFL-*.txt`）。

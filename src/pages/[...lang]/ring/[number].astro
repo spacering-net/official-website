@@ -1,0 +1,101 @@
+---
+/**
+ * /ring/<number>: a ring card its holder shares, in the site's frame. Not
+ * there unless they share it; what it shows beyond the number and the day
+ * the ring was forged is their choice (api/rings). The link preview is the
+ * card itself, rendered by the Worker.
+ */
+import Page from '../../../layouts/Page.astro';
+import { loadCard } from '../../../lib/rings';
+import { CARD_ART, CARD_H, CARD_W, cardLabel, PAGE_FACES, ringCardSvg } from '../../../lib/ring-card';
+import { dicts } from '../../../i18n';
+
+export const prerender = false;
+
+const lang = Astro.params.lang === undefined ? 'en' : Astro.params.lang === 'zh' ? 'zh' : null;
+const number = /^[1-9][0-9]{4,8}$/.test(Astro.params.number ?? '') ? Number(Astro.params.number) : null;
+const found = lang && number ? await loadCard(number, lang) : null;
+if (!lang || !number || !found) return new Response(null, { status: 404 });
+
+// The holder may stop sharing at any moment: nothing keeps a copy.
+Astro.response.headers.set('Cache-Control', 'no-store');
+const { card } = found;
+const t = dicts[lang];
+const r = t.ring;
+const forged = new Date(card.since).toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+const title = `${card.name ? `${card.name} · ` : ''}SRN ${card.number} · SpaceRing`;
+const paths = { en: `/ring/${card.number}/`, zh: `/zh/ring/${card.number}/` };
+const image = { url: new URL(found.image, Astro.url).href, width: CARD_W, height: CARD_H, alt: cardLabel(card) };
+const svg = ringCardSvg(card, { faces: PAGE_FACES, art: CARD_ART, id: 'ring-card' });
+---
+<Page lang={lang} title={title} description={r.description(card.number, card.name, forged)} paths={paths} noindex image={image}>
+  <section class="ring">
+    <figure class="ring__card" set:html={svg} />
+    <p class="ring__eyebrow mono">{r.eyebrow}</p>
+    <h1>{r.heading(card.number, card.name)}</h1>
+    <p class="ring__lede">{r.lede(forged)}</p>
+    <div class="ring__actions">
+      {/* opens the account dialog: signing in, or the visitor's own card (client/account.ts) */}
+      <button class="btn btn--primary" type="button" aria-haspopup="dialog" aria-controls="account-dialog" data-account-card data-owner={card.number} data-label-out={r.claim} data-label-in={r.shareOwn} data-label-owner={r.manage}>
+        {r.claim}
+      </button>
+      <a class="btn btn--ghost" href={t.path}>{r.about}</a>
+    </div>
+  </section>
+</Page>
+
+<style>
+  .ring {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--s-6) var(--edge) var(--s-8);
+    text-align: center;
+  }
+
+  /* the card as an object on the page: its corners rounded, lifted off it */
+  .ring__card {
+    width: min(100%, 960px);
+    margin: 0;
+    border-radius: clamp(13px, 2.2vw, 21px);
+    overflow: hidden;
+    border: 1px solid var(--hairline-strong);
+    background: #050507;
+    box-shadow:
+      0 34px 89px -21px var(--shadow-deep),
+      0 0 0 1px rgb(0 0 0 / 0.2);
+  }
+
+  .ring__card :global(svg) {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .ring__eyebrow {
+    margin-top: var(--s-7);
+    color: var(--bead);
+  }
+
+  h1 {
+    margin-top: var(--s-4);
+    font-size: clamp(28px, 4vw, 42px);
+    font-weight: 300;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .ring__lede {
+    max-width: 36rem;
+    margin-top: var(--s-4);
+    color: var(--corona-64);
+  }
+
+  .ring__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--s-3);
+    margin-top: var(--s-6);
+  }
+</style>

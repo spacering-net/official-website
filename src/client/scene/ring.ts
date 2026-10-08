@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { INK, inkLetters } from '../../lib/inscription';
 import { lerp } from '../math';
 import { SIMPLEX } from './glsl';
 
@@ -78,10 +79,18 @@ export interface Ring {
   bake(renderer: THREE.WebGLRenderer): void;
   /** Set the text engraved inside the band (e.g. "SRN 10000"); resolves once it can be shown. */
   inscribe(text: string): Promise<void>;
+  /**
+   * For the ring card's art (scripts/ring-card-art.mjs): ink the band at
+   * once with letters, all over (true) or not at all (false). Letters need
+   * their font loaded.
+   */
+  paintInk(content: string | boolean): void;
+  /** The point on the inner wall under a point of the ink canvas (its pixels), in the ring's own space. */
+  inkPoint(x: number, y: number, out: THREE.Vector3): THREE.Vector3;
 }
 
-/** The inscription's lettering, in the HUD's mono face. */
-const INK_FONT = '"IBM Plex Mono", ui-monospace, monospace';
+/** The inscription's lettering, in the HUD's mono face (laid out by src/lib/inscription.ts). */
+const INK_FONT = `${INK.weight} ${INK.size}px "IBM Plex Mono", ui-monospace, monospace`;
 
 // The vein pattern never changes, so it is drawn once into a texture laid over
 // the unrolled band (u: round, from the back through the node; v: across, along
@@ -121,8 +130,8 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
   });
   // 8:1, like the band: the letters stand about a fifth of the wall high
   const ink = document.createElement('canvas');
-  ink.width = 1024;
-  ink.height = 128;
+  ink.width = INK.width;
+  ink.height = INK.height;
   const inkTexture = new THREE.CanvasTexture(ink);
   inkTexture.anisotropy = 8;
   const inkHalfHeight = 0.085;
@@ -319,10 +328,36 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
   };
   material.customProgramCacheKey = () => (veins ? 'spacering-ring-v3-veins' : 'spacering-ring-v3');
 
+  const paintInk = (content: string | boolean) => {
+    const g = ink.getContext('2d');
+    if (!g) return;
+    g.fillStyle = content === true ? '#fff' : '#000';
+    g.fillRect(0, 0, ink.width, ink.height);
+    if (typeof content === 'string') {
+      g.fillStyle = '#fff';
+      g.font = INK_FONT;
+      g.textBaseline = 'alphabetic';
+      // letter by letter: canvas letterSpacing is not everywhere yet
+      for (const { char, x } of inkLetters(content)) g.fillText(char, x, INK.baseline);
+    }
+    inkTexture.needsUpdate = true;
+  };
+
   const mesh = new THREE.Mesh(geometry, material);
   return {
     mesh,
     uniforms,
+    paintInk,
+    inkPoint(x, y, out) {
+      // the shader's mapping (uInscriptionRect), run backwards: round the band from the back, then along the profile
+      const back = (0.5 - x / ink.width) * 2 * inkRect.x;
+      const along = inkRect.y + (y / ink.height - 0.5) * 2 * inkRect.z;
+      let j = 1;
+      while (j < arc.length - 1 && arc[j] < along) j++;
+      const t = (along - arc[j - 1]) / (arc[j] - arc[j - 1]);
+      const r = lerp(points[j - 1].x, points[j].x, t);
+      return out.set(-r * Math.sin(back), lerp(points[j - 1].y, points[j].y, t), -r * Math.cos(back));
+    },
     bake(renderer) {
       if (!field) return;
       const bakeMaterial = new THREE.ShaderMaterial({
@@ -347,24 +382,8 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
       quad.geometry.dispose();
     },
     async inscribe(text) {
-      await document.fonts?.load(`500 84px ${INK_FONT}`).catch(() => {});
-      const g = ink.getContext('2d');
-      if (!g) return;
-      g.fillStyle = '#000';
-      g.fillRect(0, 0, ink.width, ink.height);
-      g.fillStyle = '#fff';
-      g.font = `500 84px ${INK_FONT}`;
-      g.textBaseline = 'middle';
-      // letter-spaced by hand: canvas letterSpacing is not everywhere yet
-      const chars = [...text];
-      const track = 84 * 0.32;
-      const widths = chars.map((c) => g.measureText(c).width);
-      let x = (ink.width - widths.reduce((a, b) => a + b, 0) - track * (chars.length - 1)) / 2;
-      chars.forEach((c, i) => {
-        g.fillText(c, x, ink.height / 2 + 4);
-        x += widths[i] + track;
-      });
-      inkTexture.needsUpdate = true;
+      await document.fonts?.load(INK_FONT).catch(() => {});
+      paintInk(text);
     },
   };
 }

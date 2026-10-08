@@ -28,8 +28,10 @@ interface Props {
   noindex?: boolean;
   /** the product these pages belong to: its link in the HUD is marked */
   current?: keyof typeof PRODUCT_PAGES;
+  /** the picture for link previews, when the page has its own (a ring card); else the site's */
+  image?: { url: string; width: number; height: number; alt: string };
 }
-const { lang, title, description, paths, noindex, current } = Astro.props;
+const { lang, title, description, paths, noindex, current, image } = Astro.props;
 const t = dicts[lang];
 const other = lang === 'en' ? 'zh' : 'en';
 const canonical = `${SITE.url}${paths[lang]}`;
@@ -58,16 +60,20 @@ const skip = lang === 'en' ? 'Skip to content' : '跳到正文';
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    <meta property="og:image" content={`${SITE.url}/${lang === 'zh' ? 'og-zh' : 'og'}.jpg`} />
+    <meta property="og:image" content={image?.url ?? `${SITE.url}/${lang === 'zh' ? 'og-zh' : 'og'}.jpg`} />
+    {image && <meta property="og:image:width" content={String(image.width)} />}
+    {image && <meta property="og:image:height" content={String(image.height)} />}
+    {image && <meta property="og:image:alt" content={image.alt} />}
     <meta property="og:locale" content={lang === 'zh' ? 'zh_CN' : 'en_US'} />
     <meta name="twitter:card" content="summary_large_image" />
+    {image && <meta name="twitter:image:alt" content={image.alt} />}
     {/* from one of these pages to the next, the HUD stays put and the page cross-fades */}
     <style is:inline>
       @view-transition { navigation: auto; }
       ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.28s; }
     </style>
     {/* without scripts the menu and the account dialog cannot open; the HUD's links still work */}
-    <noscript><style>[data-menu-open], [data-account-open] { display: none; }</style></noscript>
+    <noscript><style>[data-menu-open], [data-account-open], [data-account-card] { display: none; }</style></noscript>
     <slot name="head" />
   </head>
   <body>

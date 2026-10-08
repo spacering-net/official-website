@@ -272,6 +272,22 @@ export class Stage {
     });
   }
 
+  /**
+   * For the ring card's art (main.ts, under ?capture): the band inked at
+   * once, with letters, all over (true) or not at all (false), the
+   * inscription's other effects (the veins kept out from under it) in place.
+   */
+  captureInk(content: string | boolean) {
+    this.ring.paintInk(content);
+    Object.assign(this.ink, { target: 1, amount: 1, reveal: 2, burning: false, ready: true });
+  }
+
+  /** Where a point of the ink canvas (its pixels) was on screen in the last frame, in CSS pixels. */
+  inkToScreen(x: number, y: number): [number, number] {
+    const p = this.ring.mesh.localToWorld(this.ring.inkPoint(x, y, this.v3)).project(this.camera);
+    return [((p.x + 1) / 2) * this.vw, ((1 - p.y) / 2) * this.vh];
+  }
+
   /** Compile shaders and render once, so the intro starts without a hitch. */
   warmup() {
     // The scene is drawn into the composer's buffer, never to the screen, and

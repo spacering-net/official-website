@@ -1,8 +1,9 @@
 // Cloudflare Workers serves the static pages built into dist/client, and runs
-// api/index.ts for the API under /api/*, the on-demand Harness pages and the
-// sitemap (run_worker_first), the cron triggers and the job queue. `astro build`
-// bundles the script with the Astro adapter and writes the deployable config
-// to dist/server/wrangler.json, which `wrangler deploy` picks up.
+// api/index.ts for the API under /api/*, the on-demand Harness and ring card
+// pages and the sitemap (run_worker_first), the cron triggers and the job
+// queue. `astro build` bundles the script with the Astro adapter and writes
+// the deployable config to dist/server/wrangler.json, which `wrangler deploy`
+// picks up.
 //
 // Pushes to main are built and deployed by Cloudflare, which does not migrate
 // D1: apply new migrations first with `pnpm db:migrate:remote`. `pnpm run
@@ -20,7 +21,7 @@
     // Everything else is a file, served without running the script. Pages
     // rendered on demand must be listed here, or they get the 404 page (and
     // in ON_DEMAND in api/index.ts, for `astro dev`).
-    "run_worker_first": ["/api/*", "/harness", "/harness/*", "/zh/harness", "/zh/harness/*", "/sitemap.xml", "/sitemap-harness-*"]
+    "run_worker_first": ["/api/*", "/harness", "/harness/*", "/zh/harness", "/zh/harness/*", "/ring/*", "/zh/ring/*", "/sitemap.xml", "/sitemap-harness-*"]
   },
   "d1_databases": [
     {
@@ -82,6 +83,12 @@
       "name": "HARNESS_LIMIT",
       "namespace_id": "1002",
       "simple": { "limit": 300, "period": 60 }
+    },
+    // ring card pictures rendered (not those served from the cache), per address
+    {
+      "name": "RING_LIMIT",
+      "namespace_id": "1003",
+      "simple": { "limit": 20, "period": 60 }
     }
   ],
   // which deployment this is: pages kept at the edge are kept per deployment,

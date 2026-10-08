@@ -3,5 +3,5 @@
   // the Worker's runtime types instead of the browser's.
   "extends": "./api/tsconfig.json",
   "compilerOptions": { "types": ["./api/worker-configuration.d.ts"] },
-  "include": ["api/**/*.ts", "src/lib/harness.ts", "src/pages/sitemap.xml.ts", "src/pages/sitemap-harness-*.ts"]
+  "include": ["api/**/*.ts", "src/lib/harness.ts", "src/lib/rings.ts", "src/pages/sitemap.xml.ts", "src/pages/sitemap-harness-*.ts"]
 }

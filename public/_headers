@@ -1,3 +1,8 @@
 # Astro's build output under /_astro/ is content-hashed, so it can be kept for a year.
 /_astro/*
   Cache-Control: public, max-age=31536000, immutable
+
+# The ring card's art and fonts (public/ring-card/) keep their names when they
+# change, so browsers keep them a day.
+/ring-card/*
+  Cache-Control: public, max-age=86400

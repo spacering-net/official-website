@@ -55,6 +55,47 @@ export interface Dict {
     signOutFailed: string;
     redirecting: string;
     close: string;
+    /** the ring card view of the dialog: share the card, choose what it shows */
+    card: {
+      /** the signed-in view's button that opens it */
+      open: string;
+      title: string;
+      back: string;
+      /** what the options are about, for screen readers */
+      show: string;
+      showName: string;
+      showImage: string;
+      loading: string;
+      private: string;
+      shared: string;
+      stopped: string;
+      share: string;
+      link: string;
+      copy: string;
+      copied: string;
+      native: string;
+      post: string;
+      save: string;
+      stop: string;
+      failed: string;
+      /** what a post on X says before the link; {n} is the ring number */
+      postText: string;
+    };
+  };
+  /** a shared ring card's page, /ring/<number>/ */
+  ring: {
+    eyebrow: string;
+    /** the page's heading: the holder's ring, by name when the card shows it */
+    heading: (number: number, name: string | null) => string;
+    /** under it: when the ring was forged, then what SpaceRing is */
+    lede: (forged: string) => string;
+    /** the page's description for search and link previews */
+    description: (number: number, name: string | null, forged: string) => string;
+    /** the button, as it reads to someone signed out, signed in, and to the card's holder */
+    claim: string;
+    shareOwn: string;
+    manage: string;
+    about: string;
   };
   loader: string;
   scramble: string;
@@ -195,6 +236,38 @@ const en: Dict = {
     signOutFailed: 'Sign-out did not finish. Please try again.',
     redirecting: 'Redirecting…',
     close: 'Close',
+    card: {
+      open: 'Share your ring card',
+      title: 'Your ring card',
+      back: 'Back',
+      show: 'What the card shows',
+      showName: 'Show my name',
+      showImage: 'Show my picture',
+      loading: 'Loading your card…',
+      private: 'Only you can see this card. Share it to get a link.',
+      shared: 'Shared. Anyone with the link can see this card.',
+      stopped: 'Sharing stopped. The link no longer opens your card.',
+      share: 'Share card',
+      link: 'Link to your card',
+      copy: 'Copy',
+      copied: 'Copied',
+      native: 'Share…',
+      post: 'Post on X',
+      save: 'Save image',
+      stop: 'Stop sharing',
+      failed: 'That did not go through. Please try again.',
+      postText: 'My ring on SpaceRing: SRN {n}',
+    },
+  },
+  ring: {
+    eyebrow: 'Ring card',
+    heading: (number, name) => (name ? `${name}’s space ring` : `Space ring SRN ${number}`),
+    lede: (forged) => `Forged on ${forged}. SpaceRing links your data, your devices, your identity and the AI that works for you into one ring you carry anywhere.`,
+    description: (number, name, forged) => `${name ? `${name} holds ` : ''}ring SRN ${number} on SpaceRing, forged on ${forged}. Your digital world, in a space ring.`,
+    claim: 'Get your own ring',
+    shareOwn: 'Share your ring card',
+    manage: 'Manage your card',
+    about: 'What is SpaceRing',
   },
   loader: 'Calibrating orbit',
   scramble: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
@@ -405,6 +478,38 @@ const zh: Dict = {
     signOutFailed: '退出没有完成，请再试一次。',
     redirecting: '正在跳转…',
     close: '关闭',
+    card: {
+      open: '分享戒指卡片',
+      title: '你的戒指卡片',
+      back: '返回',
+      show: '卡片上显示的内容',
+      showName: '显示我的名字',
+      showImage: '显示我的头像',
+      loading: '正在取出你的卡片…',
+      private: '这张卡片只有你能看到。分享后会生成一个链接。',
+      shared: '已分享。拿到链接的人都能看到这张卡片。',
+      stopped: '已停止分享，链接不再打开你的卡片。',
+      share: '分享卡片',
+      link: '卡片链接',
+      copy: '复制',
+      copied: '已复制',
+      native: '分享到…',
+      post: '发到 X',
+      save: '保存图片',
+      stop: '停止分享',
+      failed: '没有成功，请再试一次。',
+      postText: '我的空间戒指：SRN {n}',
+    },
+  },
+  ring: {
+    eyebrow: '戒指卡片',
+    heading: (number, name) => (name ? `${name} 的空间戒指` : `空间戒指 SRN ${number}`),
+    lede: (forged) => `锻造于 ${forged}。SpaceRing 把数据、设备、身份，还有替你做事的 AI 连进同一枚戒指：随身携带，统一管理，只听你的。`,
+    description: (number, name, forged) => `${name ? `${name} 的` : ''}空间戒指 SRN ${number}，锻造于 ${forged}。把数字世界，收进空间戒指。`,
+    claim: '领取你的戒指',
+    shareOwn: '分享你的戒指卡片',
+    manage: '管理这张卡片',
+    about: '了解 SpaceRing',
   },
   loader: '正在校准轨道',
   scramble: '网络空间戒指星环轨道节点投射光束',

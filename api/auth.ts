@@ -1,6 +1,6 @@
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import { audit } from './audit';
-import { copyAvatar } from './avatars';
+import { keepAvatar } from './avatars';
 import { later } from './context';
 import { uuidv7 } from './ids';
 import { nextRingNumber } from './ring-number';
@@ -93,14 +93,17 @@ export function authOptions(env: Env) {
           before: async (user, ctx) => ({
             data: { ...user, number: await nextRingNumber(env.DB), locale: localeOf(ctx?.headers ?? ctx?.request?.headers) },
           }),
-          after: async (user, ctx) => {
-            later(copyAvatar(env, user));
-            later(audit(env, 'user.created', user.id, { number: user.number }, ctx?.request));
-          },
+          after: async (user, ctx) => later(audit(env, 'user.created', user.id, { number: user.number }, ctx?.request)),
         },
       },
       session: {
-        create: { after: async (session, ctx) => later(audit(env, 'session.created', session.userId, undefined, ctx?.request)) },
+        create: {
+          after: async (session, ctx) => {
+            // the provider's picture, copied to R2 (avatars.ts); after a failed copy the next sign-in tries again
+            later(keepAvatar(env, session.userId));
+            later(audit(env, 'session.created', session.userId, undefined, ctx?.request));
+          },
+        },
       },
       account: {
         create: {

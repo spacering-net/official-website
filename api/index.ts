@@ -1,11 +1,12 @@
 import { handle } from '@astrojs/cloudflare/handler';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { getAuth } from './auth';
 import { serveAvatar } from './avatars';
 import { withRequest } from './context';
 import { cacheKey, edgeCache, forCache, fromCache } from './harness/cache';
 import { daily as harnessDaily, runJob, startRegistrySync, type Job } from './harness/jobs';
 import { harnessApi } from './harness/routes';
+import { ringRoutes, type SessionUser } from './rings/routes';
 
 const api = new Hono<{ Bindings: Env }>().basePath('/api');
 
@@ -23,18 +24,30 @@ api.use('/auth/*', async (c, next) => {
 
 api.on(['GET', 'POST'], '/auth/*', (c) => getAuth(c.env).handler(c.req.raw));
 
+/**
+ * The signed-in user, or null. A session in use is renewed (at most daily);
+ * an expired one is cleared. Either way the new cookies go back with the
+ * answer, which must then be made with `c` (c.json, c.body).
+ */
+async function sessionUser(c: Context<{ Bindings: Env }>): Promise<SessionUser | null> {
+  const { headers, response: session } = await getAuth(c.env).api.getSession({ headers: c.req.raw.headers, returnHeaders: true });
+  for (const cookie of headers.getSetCookie()) c.header('Set-Cookie', cookie, { append: true });
+  const user = session?.user;
+  if (!user || typeof user.number !== 'number') return null;
+  return { id: user.id, number: user.number, name: user.name, image: user.image ?? null, createdAt: new Date(user.createdAt).toISOString() };
+}
+
 /** Who is signed in: what the page needs to engrave the band, or 401. */
 api.get('/me', async (c) => {
-  const { headers, response: session } = await getAuth(c.env).api.getSession({ headers: c.req.raw.headers, returnHeaders: true });
-  // A session in use is renewed (at most daily) and its cookie cache refreshed;
-  // an expired one is cleared. Either way the new cookies go back to the browser.
-  for (const cookie of headers.getSetCookie()) c.header('Set-Cookie', cookie, { append: true });
-  if (!session) return c.json({ user: null }, 401);
-  const { number, name, image } = session.user;
+  const user = await sessionUser(c);
+  if (!user) return c.json({ user: null }, 401);
+  const { number, name, image } = user;
   return c.json({ user: { number, name, image } });
 });
 
 api.get('/avatars/*', (c) => serveAvatar(c.env, c.req.path.slice('/api/avatars/'.length)));
+
+api.route('/', ringRoutes(sessionUser));
 
 api.route('/harness/v1', harnessApi);
 
@@ -62,7 +75,7 @@ const PAGE_HEADERS = {
  * page through the script: the others go out as their files do, without the
  * headers above (the homepage starts from an inline script).
  */
-const ON_DEMAND = /^\/(?:zh\/)?harness(?:\/|$)|^\/sitemap(?:\.xml$|-harness-)/;
+const ON_DEMAND = /^\/(?:zh\/)?(?:harness|ring)(?:\/|$)|^\/sitemap(?:\.xml$|-harness-)/;
 
 /**
  * The site's not-found page for this address, in its language: the nearest

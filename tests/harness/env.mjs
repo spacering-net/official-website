@@ -1,9 +1,11 @@
 // A stand-in for the Worker's bindings, for tests: D1 on Node's built-in SQLite (FTS5 and JSON
-// included) with the Harness migrations applied, R2 as a map, the queue as a list.
+// included) with the Harness migrations applied (or the accounts', given their folder), R2 as a
+// map, the queue as a list.
 import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 const MIGRATIONS = new URL('../../db/harness/', import.meta.url);
+export const ACCOUNT_MIGRATIONS = new URL('../../db/migrations/', import.meta.url);
 
 class Statement {
   constructor(db, sql, params = []) {
@@ -33,10 +35,10 @@ class Statement {
 }
 
 export class D1 {
-  constructor() {
+  constructor(migrations = MIGRATIONS) {
     this.sqlite = new DatabaseSync(':memory:');
     this.sqlite.exec('PRAGMA foreign_keys = ON');
-    for (const f of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) this.sqlite.exec(readFileSync(new URL(f, MIGRATIONS), 'utf8'));
+    for (const f of readdirSync(migrations).filter((f) => f.endsWith('.sql')).sort()) this.sqlite.exec(readFileSync(new URL(f, migrations), 'utf8'));
     /** called before each batch runs; a test can fail one on purpose */
     this.beforeBatch = null;
   }

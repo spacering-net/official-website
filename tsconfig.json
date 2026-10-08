@@ -12,6 +12,7 @@
     // server code that reads the Worker's bindings: checked with the Worker's
     // types (tsconfig.server.json), which would clash with the browser's here
     "src/lib/harness.ts",
+    "src/lib/rings.ts",
     "src/pages/sitemap.xml.ts",
     "src/pages/sitemap-harness-*.ts"
   ]

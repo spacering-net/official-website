@@ -1,5 +1,5 @@
 import Lenis from 'lenis';
-import { Stage, type RingPose, type StageState } from './scene/stage';
+import { Stage, type FrameInput, type RingLayout, type RingPose, type StageState } from './scene/stage';
 import { Chapters } from './chapters';
 import { Intro } from './intro';
 import { initMenu } from './menu';
@@ -415,6 +415,30 @@ function boot() {
   // the menu opens becomes the blurred still behind it.
   let menuWasOpen = false;
   let sceneHidden = false;
+  let lastFrame: FrameInput | null = null;
+
+  // Stills for the ring card's art (scripts/ring-card-art.mjs): the script
+  // turns the projection off (alone) and poses the ring, inks its band, then
+  // has the last frame drawn again, the same but for that.
+  let alone = false;
+  if (stage && root.classList.contains('capture')) {
+    const still = stage;
+    Object.assign(window, {
+      __srCapture: {
+        ready: () => lastFrame?.intro.done === true,
+        alone: () => {
+          alone = true;
+        },
+        pose: (layout: RingLayout) => still.setLayouts([layout], layout),
+        ink: (content: string | boolean) => still.captureInk(content),
+        inkToScreen: (x: number, y: number) => still.inkToScreen(x, y),
+        shot: (time?: number) => {
+          if (lastFrame) still.update({ ...lastFrame, dt: 0, time: time ?? lastFrame.time });
+          return still.canvas.toDataURL('image/png');
+        },
+      },
+    });
+  }
   const frame = (now: number) => {
     const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
     last = now;
@@ -441,16 +465,17 @@ function boot() {
     if (stage && (!hidden || opened)) {
       // the menu's opening and closing frames say nothing about the scene's own cost
       if (opened || sceneHidden) stage.resetFrameStats();
-      stage.update({
+      lastFrame = {
         dt,
         time: (now - bootTime) / 1000,
         s,
         travel,
         mouse: { x: mouse.x, y: mouse.y, active: now - lastMove < 2500 },
         intro: state,
-        projection,
+        projection: alone ? null : projection,
         reduceMotion,
-      });
+      };
+      stage.update(lastFrame);
       if (opened) menu.capture(stage.canvas);
     }
     sceneHidden = hidden;

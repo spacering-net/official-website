@@ -453,8 +453,211 @@ ul {
   color: var(--corona-64);
 }
 
-.account__signout {
+/* the signed-in view's two actions: the ring card, then signing out */
+.account__stack {
+  display: grid;
+  gap: var(--s-3);
   margin-top: var(--s-6);
+}
+
+.account__stack .btn {
+  justify-content: center;
+}
+
+/* The ring card's view: wider, for the card. Everything in it is centred,
+   under a back button that mirrors the close button. */
+.account--card {
+  width: min(560px, calc(100vw - 2 * var(--s-5)));
+  padding: var(--s-6) var(--s-5) var(--s-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.account__back {
+  position: absolute;
+  top: var(--s-4);
+  left: var(--s-4);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--corona-64);
+  transition: color 0.3s;
+}
+
+.account__back:hover {
+  color: var(--corona);
+}
+
+.account__back svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.account--card .account__title {
+  margin-top: 0;
+  line-height: 34px;
+}
+
+/* the card as it will be seen: dark in either theme, as the picture is */
+.account__card {
+  aspect-ratio: 1200 / 630;
+  margin-top: var(--s-5);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 13px;
+  overflow: hidden;
+  background: #050507 url('/ring-card/art-1200.jpg') center / cover no-repeat;
+}
+
+.account__card svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.account__card.is-loading {
+  animation: card-wait 1.6s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes card-wait {
+  to {
+    opacity: 0.55;
+  }
+}
+
+.account__options {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-3) var(--s-5);
+  margin: var(--s-4) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.account__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: 14px;
+  color: var(--corona-80);
+  cursor: pointer;
+}
+
+.account__option[hidden] {
+  display: none;
+}
+
+.account__option input {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 5px;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
+}
+
+.account__option input:checked {
+  border-color: var(--bead);
+  background: var(--bead);
+}
+
+.account__option input:checked::after {
+  content: '';
+  width: 9px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 1.6px solid var(--void);
+  border-bottom: 1.6px solid var(--void);
+  rotate: -45deg;
+}
+
+.account__option input:disabled {
+  cursor: progress;
+}
+
+.account__status {
+  min-height: 1.6em;
+  margin-top: var(--s-4);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--graphite);
+}
+
+.account__link {
+  display: flex;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+.account__link[hidden] {
+  display: none;
+}
+
+.account__url {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 var(--s-5);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--corona-80);
+  font: 400 12.5px/1 var(--f-mono);
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+}
+
+.account__url:focus-visible {
+  outline-offset: 0;
+}
+
+.account__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+
+.account__actions [hidden] {
+  display: none;
+}
+
+.account__actions [aria-disabled],
+.account__actions :disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.account__stop {
+  margin-top: var(--s-5);
+  font-size: 13px;
+  color: var(--graphite);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 3px;
+  transition: color 0.3s;
+}
+
+.account__stop:hover {
+  color: var(--prominence);
+}
+
+.account__stop[hidden] {
+  display: none;
 }
 
 .menu-btn {
