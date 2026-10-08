@@ -2,12 +2,15 @@ import type { APIRoute } from 'astro';
 import { SITE } from '../config';
 
 // Every page built ahead of time, in both languages, each naming its twin as
-// an alternate, as the pages' own hreflang links do (Base.astro, Doc.astro);
+// an alternate, as the pages' own hreflang links do (Base.astro, Page.astro);
 // and the Harness home page. Harness items have sitemaps of their own
 // (sitemap.xml lists them all). The 404 page is left out.
 const pages = [
   { en: '/', zh: '/zh/' },
+  { en: '/space/', zh: '/zh/space/' },
+  { en: '/assistant/', zh: '/zh/assistant/' },
   { en: '/harness/', zh: '/zh/harness/' },
+  { en: '/open-source/', zh: '/zh/open-source/' },
   { en: '/privacy/', zh: '/zh/privacy/' },
   { en: '/terms/', zh: '/zh/terms/' },
 ];

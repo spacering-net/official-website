@@ -4,6 +4,11 @@ export const SITE = {
   name: 'SpaceRing',
   org: 'spacering-net',
   orgUrl: 'https://github.com/spacering-net',
+  /** this website's own repository, and its license */
+  site: {
+    repo: 'spacering-net/official-website',
+    license: 'MIT',
+  },
   codeg: {
     repo: 'spacering-net/codeg',
     docs: 'https://docs.codeg.app',

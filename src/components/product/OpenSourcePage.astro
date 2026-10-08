@@ -1,0 +1,346 @@
+---
+/**
+ * /open-source/ and /zh/open-source/: SpaceRing built in public. What is
+ * open today (Codeg; this website, Harness's server included), the ring's
+ * roadmap, why it is built in the open, and how to take part. Codeg's
+ * figures come from GitHub when the site is built (lib/github.ts).
+ */
+import Product from '../../layouts/Product.astro';
+import Icon from '../Icon.astro';
+import Hero from './Hero.astro';
+import Blueprint from './Blueprint.astro';
+import Closing from './Closing.astro';
+import Dots from './Dots.astro';
+import { dicts, PAGES, type Lang } from '../../i18n';
+import { fill, pageDicts } from '../../i18n/pages';
+import { SITE, repoUrl, releasesUrl } from '../../config';
+import { getCodegStats, compact } from '../../lib/github';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = dicts[lang];
+const o = pageDicts[lang].openSource;
+const f = o.today.facts;
+const stats = await getCodegStats();
+const paths = { en: '/open-source/', zh: '/zh/open-source/' };
+const codegRepo = repoUrl(SITE.codeg.repo);
+
+// The roadmap: what has shipped first, then the rest in the homepage's order.
+// Each node opens its page; Codeg's is on this page, the others' chapters on the homepage.
+const roadmap = [...t.menu.items]
+  .sort((a, b) => Number(b.status === 'live') - Number(a.status === 'live'))
+  .map((item) => {
+    const own = PAGES[item.key as keyof typeof PAGES];
+    return { ...item, href: own ? `${t.path}${own}` : item.key === 'codeg' ? '#codeg' : `${t.path}#${item.key}` };
+  });
+---
+<Product lang={lang} title={o.title} description={o.description} paths={paths} current="open-source">
+  <Hero title={t.open.title} lede={t.open.body}>
+    <Fragment slot="meta"><span>github.com/{SITE.org}</span></Fragment>
+    <Fragment slot="actions">
+      <a class="btn btn--primary" href={SITE.orgUrl} target="_blank" rel="noopener"><Icon name="github" />{t.open.actions.org}</a>
+      <a class="btn btn--ghost" href={codegRepo} target="_blank" rel="noopener"><Icon name="star" />{t.open.actions.star}</a>
+    </Fragment>
+    <Blueprint slot="art" caption={o.blueprint} />
+  </Hero>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">{o.today.title}</h2>
+      <p class="section__lede">{o.today.lede}</p>
+    </div>
+    <div class="projects">
+      <article class="project" id="codeg" aria-labelledby="codeg-name">
+        <p class="project__meta mono"><span class="status status--live">{t.status.live}</span><span>{t.codeg.tag}</span></p>
+        <h3 class="project__name" id="codeg-name">{t.codeg.title}</h3>
+        <p class="project__kicker">{t.codeg.kicker}</p>
+        <p class="project__body">{t.codeg.body}</p>
+        <dl class="facts project__facts">
+          <div><dt>{f.license}</dt><dd>{stats.license}</dd></div>
+          <div><dt>{f.version}</dt><dd>{stats.version}</dd></div>
+          <div><dt>{f.stars}</dt><dd>★ {compact(stats.stars)}</dd></div>
+          <div><dt>{f.platforms}</dt><dd><Dots text={t.codeg.holo.platforms} /></dd></div>
+        </dl>
+        <div class="project__actions">
+          <a class="btn btn--primary" href={codegRepo} target="_blank" rel="noopener"><Icon name="github" />{t.codeg.actions.github}</a>
+          <a class="btn btn--ghost" href={SITE.codeg.docs} target="_blank" rel="noopener">{t.codeg.actions.docs}<Icon name="external" /></a>
+          <a class="btn btn--ghost" href={releasesUrl(SITE.codeg.repo)} target="_blank" rel="noopener">{t.codeg.actions.download}<Icon name="external" /></a>
+        </div>
+      </article>
+
+      <article class="project" aria-labelledby="site-name">
+        <p class="project__meta mono"><span class="status status--live">{t.status.live}</span><span>{o.today.site.tag}</span></p>
+        <h3 class="project__name" id="site-name">spacering.net</h3>
+        <p class="project__kicker">{o.today.site.kicker}</p>
+        <p class="project__body">{o.today.site.body}</p>
+        <dl class="facts project__facts">
+          <div><dt>{f.license}</dt><dd>{SITE.site.license}</dd></div>
+          <div><dt>{f.stack}</dt><dd><Dots text="Astro · three.js · Cloudflare Workers" /></dd></div>
+          <div><dt>{f.api}</dt><dd><a href="/api/harness/v1/openapi.json">{o.today.site.api} · OpenAPI</a></dd></div>
+        </dl>
+        <div class="project__actions">
+          <a class="btn btn--primary" href={repoUrl(SITE.site.repo)} target="_blank" rel="noopener"><Icon name="github" />{t.codeg.actions.github}</a>
+          <a class="btn btn--ghost" href={`${t.path}${PAGES.harness}`}>{t.harness.actions.enter}<Icon name="arrow" /></a>
+        </div>
+      </article>
+    </div>
+    <p class="projects__note">{o.today.note}</p>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">{o.roadmap.title}</h2>
+      <p class="section__lede">{o.roadmap.lede}</p>
+    </div>
+    <ol class="road">
+      {roadmap.map((item) => (
+        <li class="road__stop" data-status={item.status}>
+          <a class="road__link" href={item.href}>
+            <span class="road__node" aria-hidden="true"></span>
+            <span class="road__name">{item.name}</span>
+            <span class:list={['road__status', 'mono', 'status', item.status === 'live' && 'status--live']}>{t.status[item.status]}</span>
+            <span class="road__desc"><Dots text={item.desc} /></span>
+          </a>
+        </li>
+      ))}
+    </ol>
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">{o.why.title}</h2>
+    </div>
+    <ul class="points">
+      {o.why.items.map((item) => (
+        <li>
+          <h3>{item.name}</h3>
+          <p>{fill(item.text, { codeg: stats.license, site: SITE.site.license })}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <Closing title={o.cta.title} text={o.cta.text}>
+    <a class="btn btn--primary" href={SITE.orgUrl} target="_blank" rel="noopener"><Icon name="github" />{t.open.actions.org}</a>
+    <a class="btn btn--ghost" href={codegRepo} target="_blank" rel="noopener"><Icon name="star" />{t.open.actions.star}</a>
+  </Closing>
+</Product>
+
+<style>
+  .projects {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-5);
+  }
+
+  .project {
+    display: flex;
+    flex-direction: column;
+    padding: var(--s-6);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 13px;
+    background: var(--card-bg);
+    scroll-margin-top: calc(var(--hud-h) + var(--s-5));
+  }
+
+  .project__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-5);
+    color: var(--graphite);
+  }
+
+  .project__name {
+    margin-top: var(--s-5);
+    font-size: clamp(30px, 3vw, 40px);
+    font-weight: 300;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+
+  .project__kicker {
+    margin-top: var(--s-3);
+    font-size: 18px;
+    color: var(--corona);
+  }
+
+  .project__body {
+    margin-top: var(--s-3);
+    color: var(--corona-64);
+    text-wrap: pretty;
+  }
+
+  .project__facts {
+    margin-top: var(--s-5);
+    padding-top: var(--s-5);
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* the buttons keep to the card's foot, level across both cards */
+  .project__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    margin-top: auto;
+    padding-top: var(--s-6);
+  }
+
+  .projects__note {
+    margin-top: var(--s-4);
+    font-size: 13px;
+    color: var(--graphite);
+  }
+
+  /* The roadmap as an orbit track: a node per part, lit once it has shipped,
+     the track solid between the shipped ones and dashed on to the rest. */
+  .road {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--s-5);
+  }
+
+  .road__stop {
+    position: relative;
+  }
+
+  .road__stop:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 18px;
+    right: calc(-1 * var(--s-5) + 6px);
+    border-top: 1px dashed rgb(var(--corona-rgb) / 0.22);
+  }
+
+  .road__stop[data-status='live']:has(+ [data-status='live'])::after {
+    border-top: 1px solid rgb(var(--bead-rgb) / 0.6);
+  }
+
+  .road__link {
+    display: grid;
+    gap: var(--s-2);
+    padding-bottom: var(--s-3);
+  }
+
+  .road__node {
+    width: 13px;
+    height: 13px;
+    margin-bottom: var(--s-4);
+    border: 1px solid var(--corona-40);
+    border-radius: 50%;
+    background: var(--void);
+    transition:
+      border-color 0.3s,
+      box-shadow 0.3s;
+  }
+
+  .road__stop[data-status='live'] .road__node {
+    border: 0;
+    background: var(--bead-hot);
+    box-shadow: 0 0 12px rgb(var(--bead-rgb) / 0.7);
+  }
+
+  .road__name {
+    font-size: 21px;
+    font-weight: 400;
+    line-height: 1.25;
+    color: var(--corona);
+    transition: color 0.3s;
+  }
+
+  .road__status {
+    font-size: 10.5px;
+  }
+
+  .road__desc {
+    margin-top: var(--s-2);
+    font-size: 14px;
+    color: var(--corona-64);
+    text-wrap: pretty;
+  }
+
+  .road__link:hover .road__name,
+  .road__link:focus-visible .road__name {
+    color: var(--bead-hot);
+  }
+
+  .road__link:hover .road__node {
+    border-color: var(--bead);
+    box-shadow: 0 0 10px rgb(var(--bead-rgb) / 0.4);
+  }
+
+  @media (max-width: 1100px) {
+    .road {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      row-gap: var(--s-6);
+    }
+
+    .road__stop:nth-child(3n)::after {
+      display: none;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .projects {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  /* narrow: the track runs down the left, a part to a row */
+  @media (max-width: 640px) {
+    .project {
+      padding: var(--s-5);
+    }
+
+    .road {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+
+    .road__stop:not(:last-child)::after,
+    .road__stop:nth-child(3n):not(:last-child)::after {
+      display: block;
+      top: 19px;
+      bottom: -6px;
+      left: 6px;
+      right: auto;
+      border-top: 0;
+      border-left: 1px dashed rgb(var(--corona-rgb) / 0.22);
+    }
+
+    .road__stop[data-status='live']:has(+ [data-status='live'])::after {
+      border-top: 0;
+      border-left: 1px solid rgb(var(--bead-rgb) / 0.6);
+    }
+
+    .road__link {
+      grid-template-columns: 13px minmax(0, 1fr) auto;
+      column-gap: var(--s-4);
+      align-items: baseline;
+      padding: 0 0 var(--s-5);
+    }
+
+    .road__node {
+      grid-row: 1;
+      align-self: center;
+      margin: 0;
+    }
+
+    .road__name {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .road__status {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .road__desc {
+      grid-column: 2 / -1;
+      margin-top: 0;
+    }
+  }
+</style>

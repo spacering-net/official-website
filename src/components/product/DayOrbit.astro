@@ -1,0 +1,253 @@
+---
+/**
+ * The assistant's drawing: a day as an orbit. Twenty-four hours round an
+ * ellipse in the mark's proportions (b/a = cos 30°, turned 30°), midnight at
+ * the foot; the assistant's node goes round it once every 72 seconds and
+ * never stops. Behind it, the day so far; on it, what it did, marked as it
+ * gets there. One mark stays lit and keeps pulsing: the one it is waiting on
+ * you for. At midnight the day starts over.
+ *
+ * The node keeps the dial's time exactly: each hour takes the same three
+ * seconds however long that hour's stretch of the ellipse is (keyPoints).
+ * The day is already under way when the page opens, at 10:50: the node
+ * reaches the question a few seconds later. With reduced motion it holds at
+ * 12:30, the question asked and waiting. SMIL, so client/product.ts can
+ * pause it off screen and hold it still.
+ */
+import type { Dict } from '../../i18n';
+import type { PagesDict } from '../../i18n/pages';
+
+interface Props {
+  t: Dict;
+  p: PagesDict;
+}
+const { t, p } = Astro.props;
+
+const DAY = 72; // seconds a day takes
+const RX = 236;
+const RY = +(RX * Math.cos(Math.PI / 6)).toFixed(2);
+const TURN = -Math.PI / 6;
+const PHI = (1 + Math.sqrt(5)) / 2;
+const r2 = (n: number) => +n.toFixed(2);
+
+/** where hour h (0–24) lies at radius r (1 = the dial) */
+const angle = (h: number) => Math.PI / 2 + (2 * Math.PI * h) / 24;
+const at = (h: number, r = 1) => {
+  const x = RX * r * Math.cos(angle(h));
+  const y = RY * r * Math.sin(angle(h));
+  return { x: r2(x * Math.cos(TURN) - y * Math.sin(TURN)), y: r2(x * Math.sin(TURN) + y * Math.cos(TURN)) };
+};
+
+// The dial as four quarter arcs, from midnight, clockwise.
+const q = [0, 6, 12, 18, 24].map((h) => at(h));
+const dial = `M${q[0].x} ${q[0].y}` + q.slice(1).map((pt) => `A${RX} ${RY} -30 0 1 ${pt.x} ${pt.y}`).join('');
+
+// How far round the dial (by length) each hour lies, so the node keeps time.
+const speed = (a: number) => Math.hypot(RX * Math.sin(a), RY * Math.cos(a));
+const lengthTo = (h: number) => {
+  const n = 600;
+  const a0 = angle(0);
+  const step = (angle(h) - a0) / n;
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += (speed(a0 + i * step) + 4 * speed(a0 + (i + 0.5) * step) + speed(a0 + (i + 1) * step)) / 6;
+  return sum * step;
+};
+const total = lengthTo(24);
+const hours = Array.from({ length: 25 }, (_, h) => h);
+const keyTimes = hours.map((h) => +(h / 24).toFixed(4)).join(';');
+const keyPoints = hours.map((h) => +(lengthTo(h) / total).toFixed(4)).join(';');
+const trailOffsets = hours.map((h) => +(1 - lengthTo(h) / total).toFixed(4)).join(';');
+
+// What it did today, by the hour; the ask is waiting on you.
+type Kind = 'done' | 'working' | 'ask';
+const marks: { h: number; kind: Kind; done?: number }[] = [
+  { h: 2 + 40 / 60, kind: 'done' },
+  { h: 7.5, kind: 'done' },
+  { h: 9.2, kind: 'done' },
+  { h: 10 + 5 / 60, kind: 'working', done: 13 },
+  { h: 11 + 40 / 60, kind: 'ask' },
+  { h: 14 + 20 / 60, kind: 'done' },
+  { h: 16 + 50 / 60, kind: 'done' },
+  { h: 19.5, kind: 'done' },
+  { h: 22.25, kind: 'done' },
+].map((m) => ({ ...m, ...at(m.h) }));
+/** lit from hour `from` (until `to`) each day; every mark fades at the day's end */
+const lit = (from: number, to = 24) => {
+  const a = +(from / 24).toFixed(4);
+  const b = +(Math.min(to, 23.3) / 24).toFixed(4);
+  return to < 24
+    ? { values: '0;0;1;1;0;0', keyTimes: `0;${a};${+(a + 0.004).toFixed(4)};${b};${+(b + 0.004).toFixed(4)};1` }
+    : { values: '0;0;1;1;0', keyTimes: `0;${a};${+(a + 0.004).toFixed(4)};0.975;1` };
+};
+
+const ticks = Array.from({ length: 24 }, (_, h) => ({ a: at(h, 1.012), b: at(h, h % 6 === 0 ? 1.07 : 1.035), major: h % 6 === 0 }));
+const labels = [0, 6, 12, 18].map((h) => ({ text: String(h).padStart(2, '0'), ...at(h, 1.15) }));
+const inner = [1 / PHI, 1 / (PHI * PHI)].map((s) => ({ rx: r2(RX * s), ry: r2(RY * s) }));
+// every animation starts this far into the day; without motion, the day holds a little later
+const OPEN = 10 + 50 / 60;
+const REST = 12.5;
+const begin = `-${r2((DAY * OPEN) / 24)}s`;
+const rest = r2((DAY * (REST - OPEN)) / 24);
+const loop = { dur: `${DAY}s`, begin, repeatCount: 'indefinite' };
+---
+<svg class="clock" viewBox="-300 -250 600 500" data-smil data-rest={rest}>
+  <g class="clock__frame">
+    {inner.map((e) => <ellipse rx={e.rx} ry={e.ry} transform="rotate(-30)"></ellipse>)}
+    {/* the axes, from the inner orbit out, leaving the name clear */}
+    {[0, 6, 12, 18].map((h) => <line x1={at(h, 1 / PHI).x} y1={at(h, 1 / PHI).y} x2={at(h, h % 12 ? 1.2 : 1.28).x} y2={at(h, h % 12 ? 1.2 : 1.28).y}></line>)}
+  </g>
+  <path class="clock__dial" d={dial}></path>
+  {ticks.map((k) => <line class:list={['clock__tick', k.major && 'clock__tick--major']} x1={k.a.x} y1={k.a.y} x2={k.b.x} y2={k.b.y}></line>)}
+  {labels.map((l) => <text class="clock__hour" x={l.x} y={l.y}>{l.text}</text>)}
+
+  {/* the day so far */}
+  <path class="clock__trail" d={dial} pathLength="1" stroke-dasharray="1 1" stroke-dashoffset="1">
+    <animate attributeName="stroke-dashoffset" {...loop} calcMode="linear" values={trailOffsets} keyTimes={keyTimes}></animate>
+    <animate attributeName="opacity" {...loop} values="1;1;0" keyTimes="0;0.975;1"></animate>
+  </path>
+
+  {marks.map((m) => (
+    <g class="clock__mark" data-kind={m.kind}>
+      <circle class="clock__slot" cx={m.x} cy={m.y} r="4.2"></circle>
+      {m.kind === 'ask' && (
+        <circle class="clock__halo" cx={m.x} cy={m.y} r="13" opacity="0">
+          <animate attributeName="opacity" {...loop} {...lit(m.h)}></animate>
+        </circle>
+      )}
+      <circle class="clock__lit" cx={m.x} cy={m.y} r="4.2" opacity="0">
+        <animate attributeName="opacity" {...loop} {...lit(m.h, m.done)}></animate>
+      </circle>
+      {m.done && (
+        <circle class="clock__lit clock__lit--done" cx={m.x} cy={m.y} r="4.2" opacity="0">
+          <animate attributeName="opacity" {...loop} {...lit(m.done)}></animate>
+        </circle>
+      )}
+    </g>
+  ))}
+
+  {/* the assistant, keeping the dial's time */}
+  <g class="clock__node">
+    <circle class="clock__glow" r="19"></circle>
+    <circle r="6.5"></circle>
+    <animateMotion {...loop} calcMode="linear" path={dial} keyPoints={keyPoints} keyTimes={keyTimes}></animateMotion>
+  </g>
+
+  <text class="clock__name" x="0" y="-4">{t.assistantName}</text>
+  <text class="clock__status" x="0" y="24">{p.assistant.dial.status}</text>
+</svg>
+
+<style>
+  .clock__frame ellipse,
+  .clock__frame line {
+    fill: none;
+    stroke: rgb(var(--corona-rgb) / 0.12);
+    stroke-width: 1;
+    stroke-dasharray: 14 3 2 3;
+  }
+
+  .clock__dial {
+    fill: none;
+    stroke: rgb(var(--corona-rgb) / 0.3);
+    stroke-width: 1.2;
+  }
+
+  .clock__tick {
+    stroke: rgb(var(--corona-rgb) / 0.3);
+    stroke-width: 1;
+  }
+
+  .clock__tick--major {
+    stroke: rgb(var(--corona-rgb) / 0.6);
+  }
+
+  .clock__hour {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    fill: var(--graphite);
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  .clock__trail {
+    fill: none;
+    stroke: rgb(var(--bead-rgb) / 0.7);
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+
+  .clock__slot {
+    fill: var(--void);
+    stroke: rgb(var(--corona-rgb) / 0.4);
+    stroke-width: 1.2;
+  }
+
+  /* done: filled in; working: a warm ring; asking: warm, and pulsing until you answer */
+  .clock__lit {
+    fill: var(--corona);
+  }
+
+  .clock__mark[data-kind='working'] .clock__lit:not(.clock__lit--done) {
+    fill: var(--void);
+    stroke: var(--bead);
+    stroke-width: 1.6;
+  }
+
+  /* asking: a warm ring, not a light, so it never reads as the node */
+  .clock__mark[data-kind='ask'] .clock__lit {
+    fill: var(--void);
+    stroke: var(--bead);
+    stroke-width: 2;
+  }
+
+  .clock__halo {
+    fill: rgb(var(--bead-rgb) / 0.22);
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: clock-ask 2.4s ease-in-out infinite;
+  }
+
+  @keyframes clock-ask {
+    50% {
+      transform: scale(1.5);
+      fill: rgb(var(--bead-rgb) / 0.06);
+    }
+  }
+
+  .clock__node circle {
+    fill: var(--bead-hot);
+  }
+
+  .clock__node .clock__glow {
+    fill: rgb(var(--bead-rgb) / 0.16);
+    filter: blur(3px);
+  }
+
+  .clock__name {
+    font-family: var(--f-display);
+    font-size: 34px;
+    font-weight: 300;
+    letter-spacing: -0.01em;
+    fill: var(--corona);
+    text-anchor: middle;
+  }
+
+  .clock__status {
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    fill: var(--graphite);
+    text-anchor: middle;
+  }
+
+  :global(.is-paused) .clock__halo {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .clock__halo {
+      animation: none;
+    }
+  }
+</style>

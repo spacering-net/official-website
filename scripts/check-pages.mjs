@@ -1,7 +1,8 @@
-// The pages beside the homepage (Harness, the policies): the shared HUD, menu
-// and account dialog, what stays in view while scrolling, Harness's in-place
-// browsing, the edges they share, the light theme and the prompts' gallery,
-// all without a page error or a refused script.
+// The pages beside the homepage (Harness, the policies; Space, the assistant
+// and open source): the shared HUD, menu and account dialog, what stays in
+// view while scrolling, Harness's in-place browsing, the edges they share, the
+// light theme, the prompts' gallery and the product pages' drawings and
+// previews, all without a page error or a refused script.
 // Usage: node scripts/check-pages.mjs [baseUrl]
 import { chromium } from 'playwright';
 
@@ -47,7 +48,7 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
   }));
   report(hud.page && hud.current === '/zh/harness/' && hud.dot, 'HUD on the page, Harness current, rail resting on it', JSON.stringify(hud.current));
   report(hud.lang === '/harness/?q=pdf' && !hud.topLang, 'language switch (in the foot) leads to the twin page with its query', `${hud.lang} top:${hud.topLang}`);
-  report(hud.menuLinks === '/zh/#space /zh/#assistant /zh/harness/ /zh/#relay /zh/#signet /zh/#codeg', 'menu leads to pages and the homepage chapters', hud.menuLinks);
+  report(hud.menuLinks === '/zh/space/ /zh/assistant/ /zh/harness/ /zh/#relay /zh/#signet /zh/#codeg', 'menu leads to pages and the homepage chapters', hud.menuLinks);
   await page.click('.hud [data-menu-open]');
   await page.waitForTimeout(900);
   const opened = await page.evaluate(() => [document.querySelector('.orbit-menu')?.classList.contains('is-open'), document.documentElement.classList.contains('is-locked')]);
@@ -602,6 +603,94 @@ for (const [path, lang] of [
     JSON.stringify({ ...one, text: one.text?.length, copied: fromPage.length }),
   );
   report(!errors.length, 'prompts: no errors', errors.join(' | '));
+  await ctx.close();
+}
+
+// 10. Space, the assistant and open source: in the frame, with their HUD link
+// current; a preview below the fold fills in as it scrolls into view (one
+// already in view is simply there); the hero's drawing waits while it is off
+// screen; "Get your ring" opens signing in; the closing still stays night in
+// the light theme; nothing is wider than a phone; and reduced motion holds
+// every drawing still.
+for (const [path, twin] of [
+  ['/space/', '/zh/space/'],
+  ['/zh/assistant/', '/assistant/'],
+  ['/open-source/', '/zh/open-source/'],
+]) {
+  const { ctx, page, errors } = await open(path);
+  const seen = await page.evaluate(() => ({
+    current: document.querySelector('.nav__link[aria-current="page"]')?.getAttribute('href'),
+    dot: document.querySelector('.nav__dot')?.classList.contains('is-on'),
+    twin: document.querySelector('.page-foot [data-lang-switch]')?.getAttribute('href'),
+    h1: document.querySelector('main h1')?.textContent?.trim(),
+    art: !!document.querySelector('.lead__art svg'),
+  }));
+  report(seen.current === path && seen.dot && seen.twin === twin && !!seen.h1 && seen.art, `${path}: in the frame, its HUD link current, its drawing there`, JSON.stringify(seen));
+
+  const preview = await page.evaluate(() => {
+    const el = document.querySelector('[data-reveal]');
+    if (!el) return null;
+    const rows = [...el.querySelectorAll('[data-arrive]')];
+    return { inView: el.getBoundingClientRect().top < innerHeight, waiting: el.classList.contains('is-waiting'), hidden: rows.filter((r) => getComputedStyle(r).opacity === '0').length, rows: rows.length };
+  });
+  if (preview) {
+    await page.locator('[data-reveal]').scrollIntoViewIfNeeded();
+    await page.waitForTimeout(2000);
+    const shown = await page.evaluate(() => [...document.querySelectorAll('[data-reveal] [data-arrive]')].every((r) => getComputedStyle(r).opacity === '1'));
+    const before = preview.inView ? !preview.waiting && preview.hidden === 0 : preview.waiting && preview.hidden === preview.rows;
+    report(before && shown, `${path}: the preview ${preview.inView ? 'is there from the start' : 'fills in as it scrolls into view'}`, JSON.stringify({ ...preview, shown }));
+  }
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(500);
+  const away = await page.evaluate(() => {
+    const art = document.querySelector('[data-art]');
+    const svg = art?.querySelector('svg[data-smil]');
+    const closing = document.querySelector('.closing__art');
+    return { paused: art?.classList.contains('is-paused'), smil: svg ? svg.animationsPaused() : null, closing: closing?.complete && closing.naturalWidth > 0 };
+  });
+  report(away.paused && away.smil !== false && away.closing, `${path}: the drawing waits off screen; the closing ring is there`, JSON.stringify(away));
+
+  const claim = page.locator('main .lead [data-account-card]');
+  if (await claim.count()) {
+    await claim.click();
+    await page.waitForTimeout(400);
+    const dialog = await page.evaluate(() => ({ open: document.querySelector('[data-account-dialog]')?.open, out: !document.querySelector('[data-account-view="out"]')?.hidden }));
+    await page.keyboard.press('Escape');
+    report(dialog.open && dialog.out, `${path}: "Get your ring" opens signing in`, JSON.stringify(dialog));
+  }
+
+  await page.evaluate(() => localStorage.setItem('sr-theme', 'light'));
+  await page.reload({ waitUntil: 'networkidle' });
+  const light = await page.evaluate(() => ({
+    theme: document.documentElement.dataset.theme,
+    page: getComputedStyle(document.body).backgroundColor,
+    closing: getComputedStyle(document.querySelector('.closing')).backgroundColor,
+    words: getComputedStyle(document.querySelector('.closing__title')).color,
+  }));
+  report(light.theme === 'light' && light.closing === 'rgb(5, 5, 7)' && light.words === 'rgb(236, 234, 244)', `${path}: light, the closing still night`, JSON.stringify(light));
+  report(!errors.length, `${path}: no errors`, errors.join(' | '));
+  await ctx.close();
+
+  const phone = await open(path, { phone: true });
+  const wide = await phone.page.evaluate(() => ({ page: document.documentElement.scrollWidth, screen: innerWidth }));
+  report(wide.page <= wide.screen && !phone.errors.length, `${path}: nothing wider than a phone`, JSON.stringify(wide));
+  await phone.ctx.close();
+}
+{
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
+  const page = await ctx.newPage();
+  const still = [];
+  for (const path of ['/space/', '/assistant/', '/open-source/']) {
+    await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
+    still.push(
+      await page.evaluate(() => {
+        const moving = [...document.querySelectorAll('.lead__art *')].filter((el) => getComputedStyle(el).animationName !== 'none').length;
+        const svg = document.querySelector('.lead__art svg[data-smil]');
+        return { moving, smil: svg ? svg.animationsPaused() : 'none' };
+      }),
+    );
+  }
+  report(still.every((s) => s.moving === 0 && s.smil !== false), 'reduced motion: every drawing holds still', JSON.stringify(still));
   await ctx.close();
 }
 

@@ -1,0 +1,139 @@
+---
+/**
+ * Space's concept preview: one search, answered from every kind of asset.
+ * The sample is the homepage projection's (the Iceland trip), at full size.
+ */
+import type { Dict } from '../../i18n';
+
+interface Props {
+  t: Dict;
+  /** "4 results" */
+  results: (n: number) => string;
+}
+const { t, results } = Astro.props;
+const h = t.space.holo;
+const total = h.usage.reduce((sum, u) => sum + u.share, 0);
+---
+<div class="concept search" data-reveal aria-hidden="true">
+  <span class="concept__tag">{t.status.preview}</span>
+  <div class="concept__bar">
+    <span>{h.label}</span>
+    <span class="search__lock">{h.encrypted}</span>
+  </div>
+  <p class="search__query">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6.8" cy="6.8" r="4.6"></circle><path d="M10.3 10.3L14 14"></path></svg>
+    <span class="search__typed">{h.query}<span class="caret"></span></span>
+    <span class="concept__label">{results(h.hits.length)}</span>
+  </p>
+  <ul>
+    {h.hits.map((hit, i) => (
+      <li class:list={['concept__row', 'search__hit', i === h.hits.length - 1 && 'search__hit--memory']} data-arrive style={`--i:${i}`}>
+        <span class="concept__label">{hit.kind}</span>
+        <span class="search__name">{hit.name}</span>
+        <span class="search__from">{hit.from}</span>
+      </li>
+    ))}
+  </ul>
+  <div class="concept__foot search__usage">
+    <span class="search__bar">{h.usage.map((u, i) => <i style={`flex:${(u.share / total).toFixed(3)};--o:${(1 - i * 0.17).toFixed(2)}`}></i>)}</span>
+    <span class="search__legend">{h.usage.map((u) => <span><b>{u.value}</b> {u.label}</span>)}</span>
+  </div>
+</div>
+
+<style>
+  .search__lock::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-right: 7px;
+    vertical-align: 1px;
+    border-radius: 50%;
+    background: var(--ion);
+    box-shadow: 0 0 6px rgb(var(--ion-rgb) / 0.6);
+  }
+
+  .search__query {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-4) var(--s-5);
+    border-bottom: 1px solid var(--hairline);
+    font-size: 15px;
+    color: var(--corona);
+  }
+
+  .search__query svg {
+    width: 15px;
+    height: 15px;
+    flex: none;
+    color: var(--bead);
+  }
+
+  .search__typed {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .search__hit {
+    grid-template-columns: 7ch minmax(0, 1fr) auto;
+  }
+
+  .search__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--corona);
+  }
+
+  .search__from {
+    font-size: 11px;
+    white-space: nowrap;
+    color: var(--graphite);
+  }
+
+  /* the asset only your ring holds: what your assistant has learned */
+  .search__hit--memory .concept__label {
+    color: var(--bead);
+  }
+
+  .search__usage {
+    display: grid;
+    justify-content: stretch;
+    gap: var(--s-3);
+  }
+
+  .search__bar {
+    display: flex;
+    gap: 2px;
+    height: 3px;
+  }
+
+  .search__bar i {
+    background: var(--bead);
+    opacity: var(--o);
+  }
+
+  .search__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px var(--s-5);
+    letter-spacing: 0.08em;
+  }
+
+  .search__legend b {
+    font-weight: 400;
+    color: var(--corona-80);
+  }
+
+  @media (max-width: 520px) {
+    .search__hit {
+      grid-template-columns: 6ch minmax(0, 1fr);
+    }
+
+    .search__from {
+      grid-column: 2;
+      margin-top: -8px;
+    }
+  }
+</style>

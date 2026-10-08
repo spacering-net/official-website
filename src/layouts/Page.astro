@@ -1,9 +1,10 @@
 ---
 /**
- * Every page but the homepage: Harness, the policies, and the product pages
- * to come. The same HUD, orbit menu and account dialog as the homepage, around
- * the page's own content, with no scene and no intro. Each page has a twin in
- * the other language.
+ * Every page but the homepage: Harness; Space, the assistant and open source
+ * (layouts/Product.astro); the policies and the ring cards. The same HUD,
+ * orbit menu and account dialog as the homepage, around the page's own
+ * content, with no scene and no intro. Each page has a twin in the other
+ * language.
  */
 import '@fontsource-variable/jost';
 import '@fontsource/ibm-plex-mono/400.css';
@@ -16,7 +17,7 @@ import SiteFooter from '../components/SiteFooter.astro';
 // a file of its own, never inlined: these pages allow scripts from this site only
 import themeScript from '../client/theme.js?url&no-inline';
 import { SITE } from '../config';
-import { dicts, PRODUCT_PAGES, type Lang } from '../i18n';
+import { dicts, PAGES, type Lang } from '../i18n';
 
 interface Props {
   lang: Lang;
@@ -26,8 +27,8 @@ interface Props {
   paths: Record<Lang, string>;
   /** search results and later pages are not for search engines */
   noindex?: boolean;
-  /** the product these pages belong to: its link in the HUD is marked */
-  current?: keyof typeof PRODUCT_PAGES;
+  /** the page of the HUD's this is or belongs to: its link is marked */
+  current?: keyof typeof PAGES;
   /** the picture for link previews, when the page has its own (a ring card); else the site's */
   image?: { url: string; width: number; height: number; alt: string };
 }
@@ -72,8 +73,8 @@ const skip = lang === 'en' ? 'Skip to content' : '跳到正文';
       @view-transition { navigation: auto; }
       ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.28s; }
     </style>
-    {/* without scripts the menu and the account dialog cannot open; the HUD's links still work */}
-    <noscript><style>[data-menu-open], [data-account-open], [data-account-card] { display: none; }</style></noscript>
+    {/* without scripts the menu and the account dialog cannot open, so their buttons go (over the buttons' own display); the HUD's links still work */}
+    <noscript><style>[data-menu-open], [data-account-open], [data-account-card] { display: none !important; }</style></noscript>
     <slot name="head" />
   </head>
   <body>

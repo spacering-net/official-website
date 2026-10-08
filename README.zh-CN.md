@@ -27,6 +27,7 @@ Harness 的导入按计划任务运行。本地手动触发（队列在开发服
 | --- | --- |
 | 中英文案、产品名、示例助手的名字 | `src/i18n/index.ts` |
 | 各幕的投影示意 | `src/components/holo/` |
+| 空间、助手与开源三个页面：文案、配图与概念预览、共用的版块 | `src/i18n/pages.ts`、`src/components/product/`、`src/layouts/Product.astro` 和 `src/styles/product.css`；`src/client/product.ts` 负责概念预览的展开，以及配图移出屏幕时暂停 |
 | 仓库、文档地址，统计兜底值 | `src/config.ts` |
 | 色板、字号、间距 | `src/styles/site.css` 顶部变量 |
 | 戒指尺寸、材质与戒身脉络 | `src/client/scene/ring.ts` |
@@ -40,7 +41,7 @@ Harness 的导入按计划任务运行。本地手动触发（队列在开发服
 | 首页以外所有页面的外壳（HUD、菜单、登录、页脚；同一栏宽，`--page-max`） | `src/layouts/Page.astro`、`src/client/page.ts` |
 | 首页以外页面的深浅色（首页始终是深色）：浅色色板、切换按钮、首帧前套用所选外观 | `src/styles/site.css` 里的 `:root[data-theme='light']`、`src/components/ThemeSwitch.astro`、`src/client/theme.js` |
 | 发布者头像（GitHub 头像、网站图标；存在 R2，每日任务每 30 天重新查找一次） | `api/harness/importers/avatars.ts`、`src/components/harness/Avatar.astro` |
-| 有独立页面的产品（HUD 直接链接过去；其余仍是首页的章节） | `src/i18n/index.ts` 里的 `PRODUCT_PAGES` |
+| HUD 链接的页面（空间、助手、Harness、开源；「戒指」回到首页），空间、助手和 Harness 的首页章节末尾也有按钮通往各自的页面。菜单里没有页面的产品仍是首页的章节 | `src/i18n/index.ts` 里的 `PAGES` |
 | 404 页，分语言（`404.html`、`zh/404.html`；Harness 里不存在的地址也用它） | `src/components/NotFound.astro`、`src/pages/404.astro`、`src/pages/zh/404.astro` |
 | 戒身内壁的刻字 | `src/client/scene/ring.ts` 的 `inscribe()`，`src/client/account.ts` |
 | 戒指卡片的画面：账号对话框的预览、卡片页面和卡片图片共用同一份 SVG | `src/lib/ring-card.ts` |
@@ -62,12 +63,12 @@ Harness 规则检查的具体规则放在数据库里，不在本仓库。新建
 ```bash
 pnpm qa:shots   # 开场与各幕截图（桌面）
 pnpm qa:modes   # 无 WebGL、减少动态效果、键盘焦点
-pnpm qa:nav     # 深链接、焦点、刻度盘、顶部导航高亮、语言切换
+pnpm qa:nav     # 深链接、焦点、刻度盘、顶部导航高亮，它和章节按钮打开的页面，语言切换
 pnpm qa:jump    # 跨幕跳转只投射起点和终点
 pnpm qa:switch  # 语言切换接力：同一幕、不重播开场、画面不闪
 pnpm qa:menu    # 矮屏菜单可滚动、背景锁定、Esc 与焦点归还；展开时场景暂停、不用实时模糊
 pnpm qa:fit     # 各尺寸下面板是否完整落在 HUD 与屏幕底边之间
-pnpm qa:pages   # 首页以外的页面：共用的 HUD、菜单与登录，滚动时吸顶的部分，Harness 的页内搜索与筛选，对齐的边线，浅色模式
+pnpm qa:pages   # 首页以外的页面：共用的 HUD、菜单与登录，滚动时吸顶的部分，Harness 的页内搜索与筛选，对齐的边线，浅色模式，产品页的配图与概念预览
 pnpm qa:perf    # 帧时间（1 倍与 2 倍像素比）
 pnpm og         # 重新生成分享图，之后转成 public/og.jpg 与 og-zh.jpg
 ```

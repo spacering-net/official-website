@@ -22,9 +22,9 @@ await page.click('.hud .brand');
 await page.waitForTimeout(2600);
 console.log('home link →', await page.evaluate(() => ({ chapter: document.documentElement.dataset.chapter, hash: location.hash || '(none)' })));
 
-// 2. click "Open the ring" from the hero: focus lands on the Space heading. Planned
-// chapters hold no links, so Tab goes on to the next link (Enter Harness) and the
-// projection follows it there.
+// 2. click "Open the ring" from the hero: focus lands on the Space heading, and Tab
+// goes on to the chapter's own button (See the plan), the projection staying on
+// Space.
 await page.goto(`${base}/`, { waitUntil: 'load' });
 await page.waitForTimeout(5200);
 await page.click('.hero .btn--primary');
@@ -49,30 +49,41 @@ await page.waitForTimeout(2800);
 console.log('roadmap → harness:', await page.evaluate(() => ({ chapter: document.documentElement.dataset.chapter, focus: document.activeElement?.id })));
 
 // 4. HUD nav: Space, Assistant and Harness light on their own chapters, Ring on the
-// hero and the ring's other products, Open source on Codeg and the finale. Each link lands
-// on its own chapter (Open source on the finale, not on Codeg); Ring leaves a
-// clean address. Harness leads to the marketplace instead, as does its chapter's button.
+// hero and the ring's other products, Open source on Codeg and the finale. Only
+// Ring stays on this page (back to the top, a clean address); Space, Assistant,
+// Harness and Open source open their own pages, the projections left alone, and
+// there their own link is the current one. The chapters of Space, the assistant
+// and Harness end with a button to the same pages.
 const lit = [];
 for (let i = 0; i <= lastIndex; i++) {
   await page.click(`.dial__item[data-goto="${i}"]`, { force: true });
   await page.waitForTimeout(2600);
   lit.push(await page.evaluate(() => document.querySelector('.nav__link[aria-current="true"]')?.getAttribute('href') ?? '-'));
 }
-const lands = [];
-for (const href of ['#space', '#assistant', '#open-source', '#top']) {
-  await page.click(`.nav__link[href="${href}"]`);
-  await page.waitForTimeout(2800);
-  lands.push(await page.evaluate(() => `${document.documentElement.dataset.chapter}${location.hash}`));
-}
+const gotos = await page.evaluate(() => [...document.querySelectorAll('.nav__link')].map((a) => a.dataset.goto ?? '-').join());
+await page.click('.nav__link[href="#top"]');
+await page.waitForTimeout(2800);
+const top = await page.evaluate(() => `${document.documentElement.dataset.chapter}${location.hash}`);
 const market = await page.evaluate(() => [
   document.querySelector('.nav__link[data-range="3"]')?.getAttribute('href'),
-  document.querySelector('#harness .projection__actions a')?.getAttribute('href'),
+  ...['space', 'assistant', 'harness'].map((id) => document.querySelector(`#${id} .projection__actions a`)?.getAttribute('href')),
 ]);
+const opened = [];
+for (const href of ['/space/', '/assistant/', '/open-source/']) {
+  await page.click(`.nav__link[href="${href}"]`);
+  await page.waitForURL(`**${href}`, { timeout: 8000 }).catch(() => {});
+  await page.waitForLoadState('load');
+  opened.push(await page.evaluate(() => `${location.pathname}${location.hash}=${document.querySelector('.nav__link[aria-current="page"]')?.getAttribute('href')}`));
+  await page.goto(`${base}/`, { waitUntil: 'load' });
+  await page.waitForTimeout(3200);
+}
 const navOk =
-  lit.join() === '#top,#space,#assistant,/harness/,#top,#top,#open-source,#open-source' &&
-  lands.join() === '1#space,2#assistant,7#open-source,0' &&
-  market.join() === '/harness/,/harness/';
-console.log('nav lit per chapter:', lit.join(' '), '| links land on', lands.join(' '), '| market:', market.join(' '), navOk ? 'ok' : '✗ nav');
+  lit.join() === '#top,/space/,/assistant/,/harness/,#top,#top,/open-source/,/open-source/' &&
+  gotos === '0,-,-,-,-' &&
+  top === '0' &&
+  opened.join() === '/space/=/space/,/assistant/=/assistant/,/open-source/=/open-source/' &&
+  market.join() === '/harness/,/space/,/assistant/,/harness/';
+console.log('nav lit per chapter:', lit.join(' '), '| goto:', gotos, '| ring →', top, '| pages:', opened.join(' '), '| market:', market.join(' '), navOk ? 'ok' : '✗ nav');
 
 // 5. language switch: remembers the choice, cross-fades, and lands on the same
 // chapter already projected, without replaying the intro

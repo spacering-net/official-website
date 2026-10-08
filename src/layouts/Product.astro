@@ -1,0 +1,40 @@
+---
+/**
+ * The pages the HUD opens besides Harness: Space, the personal assistant and
+ * open source, in the site's frame (layouts/Page.astro). Built ahead of time,
+ * one per language. client/product.ts fills in the concept previews as they
+ * scroll into view and keeps the hero's drawing still while it is out of it.
+ */
+import Page from './Page.astro';
+import '../styles/product.css';
+import type { Lang, PAGES } from '../i18n';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  /** this page in each language */
+  paths: Record<Lang, string>;
+  /** the HUD's link to this page */
+  current: keyof typeof PAGES;
+}
+const { lang, title, description, paths, current } = Astro.props;
+---
+<Page lang={lang} title={title} description={description} paths={paths} current={current}>
+  <div class="product">
+    <slot />
+  </div>
+  <script>
+    import '../client/product';
+  </script>
+</Page>
+
+<style>
+  /* the column of the frame; the footer's own margin follows the last section */
+  .product {
+    width: 100%;
+    max-width: var(--page-max);
+    margin-inline: auto;
+    padding-inline: var(--edge);
+  }
+</style>

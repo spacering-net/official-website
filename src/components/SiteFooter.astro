@@ -1,9 +1,13 @@
 ---
-/** The foot of every page but the homepage (whose finale has its own). */
+/**
+ * The foot of every page but the homepage (whose finale has its own): the
+ * HUD's pages, which narrow screens reach from here, then Codeg's docs and
+ * GitHub.
+ */
 import Logo from './Logo.astro';
 import FootLine from './FootLine.astro';
 import { SITE } from '../config';
-import { PRODUCT_PAGES, type Dict } from '../i18n';
+import { PAGES, type Dict } from '../i18n';
 
 interface Props {
   t: Dict;
@@ -13,6 +17,12 @@ interface Props {
 const { t, alternate } = Astro.props;
 const docs = t.menu.external[0];
 const github = t.menu.external[1];
+const pages = [
+  { name: t.nav.space, href: `${t.path}${PAGES.space}` },
+  { name: t.nav.assistant, href: `${t.path}${PAGES.assistant}` },
+  { name: 'Harness', href: `${t.path}${PAGES.harness}` },
+  { name: t.nav.openSource, href: `${t.path}${PAGES['open-source']}` },
+];
 ---
 <footer class="page-foot">
   <div class="page-foot__inner">
@@ -22,7 +32,7 @@ const github = t.menu.external[1];
         <span class="brand__word" aria-hidden="true">SpaceRing</span>
       </a>
       <nav class="page-foot__links" aria-label={t.menu.destinations}>
-        <a href={`${t.path}${PRODUCT_PAGES.harness}`}>Harness</a>
+        {pages.map((p) => <a href={p.href}>{p.name}</a>)}
         <a href={SITE.codeg.docs} target="_blank" rel="noopener">{docs.name} <span aria-hidden="true">↗</span></a>
         <a href={SITE.orgUrl} target="_blank" rel="noopener">{github.name} <span aria-hidden="true">↗</span></a>
       </nav>

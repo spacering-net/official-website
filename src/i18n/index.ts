@@ -103,6 +103,8 @@ export interface Dict {
   /** The example assistant that turns up in every hologram. Users name their own. */
   assistantName: string;
   space: Chapter & {
+    /** the chapter's button to the product's page */
+    actions: { plan: string };
     holo: {
       label: string;
       encrypted: string;
@@ -112,6 +114,7 @@ export interface Dict {
     };
   };
   assistant: Chapter & {
+    actions: { plan: string };
     holo: {
       role: string;
       online: string;
@@ -278,6 +281,7 @@ const en: Dict = {
     title: 'Space',
     kicker: 'Bigger on the inside.',
     body: 'The room inside your ring. Files, photos, notes, links and your assistant’s memory live together, encrypted, and one search reaches all of it. Whatever already sits in other drives and apps can move in too.',
+    actions: { plan: 'See the plan' },
     holo: {
       label: 'space · 248.6 GB',
       encrypted: 'encrypted',
@@ -302,6 +306,7 @@ const en: Dict = {
     title: 'Personal assistant',
     kicker: 'Always on, and only yours.',
     body: 'Give it a name and a goal. While you are away it keeps working on its own cloud machine, looks things up in your Space, and asks before anything sensitive. What it remembers stays in your ring.',
+    actions: { plan: 'See the plan' },
     holo: {
       role: 'your assistant',
       online: 'online · 3 tasks',
@@ -520,6 +525,7 @@ const zh: Dict = {
     title: '空间',
     kicker: '方寸之间，自有乾坤。',
     body: '戒指里的那方天地。文件、照片、笔记、收藏，连同助手对你的记忆，都加密存放在一起，一次搜索就能找到。散落在网盘和各个应用里的东西，也能一并收进来。',
+    actions: { plan: '查看规划' },
     holo: {
       label: '空间 · 248.6 GB',
       encrypted: '已加密',
@@ -544,6 +550,7 @@ const zh: Dict = {
     title: '个人助手',
     kicker: '全天候在线，只属于你。',
     body: '给它起个名字，交代一个目标。你不在的时候，它在自己的云端机器上继续工作，需要时翻阅你的空间，遇到敏感操作先征求你的同意。它记住的一切，都留在你的戒指里。',
+    actions: { plan: '查看规划' },
     holo: {
       role: '你的助手',
       online: '在线 · 3 项任务',
@@ -680,8 +687,11 @@ export const dicts: Record<Lang, Dict> = { en, zh };
 export const CHAPTER_IDS = ['top', 'space', 'assistant', 'harness', 'relay', 'signet', 'codeg', 'open-source'] as const;
 
 /**
- * Products with pages of their own, under each language's path. The HUD links
- * to them from every page; the others are chapters of the homepage until they
- * ship.
+ * The HUD's destinations with pages of their own, under each language's path:
+ * Space and the personal assistant (planned: their pages say what is planned),
+ * Harness, and open source. The HUD links to them from every page, the
+ * homepage's included, and the products' homepage chapters end with a button
+ * to theirs; the menu's other products are chapters of the homepage until
+ * they have pages.
  */
-export const PRODUCT_PAGES = { harness: 'harness/' } as const;
+export const PAGES = { space: 'space/', assistant: 'assistant/', harness: 'harness/', 'open-source': 'open-source/' } as const;

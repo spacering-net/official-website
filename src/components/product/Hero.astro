@@ -1,0 +1,126 @@
+---
+/**
+ * The top of a product page: what it is and where it stands on one side, its
+ * drawing on the other (under the words on narrow screens). The drawing is
+ * decoration; everything it says is in the words around it.
+ */
+interface Props {
+  title: string;
+  kicker?: string;
+  lede: string;
+}
+const { title, kicker, lede } = Astro.props;
+---
+<section class="lead">
+  <div class="lead__text">
+    <p class="lead__meta mono"><slot name="meta" /></p>
+    <h1>{title}</h1>
+    {kicker && <p class="lead__kicker">{kicker}</p>}
+    <p class="lead__lede">{lede}</p>
+    <div class="lead__actions"><slot name="actions" /></div>
+  </div>
+  <div class="lead__art" data-art aria-hidden="true">
+    <slot name="art" />
+  </div>
+</section>
+
+<style>
+  .lead {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: center;
+    gap: var(--s-6) var(--s-7);
+    padding-top: var(--s-5);
+  }
+
+  .lead__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-5);
+    color: var(--graphite);
+  }
+
+  h1 {
+    margin-top: var(--s-5);
+    font-size: clamp(44px, 6vw, 76px);
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  html:lang(zh-CN) h1 {
+    letter-spacing: -0.01em;
+  }
+
+  .lead__kicker {
+    margin-top: var(--s-5);
+    font-size: clamp(19px, 1.7vw, 24px);
+    line-height: 1.4;
+    color: var(--corona);
+  }
+
+  .lead__lede {
+    max-width: 34rem;
+    margin-top: var(--s-3);
+    font-size: 17px;
+    color: var(--corona-64);
+    text-wrap: pretty;
+  }
+
+  .lead__kicker + .lead__lede {
+    margin-top: var(--s-3);
+  }
+
+  h1 + .lead__lede {
+    margin-top: var(--s-5);
+  }
+
+  .lead__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-3);
+    margin-top: var(--s-6);
+  }
+
+  .lead__actions:empty {
+    display: none;
+  }
+
+  /* the drawing: as wide as its column, up to a size that leaves the next section in view */
+  .lead__art {
+    position: relative;
+    justify-self: center;
+    width: min(100%, 38rem, 62svh);
+  }
+
+  .lead__art :global(svg) {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  @media (max-width: 860px) {
+    .lead {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-6);
+    }
+
+    .lead__art {
+      width: min(100%, 34rem);
+      margin-inline: auto;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .lead {
+      padding-top: var(--s-4);
+    }
+
+    .lead__lede {
+      font-size: 16px;
+    }
+  }
+</style>

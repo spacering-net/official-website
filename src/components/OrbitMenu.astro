@@ -2,7 +2,7 @@
 import Logo from './Logo.astro';
 import AccountButton from './AccountButton.astro';
 import FootLine from './FootLine.astro';
-import { CHAPTER_IDS, PRODUCT_PAGES, type Dict } from '../i18n';
+import { CHAPTER_IDS, PAGES, type Dict } from '../i18n';
 import { SITE } from '../config';
 import { MARK_BAND, MARK_CRESCENT } from './mark';
 
@@ -17,7 +17,7 @@ interface Props {
 const { t, page } = Astro.props;
 const destination = (key: string) => {
   if (!page) return `#${key}`;
-  const own = PRODUCT_PAGES[key as keyof typeof PRODUCT_PAGES];
+  const own = PAGES[key as keyof typeof PAGES];
   return own ? `${t.path}${own}` : `${t.path}#${key}`;
 };
 const COS30 = Math.cos(Math.PI / 6);

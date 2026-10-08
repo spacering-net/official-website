@@ -13,7 +13,7 @@ import HarnessHolo from './holo/HarnessHolo.astro';
 import RelayHolo from './holo/RelayHolo.astro';
 import SignetHolo from './holo/SignetHolo.astro';
 import CodegHolo from './holo/CodegHolo.astro';
-import { dicts, CHAPTER_IDS, type Lang } from '../i18n';
+import { dicts, CHAPTER_IDS, PAGES, type Lang } from '../i18n';
 import { SITE, repoUrl, releasesUrl } from '../config';
 import { getCodegStats, compact } from '../lib/github';
 
@@ -28,14 +28,17 @@ const at = (id: string) => CHAPTER_IDS.indexOf(id as (typeof CHAPTER_IDS)[number
 const finale = CHAPTER_IDS.length - 1;
 
 // The ring's products in scroll order, each with its status from the menu. Panels
-// alternate sides so the ring always has room.
+// alternate sides so the ring always has room. Those with a page of their own
+// end with a button to it: Harness's into the marketplace, the planned ones' to
+// their plans.
 const statusOf = (key: string) => t.menu.items.find((item) => item.key === key)?.status ?? 'planned';
+const toPage = (key: keyof typeof PAGES, label: string, primary = false) => ({ href: `${t.path}${PAGES[key]}`, label, primary });
 const products = [
-  { key: 'space', side: 'right', copy: t.space, Holo: SpaceHolo },
-  { key: 'assistant', side: 'left', copy: t.assistant, Holo: AssistantHolo },
-  { key: 'harness', side: 'right', copy: t.harness, Holo: HarnessHolo },
-  { key: 'relay', side: 'left', copy: t.relay, Holo: RelayHolo },
-  { key: 'signet', side: 'right', copy: t.signet, Holo: SignetHolo },
+  { key: 'space', side: 'right', copy: t.space, Holo: SpaceHolo, action: toPage('space', t.space.actions.plan) },
+  { key: 'assistant', side: 'left', copy: t.assistant, Holo: AssistantHolo, action: toPage('assistant', t.assistant.actions.plan) },
+  { key: 'harness', side: 'right', copy: t.harness, Holo: HarnessHolo, action: toPage('harness', t.harness.actions.enter, true) },
+  { key: 'relay', side: 'left', copy: t.relay, Holo: RelayHolo, action: null },
+  { key: 'signet', side: 'right', copy: t.signet, Holo: SignetHolo, action: null },
 ] as const;
 
 // The finale's roadmap: what has shipped first, then the rest in page order.
@@ -80,7 +83,7 @@ const isLong = (title: string) => title.length > 10;
         </div>
       </section>
 
-      {products.map(({ key, side, copy, Holo }) => (
+      {products.map(({ key, side, copy, Holo, action }) => (
         <section class="chapter" id={key} data-chapter={at(key)} data-side={side} aria-labelledby={`${key}-title`}>
           <article class="projection" data-projection>
             <div class="projection__edge" aria-hidden="true"></div>
@@ -96,9 +99,9 @@ const isLong = (title: string) => title.length > 10;
               <p class="projection__kicker">{copy.kicker}</p>
               <p class="projection__text">{copy.body}</p>
               <Holo t={t} />
-              {key === 'harness' && (
+              {action && (
                 <div class="projection__actions">
-                  <a class="btn btn--primary" href={`${t.path}harness/`}>{t.harness.actions.enter}<Icon name="arrow" /></a>
+                  <a class:list={['btn', action.primary ? 'btn--primary' : 'btn--ghost']} href={action.href}>{action.label}<Icon name="arrow" /></a>
                 </div>
               )}
             </div>

@@ -1,29 +1,30 @@
 ---
 import Logo from './Logo.astro';
 import AccountButton from './AccountButton.astro';
-import { CHAPTER_IDS, PRODUCT_PAGES, type Dict } from '../i18n';
+import { CHAPTER_IDS, PAGES, type Dict } from '../i18n';
 
 interface Props {
   t: Dict;
   /**
-   * Any page but the homepage, and the product whose pages these are (its
-   * link is marked as the current page). Links then lead to the homepage's
-   * chapters instead of scrolling to them.
+   * Any page but the homepage, and the page of PAGES this is or belongs to
+   * (its link is marked as the current page). The ring's link then leads to
+   * the homepage instead of scrolling to its top.
    */
-  page?: { current?: keyof typeof PRODUCT_PAGES };
+  page?: { current?: keyof typeof PAGES };
 }
 const { t, page } = Astro.props;
-// Each link lights the rail while any chapter in its range is projected. Space,
-// the assistant and Harness have links of their own (a product with pages of
-// its own opens them); the ring covers the hero and the rest of its products;
-// open source covers Codeg and the finale, and leads to the finale.
+// Space, the assistant, Harness and open source open their pages (PAGES); the
+// ring opens the homepage, at its top. On the homepage each link also lights
+// the rail while any chapter in its range is projected: Space, the assistant
+// and Harness their own chapters; the ring the hero and the rest of its
+// products; open source Codeg and the finale.
 const own = (['space', 'assistant', 'harness'] as const).map((key) => ({ key, at: CHAPTER_IDS.indexOf(key) }));
 const codeg = CHAPTER_IDS.indexOf('codeg');
 const last = CHAPTER_IDS.length - 1;
 const ring = [...Array(codeg).keys()].filter((i) => !own.some((p) => p.at === i)).join(',');
-/** where a link goes: a product's own pages, a chapter on this page, or a chapter on the homepage */
+/** where a link goes: a page of its own, or the homepage's top (scrolled to, on the homepage) */
 const link = (key: string, at: number) => {
-  const own = PRODUCT_PAGES[key as keyof typeof PRODUCT_PAGES];
+  const own = PAGES[key as keyof typeof PAGES];
   if (own) return { href: `${t.path}${own}`, current: page?.current === key ? 'page' : undefined };
   if (page) return { href: at === 0 ? t.path : `${t.path}#${key}` };
   return { href: `#${key}`, goto: at };

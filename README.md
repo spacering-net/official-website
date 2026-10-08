@@ -27,6 +27,7 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | --- | --- |
 | Copy in both languages, product names, the sample assistant's name | `src/i18n/index.ts` |
 | The projected previews in each chapter | `src/components/holo/` |
+| The pages of Space, the assistant and open source: their copy, their drawings and previews, the sections they share | `src/i18n/pages.ts`, `src/components/product/`, `src/layouts/Product.astro` and `src/styles/product.css`; `src/client/product.ts` fills in the previews and pauses the drawings off screen |
 | Repository and docs links, fallback stats | `src/config.ts` |
 | Palette, type sizes, spacing | the variables at the top of `src/styles/site.css` |
 | Ring size, materials and the veins on the band | `src/client/scene/ring.ts` |
@@ -40,7 +41,7 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | The frame of every page but the homepage (HUD, menu, sign-in, footer; one column, `--page-max`) | `src/layouts/Page.astro`, `src/client/page.ts` |
 | Light and dark on every page but the homepage (which stays dark): the light palette, the switch, the choice applied before the first paint | `:root[data-theme='light']` in `src/styles/site.css`, `src/components/ThemeSwitch.astro`, `src/client/theme.js` |
 | Publishers' pictures (GitHub avatars, sites' icons; kept in R2, looked for again every 30 days by the daily jobs) | `api/harness/importers/avatars.ts`, `src/components/harness/Avatar.astro` |
-| Products with pages of their own (the HUD links to them; the rest are homepage chapters) | `PRODUCT_PAGES` in `src/i18n/index.ts` |
+| The HUD's pages (Space, the assistant, Harness, open source; Ring opens the homepage); the homepage chapters of Space, the assistant and Harness end with a button to theirs. The menu's products without a page are homepage chapters | `PAGES` in `src/i18n/index.ts` |
 | The not-found page, per language (`404.html`, `zh/404.html`; also for Harness addresses with nothing behind them) | `src/components/NotFound.astro`, `src/pages/404.astro`, `src/pages/zh/404.astro` |
 | The engraving inside the band | `inscribe()` in `src/client/scene/ring.ts`, `src/client/account.ts` |
 | The ring card's drawing: one SVG for the account dialog's preview, the card's page and its picture | `src/lib/ring-card.ts` |
@@ -62,12 +63,12 @@ The scripts drive the local Chrome with Playwright. Run `pnpm build && pnpm prev
 ```bash
 pnpm qa:shots   # intro and chapter screenshots (desktop)
 pnpm qa:modes   # no WebGL, reduced motion, keyboard focus
-pnpm qa:nav     # deep links, focus, chapter dial, HUD nav highlight, language switch
+pnpm qa:nav     # deep links, focus, chapter dial, HUD nav highlight, the pages it and the chapters' buttons open, language switch
 pnpm qa:jump    # jumps across several chapters project only the start and end chapters
 pnpm qa:switch  # language switch hand-over: same chapter, no intro replay, no flash
 pnpm qa:menu    # menu on short screens: scrolls, locks the page, Esc and focus return; pauses the scene, no live blur
 pnpm qa:fit     # panels fit between the HUD and the bottom edge at every size
-pnpm qa:pages   # the other pages: shared HUD, menu and sign-in, what sticks while scrolling, Harness's in-place search and filters, shared edges, the light theme
+pnpm qa:pages   # the other pages: shared HUD, menu and sign-in, what sticks while scrolling, Harness's in-place search and filters, shared edges, the light theme, the product pages' drawings and previews
 pnpm qa:perf    # frame times at 1x and 2x pixel ratio
 pnpm og         # re-renders the share images; then convert them to public/og.jpg and og-zh.jpg
 ```

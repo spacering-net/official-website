@@ -1,0 +1,22 @@
+---
+/**
+ * A list run together with middle dots ("macOS · Windows · Linux"), set so a
+ * line breaks between its items and never inside one, each dot staying with
+ * the item before it. Text without dots is left as it is.
+ */
+interface Props {
+  text: string;
+}
+const parts = Astro.props.text.split(' · ');
+---
+{parts.length > 1 ? (
+  <span class="dots">{parts.map((part, i) => <>{i > 0 && ' '}<span>{i < parts.length - 1 ? `${part} ·` : part}</span></>)}</span>
+) : (
+  parts[0]
+)}
+
+<style>
+  .dots > span {
+    white-space: nowrap;
+  }
+</style>

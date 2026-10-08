@@ -1,0 +1,23 @@
+---
+/**
+ * "Get your ring": signs in, then shows the new ring's card; once signed in,
+ * it opens the card straight away (client/account.ts, as on a ring card's
+ * page). Without scripts it is hidden, as every account button is.
+ */
+import type { PagesDict } from '../../i18n/pages';
+
+interface Props {
+  p: PagesDict;
+}
+const { p } = Astro.props;
+---
+<button
+  class="btn btn--primary"
+  type="button"
+  aria-haspopup="dialog"
+  aria-controls="account-dialog"
+  data-account-card
+  data-label-out={p.planned.claim}
+  data-label-in={p.planned.mine}
+  data-label-owner={p.planned.mine}
+>{p.planned.claim}</button>

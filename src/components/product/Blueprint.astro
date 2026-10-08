@@ -1,0 +1,199 @@
+---
+/**
+ * Open source's drawing: the SpaceRing mark with its construction, as in
+ * logo/spacering-logo-construction.svg, drawn in as the page opens. The
+ * outlines first (the outer contour, the near rim's inner edge, the node,
+ * the far rim where it shows), then the axes and the outer surface, then the
+ * centres and the measures. Labels are the drawing's own symbols, the same
+ * in both languages.
+ *
+ * Coordinates are the mark's 512 canvas (components/mark.ts): the diagram's,
+ * less its (40, 44) margin.
+ */
+import { MARK_BAND, MARK_CRESCENT } from '../mark';
+
+interface Props {
+  caption: string;
+}
+const { caption } = Astro.props;
+
+/** an ellipse as four quarter arcs, so it can be drawn in by its length */
+const ellipse = (cx: number, cy: number, rx: number, ry: number, deg: number) => {
+  const t = (deg * Math.PI) / 180;
+  const pt = (a: number) => {
+    const x = rx * Math.cos(a);
+    const y = ry * Math.sin(a);
+    return `${+(cx + x * Math.cos(t) - y * Math.sin(t)).toFixed(2)} ${+(cy + x * Math.sin(t) + y * Math.cos(t)).toFixed(2)}`;
+  };
+  const q = [0, 1, 2, 3, 4].map((i) => pt((i * Math.PI) / 2));
+  return `M${q[0]}` + q.slice(1).map((p) => `A${rx} ${ry} ${deg} 0 1 ${p}`).join('');
+};
+
+const O = { x: 267.04, y: 236.65 };
+const O2 = { x: 255.86, y: 256.01 };
+const outlines = [
+  ellipse(O2.x, O2.y, 221.8, 192.09, 30), // outer contour, A = φ⁵u
+  ellipse(O.x, O.y, 172.89, 149.73, 30), // near rim, inner edge
+  'M107.82 170.54A172.89 149.73 30 0 1 319.55 145.71A172.89 149.73 30 0 1 403.91 341.49', // far rim, where it shows
+  ellipse(171, 403, 20, 10, 30), // the node, 2u × u
+];
+const ticks = [
+  [344.11, 85.16, 359.7, 94.16],
+  [334.11, 102.48, 349.7, 111.48],
+  [327.93, 113.18, 343.52, 122.18],
+  [311.75, 141.21, 327.34, 150.21],
+  [184.39, 361.81, 199.97, 370.81],
+  [174.39, 379.14, 189.97, 388.14],
+  [168.21, 389.84, 183.79, 398.84],
+  [158.21, 407.16, 173.79, 416.16],
+  [152.03, 417.86, 167.61, 426.86],
+];
+---
+<figure class="bp">
+  <svg viewBox="24 12 488 480">
+    <path class="bp__mark" fill-rule="evenodd" d={MARK_BAND}></path>
+    <path class="bp__mark" d={MARK_CRESCENT}></path>
+
+    <line class="bp__axis" x1="52.44" y1="112.75" x2="481.65" y2="360.55" style="--d:0.9s"></line>
+    <line class="bp__axis" x1="366.91" y1="63.68" x2="139.82" y2="457.01" stroke-dashoffset="11.19" style="--d:1s"></line>
+    <path class="bp__surface" d="M436.77 334.64A195.98 169.73 30 0 1 182.18 383.64A195.98 169.73 30 0 1 97.32 138.66" style="--d:1.1s"></path>
+    <path class="bp__axis" d="M247.37 430.15A195.98 169.73 30 0 1 109.3 350.44" stroke-dashoffset="13.49" style="--d:1.2s"></path>
+
+    {outlines.map((d, i) => <path class="bp__line" d={d} pathLength="1" style={`--d:${(0.15 + i * 0.18).toFixed(2)}s`}></path>)}
+
+    <g class="bp__notes" style="--d:1.5s">
+      {ticks.map(([x1, y1, x2, y2]) => <line class="bp__tick" x1={x1} y1={y1} x2={x2} y2={y2}></line>)}
+      <line class="bp__tick" x1={O.x} y1={O.y} x2={O.x + 70} y2={O.y}></line>
+      <path class="bp__tick" d={`M${O.x + 48} ${O.y}A48 48 0 0 1 ${+(O.x + 48 * Math.cos(Math.PI / 6)).toFixed(2)} ${+(O.y + 48 * Math.sin(Math.PI / 6)).toFixed(2)}`}></path>
+      <line class="bp__lead" x1="151.38" y1="32.28" x2="177.38" y2="62.28"></line>
+      <line class="bp__lead" x1="246" y1="374.34" x2="186" y2="397.4"></line>
+      <circle class="bp__centre" cx={O.x} cy={O.y} r="2.6"></circle>
+      <circle class="bp__centre" cx={O2.x} cy={O2.y} r="2.6"></circle>
+      <text class="bp__label bp__label--point" x={O.x + 12} y={O.y - 6}>O</text>
+      <text class="bp__label bp__label--point" x={O2.x - 24} y={O2.y + 10}>O′</text>
+      <text class="bp__measure" x={O.x + 58} y={O.y + 20}>30°</text>
+      <text class="bp__measure" x="364" y="146">φu</text>
+      <text class="bp__measure bp__measure--end" x="146" y="34">A = φ⁵u</text>
+      <text class="bp__measure" x="250" y="378">2u × u</text>
+      {/* the drawing's notes, in its corner */}
+      <text class="bp__label bp__label--end" x="504" y="460">φ = (1 + √5) / 2</text>
+      <text class="bp__label bp__label--end" x="504" y="478">b/a = cos 30°</text>
+    </g>
+  </svg>
+  <figcaption class="bp__caption mono">{caption}</figcaption>
+</figure>
+
+<style>
+  .bp {
+    margin: 0;
+  }
+
+  /* the mark, faint, under its construction */
+  .bp__mark {
+    fill: rgb(var(--corona-rgb) / 0.07);
+    animation: bp-show 0.9s var(--ease-out) backwards;
+  }
+
+  .bp__line {
+    fill: none;
+    stroke: rgb(var(--corona-rgb) / 0.62);
+    stroke-width: 1;
+    animation: bp-draw 1.3s var(--ease-in-out) var(--d) backwards;
+  }
+
+  .bp__axis {
+    fill: none;
+    stroke: rgb(var(--corona-rgb) / 0.3);
+    stroke-width: 0.85;
+    stroke-dasharray: 14 3 2 3;
+    animation: bp-show 0.9s var(--ease-out) var(--d) backwards;
+  }
+
+  .bp__surface {
+    fill: none;
+    stroke: rgb(var(--corona-rgb) / 0.42);
+    stroke-width: 1;
+    stroke-dasharray: 1.5 3;
+    animation: bp-show 0.9s var(--ease-out) var(--d) backwards;
+  }
+
+  .bp__notes {
+    animation: bp-show 1s var(--ease-out) var(--d) backwards;
+  }
+
+  .bp__tick,
+  .bp__lead {
+    fill: none;
+    stroke: rgb(var(--corona-rgb) / 0.5);
+    stroke-width: 0.85;
+  }
+
+  .bp__lead {
+    stroke: rgb(var(--corona-rgb) / 0.32);
+  }
+
+  .bp__centre {
+    fill: var(--void);
+    stroke: rgb(var(--corona-rgb) / 0.7);
+    stroke-width: 1;
+  }
+
+  .bp__label,
+  .bp__measure {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.04em;
+    fill: var(--graphite);
+  }
+
+  /* the centres, in the display face, whose round O no one reads as a zero */
+  .bp__label--point {
+    font-family: var(--f-display);
+    font-size: 14px;
+    letter-spacing: 0;
+  }
+
+  /* the measures, in the node's warm light */
+  .bp__measure {
+    fill: var(--bead);
+  }
+
+  .bp__label--end,
+  .bp__measure--end {
+    text-anchor: end;
+  }
+
+  .bp__caption {
+    max-width: 34rem;
+    margin: var(--s-4) auto 0;
+    font-size: 10.5px;
+    line-height: 1.7;
+    letter-spacing: 0.1em;
+    text-align: center;
+    color: var(--graphite);
+    text-transform: none;
+  }
+
+  @keyframes bp-draw {
+    from {
+      stroke-dasharray: 1 1;
+      stroke-dashoffset: 1;
+    }
+    to {
+      stroke-dasharray: 1 1;
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes bp-show {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bp :global(*) {
+      animation: none !important;
+    }
+  }
+</style>

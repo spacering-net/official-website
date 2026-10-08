@@ -1,0 +1,93 @@
+---
+/**
+ * /assistant/ and /zh/assistant/: the personal assistant, while it is being
+ * planned. A day of its work and the question it waits on, how it works for
+ * you, how the rest of the ring works with it, and the ring you can hold
+ * already; the skills it will use are in Harness now.
+ */
+import Product from '../../layouts/Product.astro';
+import Icon from '../Icon.astro';
+import Hero from './Hero.astro';
+import DayOrbit from './DayOrbit.astro';
+import AssistantDay from './AssistantDay.astro';
+import RingParts from './RingParts.astro';
+import Closing from './Closing.astro';
+import Claim from './Claim.astro';
+import { dicts, PAGES, type Lang } from '../../i18n';
+import { fill, pageDicts } from '../../i18n/pages';
+import { SITE } from '../../config';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = dicts[lang];
+const p = pageDicts[lang];
+const a = p.assistant;
+const paths = { en: '/assistant/', zh: '/zh/assistant/' };
+---
+<Product lang={lang} title={a.title} description={a.description} paths={paths} current="assistant">
+  <Hero title={t.assistant.title} kicker={t.assistant.kicker} lede={a.lede}>
+    <Fragment slot="meta"><span class="status">{t.status.planned}</span><span>{t.assistant.tag}</span></Fragment>
+    <Fragment slot="actions">
+      <Claim p={p} />
+      <a class="btn btn--ghost" href={SITE.orgUrl} target="_blank" rel="noopener"><Icon name="github" />{p.planned.github}</a>
+    </Fragment>
+    <DayOrbit slot="art" t={t} p={p} />
+  </Hero>
+
+  <section class="section section--split">
+    <div class="section__head">
+      <h2 class="section__title">{a.day.title}</h2>
+      <p class="section__lede">{a.day.lede}</p>
+    </div>
+    <AssistantDay t={t} p={p} />
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">{a.ways.title}</h2>
+    </div>
+    <ul class="points ways">
+      {a.ways.items.map((item) => (
+        <li>
+          <h3>{item.name}</h3>
+          <p>{fill(item.text, { name: t.assistantName })}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <RingParts t={t} title={p.planned.ring} lede={a.ring.lede} items={a.ring.items} />
+
+  <Closing title={a.cta.title} text={a.cta.text}>
+    <Claim p={p} />
+    <a class="btn btn--ghost" href={`${t.path}${PAGES.harness}`}>{a.cta.harness}<Icon name="arrow" /></a>
+  </Closing>
+</Product>
+
+<style>
+  /* five promises: three over two, each row filling the column */
+  .ways {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .ways li {
+    grid-column: span 2;
+  }
+
+  .ways li:nth-child(n + 4) {
+    grid-column: span 3;
+  }
+
+  @media (max-width: 960px) {
+    .ways {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ways li,
+    .ways li:nth-child(n + 4) {
+      grid-column: auto;
+    }
+  }
+</style>

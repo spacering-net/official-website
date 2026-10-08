@@ -5,7 +5,7 @@
  */
 import Icon from './Icon.astro';
 import { harnessDicts } from '../i18n/harness';
-import { PRODUCT_PAGES, type Dict } from '../i18n';
+import { PAGES, type Dict } from '../i18n';
 
 interface Props {
   t: Dict;
@@ -13,7 +13,7 @@ interface Props {
 const { t } = Astro.props;
 const h = harnessDicts[t.lang];
 const nf = t.notFound;
-const harness = `${t.path}${PRODUCT_PAGES.harness}`;
+const harness = `${t.path}${PAGES.harness}`;
 // the orbit as in the logo: b/a = cos 30°, tilted 30°; the node's place on it, and where it has drifted to
 const A = 150;
 const B = +(A * Math.cos(Math.PI / 6)).toFixed(1);

@@ -1,0 +1,190 @@
+---
+/**
+ * /space/ and /zh/space/: Space, the room inside your ring, while it is being
+ * planned. What it will hold, how one search finds it, how it stays yours,
+ * how the rest of the ring works with it, and the ring you can hold already.
+ */
+import Product from '../../layouts/Product.astro';
+import Icon from '../Icon.astro';
+import Hero from './Hero.astro';
+import SpaceRoom from './SpaceRoom.astro';
+import AssetGlyph from './AssetGlyph.astro';
+import SpaceSearch from './SpaceSearch.astro';
+import RingParts from './RingParts.astro';
+import Closing from './Closing.astro';
+import Claim from './Claim.astro';
+import { dicts, type Lang } from '../../i18n';
+import { pageDicts } from '../../i18n/pages';
+import { SITE } from '../../config';
+
+interface Props {
+  lang: Lang;
+}
+const { lang } = Astro.props;
+const t = dicts[lang];
+const p = pageDicts[lang];
+const s = p.space;
+const paths = { en: '/space/', zh: '/zh/space/' };
+---
+<Product lang={lang} title={s.title} description={s.description} paths={paths} current="space">
+  <Hero title={t.space.title} kicker={t.space.kicker} lede={s.lede}>
+    <Fragment slot="meta"><span class="status">{t.status.planned}</span><span>{t.space.tag}</span></Fragment>
+    <Fragment slot="actions">
+      <Claim p={p} />
+      <a class="btn btn--ghost" href={SITE.orgUrl} target="_blank" rel="noopener"><Icon name="github" />{p.planned.github}</a>
+    </Fragment>
+    <SpaceRoom slot="art" />
+  </Hero>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">{s.holds.title}</h2>
+      <p class="section__lede">{s.holds.lede}</p>
+    </div>
+    <ul class="kinds">
+      {s.holds.items.map((item) => (
+        <li class:list={['kind', item.key === 'memory' && 'kind--memory']}>
+          <AssetGlyph kind={item.key} />
+          <h3>{item.name}</h3>
+          <p>{item.text}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="section section--split">
+    <div class="section__head">
+      <h2 class="section__title">{s.search.title}</h2>
+      <p class="section__lede">{s.search.lede}</p>
+    </div>
+    <SpaceSearch t={t} results={s.search.results} />
+  </section>
+
+  <section class="section">
+    <div class="section__head">
+      <h2 class="section__title">{s.keeps.title}</h2>
+    </div>
+    <ul class="points">
+      {s.keeps.items.map((item) => (
+        <li>
+          <h3>{item.name}</h3>
+          <p>{item.text}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <RingParts t={t} title={p.planned.ring} lede={s.ring.lede} items={s.ring.items} />
+
+  <Closing title={s.cta.title} text={s.cta.text}>
+    <Claim p={p} />
+    <a class="btn btn--ghost" href={SITE.orgUrl} target="_blank" rel="noopener"><Icon name="github" />{p.planned.github}</a>
+  </Closing>
+</Product>
+
+<style>
+  /* the five kinds, side by side, each in its column between hairlines */
+  .kinds {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--hairline-strong);
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .kind {
+    padding: var(--s-5) var(--s-5) var(--s-6);
+  }
+
+  .kind:not(:first-child) {
+    border-left: 1px solid var(--hairline);
+  }
+
+  .kind:first-child {
+    padding-left: 0;
+  }
+
+  .kind :global(.glyph) {
+    width: 28px;
+    height: 28px;
+    color: var(--corona-80);
+  }
+
+  .kind h3 {
+    margin-top: var(--s-5);
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    font-weight: 400;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--corona);
+  }
+
+  .kind p {
+    margin-top: var(--s-3);
+    font-size: 15px;
+    color: var(--corona-64);
+    text-wrap: pretty;
+  }
+
+  /* memory: the asset only your ring holds, in the node's warm light */
+  .kind--memory :global(.glyph),
+  .kind--memory h3 {
+    color: var(--bead);
+  }
+
+  /* three over two, each row filling the width */
+  @media (max-width: 1100px) {
+    .kinds {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .kind {
+      grid-column: span 2;
+    }
+
+    .kind:nth-child(n + 4) {
+      grid-column: span 3;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .kind:nth-child(4) {
+      border-left: 0;
+      padding-left: 0;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .kinds {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .kind,
+    .kind:nth-child(n + 4) {
+      grid-column: auto;
+    }
+
+    .kind {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      column-gap: var(--s-4);
+      padding: var(--s-4) 0;
+    }
+
+    .kind:not(:first-child) {
+      border-left: 0;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .kind :global(.glyph) {
+      grid-row: 1 / 3;
+    }
+
+    .kind h3 {
+      margin-top: 4px;
+    }
+
+    .kind p {
+      margin-top: var(--s-2);
+    }
+  }
+</style>

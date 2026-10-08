@@ -1,0 +1,284 @@
+---
+/**
+ * The assistant's concept preview: its morning, as the homepage projects it,
+ * and the question it is waiting on, opened: what it wants to pay, from
+ * where, with which key, and how you would sign it.
+ */
+import type { Dict } from '../../i18n';
+import { fill, type PagesDict } from '../../i18n/pages';
+
+interface Props {
+  t: Dict;
+  p: PagesDict;
+}
+const { t, p } = Astro.props;
+const h = t.assistant.holo;
+const sheet = p.assistant.day.sheet;
+// the projection's one line, as its two facts, so a narrow panel breaks it between them
+const memory = h.memory.split(' · ');
+---
+<div class="day" data-reveal aria-hidden="true">
+  <div class="concept">
+    <span class="concept__tag">{t.status.preview}</span>
+    <div class="concept__bar">
+      <span class="day__who"><span class="day__orb"></span><b>{t.assistantName}</b> · {h.role}</span>
+      <span>{h.online}</span>
+    </div>
+    <ul>
+      {h.rows.map((row, i) => (
+        <li class="concept__row day__task" data-kind={row.kind} data-arrive style={`--i:${i}${row.p === undefined ? '' : `;--p:${row.p}`}`}>
+          <span class="day__time">{row.time}</span>
+          <span class="day__text">{row.text}</span>
+          {row.kind === 'ask' ? (
+            <span class="day__chips"><span class="day__chip day__chip--yes">{h.approve}</span><span class="day__chip">{h.later}</span></span>
+          ) : row.kind === 'working' ? (
+            <span class="day__state"><span class="day__bar"><i></i></span>{Math.round((row.p ?? 0) * 100)}%</span>
+          ) : (
+            <span class="day__state">{h.done}</span>
+          )}
+        </li>
+      ))}
+    </ul>
+    <div class="concept__foot day__foot">{memory.map((fact) => <span>{fact}</span>)}</div>
+  </div>
+
+  <div class="concept day__sheet" data-arrive style={`--i:${h.rows.length + 1}`}>
+    <p class="concept__label day__asks"><span class="day__orb"></span>{fill(sheet.asks, { name: t.assistantName })}</p>
+    <p class="day__title">{sheet.title}</p>
+    <dl class="day__facts">
+      {sheet.facts.map(([label, value]) => (
+        <div>
+          <dt class="concept__label">{label}</dt>
+          <dd>{value}</dd>
+        </div>
+      ))}
+    </dl>
+    <div class="day__actions">
+      <span class="day__chip day__chip--yes day__chip--wide">{sheet.approve}</span>
+      <span class="day__chip day__chip--wide">{sheet.later}</span>
+    </div>
+    <p class="day__signed">{sheet.signed}</p>
+  </div>
+</div>
+
+<style>
+  .day {
+    display: grid;
+  }
+
+  .day__who {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+  }
+
+  .day__who b {
+    font-weight: 500;
+    color: var(--corona);
+  }
+
+  /* the assistant, as a small warm light */
+  .day__orb {
+    width: 9px;
+    height: 9px;
+    flex: none;
+    border-radius: 50%;
+    background: radial-gradient(circle at 38% 34%, var(--bead-hot), var(--bead) 45%, rgb(var(--bead-rgb) / 0.1) 76%);
+    box-shadow: 0 0 10px rgb(var(--bead-rgb) / 0.6);
+    animation: orb 2.6s ease-in-out infinite;
+  }
+
+  @keyframes orb {
+    50% {
+      scale: 1.35;
+      opacity: 0.45;
+    }
+  }
+
+  .day__task {
+    grid-template-columns: 5ch minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .day__time {
+    font-size: 11px;
+    color: var(--graphite);
+  }
+
+  .day__text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--corona-80);
+  }
+
+  .day__task[data-kind='done'] .day__text {
+    color: var(--corona-64);
+  }
+
+  .day__state {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--graphite);
+  }
+
+  .day__task[data-kind='working'] .day__state {
+    color: var(--bead);
+  }
+
+  .day__bar {
+    position: relative;
+    width: 64px;
+    height: 2px;
+    overflow: hidden;
+    background: var(--hairline-strong);
+  }
+
+  .day__bar i {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(var(--p) * 100%);
+    background: linear-gradient(90deg, rgb(var(--bead-rgb) / 0.15), var(--bead));
+    animation: work 3.2s var(--ease-in-out) infinite alternate;
+  }
+
+  @keyframes work {
+    from {
+      width: calc(var(--p) * 70%);
+    }
+    to {
+      width: calc(min(1, var(--p) + 0.18) * 100%);
+    }
+  }
+
+  /* the one waiting on you */
+  .day__task[data-kind='ask'] {
+    background: rgb(var(--bead-rgb) / 0.06);
+    box-shadow: inset 2px 0 0 var(--bead);
+  }
+
+  .day__task[data-kind='ask'] .day__text {
+    color: var(--corona);
+  }
+
+  .day__chips {
+    display: inline-flex;
+    gap: 6px;
+  }
+
+  .day__chip {
+    padding: 0 9px;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    font-size: 10.5px;
+    line-height: 20px;
+    color: var(--corona-80);
+    white-space: nowrap;
+  }
+
+  .day__chip--yes {
+    border-color: var(--corona);
+    background: var(--corona);
+    color: var(--void);
+  }
+
+  /* the foot keeps its words above the sheet's raised edge */
+  .day__foot {
+    padding-bottom: calc(var(--s-4) + var(--s-6));
+  }
+
+  /* the question, opened: a sheet raised over the morning */
+  .day__sheet {
+    justify-self: end;
+    width: min(23rem, 86%);
+    margin-top: calc(-1 * var(--s-6));
+    padding: var(--s-5);
+    background: var(--raised);
+    box-shadow:
+      var(--card-shadow),
+      0 0 0 1px rgb(var(--bead-rgb) / 0.12);
+  }
+
+  .day__asks {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    color: var(--bead);
+  }
+
+  .day__title {
+    margin-top: var(--s-3);
+    font-family: var(--f-display);
+    font-size: 19px;
+    line-height: 1.35;
+    color: var(--corona);
+  }
+
+  .day__facts {
+    display: grid;
+    gap: 6px;
+    margin-top: var(--s-4);
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--hairline);
+  }
+
+  .day__facts div {
+    display: grid;
+    grid-template-columns: 9ch minmax(0, 1fr);
+    gap: var(--s-4);
+    align-items: baseline;
+  }
+
+  .day__facts dd {
+    margin: 0;
+    color: var(--corona-80);
+  }
+
+  .day__actions {
+    display: flex;
+    gap: var(--s-3);
+    margin-top: var(--s-5);
+  }
+
+  .day__chip--wide {
+    padding: 0 var(--s-4);
+    font-size: 11.5px;
+    line-height: 30px;
+  }
+
+  .day__signed {
+    margin-top: var(--s-4);
+    font-size: 10.5px;
+    letter-spacing: 0.04em;
+    color: var(--graphite);
+  }
+
+  @media (max-width: 760px) {
+    .day__foot {
+      padding-bottom: var(--s-3);
+    }
+
+    .day__sheet {
+      width: 100%;
+      margin: var(--s-4) 0 0;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .day__task {
+      grid-template-columns: 5ch minmax(0, 1fr);
+    }
+
+    .day__task > :last-child {
+      grid-column: 2;
+    }
+
+    .day__text {
+      white-space: normal;
+    }
+  }
+</style>
