@@ -1,15 +1,11 @@
-/**
- * Site-wide constants. When Codeg moves to the spacering-net organisation,
- * change `codeg.repo` to 'spacering-net/codeg'. GitHub redirects the old
- * path, so nothing breaks before then.
- */
+/** Site-wide constants. */
 export const SITE = {
   url: 'https://spacering.net',
   name: 'SpaceRing',
   org: 'spacering-net',
   orgUrl: 'https://github.com/spacering-net',
   codeg: {
-    repo: 'xintaofei/codeg',
+    repo: 'spacering-net/codeg',
     docs: 'https://docs.codeg.app',
   },
 } as const;
