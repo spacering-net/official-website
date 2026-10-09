@@ -175,10 +175,27 @@ const MODEL_NAMES: Record<string, string> = {
   'claude-haiku-4-5': 'Claude Haiku 4.5',
 };
 
-/** A model's name; `short` leaves out the maker where it is obvious ("Opus 5.5"). */
+/** The aliases Claude Code takes for the latest model of each family (an assistant's `model`). */
+const MODEL_ALIASES: Record<string, string> = { opus: 'Claude Opus', sonnet: 'Claude Sonnet', haiku: 'Claude Haiku', fable: 'Claude Fable' };
+
+/** Another Claude model's id, read: claude-sonnet-4-20250514 → Claude Sonnet 4; claude-3-5-haiku-20241022 → Claude Haiku 3.5. */
+function claudeModel(id: string): string | null {
+  const m = /^claude-(?:(\d+)-(?:(\d)-)?)?(opus|sonnet|haiku|fable)(?:-(\d{1,2})(?:-(\d{1,2}))?)?(?:-\d{8})?$/i.exec(id);
+  if (!m) return null;
+  const major = m[4] ?? m[1];
+  const minor = m[4] ? m[5] : m[2];
+  const family = m[3].charAt(0).toUpperCase() + m[3].slice(1).toLowerCase();
+  return `Claude ${family}${major ? ` ${major}${minor ? `.${minor}` : ''}` : ''}`;
+}
+
+/**
+ * A model's name; `short` leaves out the maker where it is obvious ("Opus 5.5").
+ * Null for none, and for `inherit` (an assistant that runs on whatever model
+ * its session does), which a page words in its own language.
+ */
 export function modelName(id: string | null | undefined, short = false): string | null {
-  if (!id) return null;
-  const name = MODEL_NAMES[id] ?? id;
+  if (!id || id === 'inherit') return null;
+  const name = MODEL_NAMES[id] ?? MODEL_ALIASES[id.toLowerCase()] ?? claudeModel(id) ?? id;
   return short ? name.replace(/^Claude /, '') : name;
 }
 

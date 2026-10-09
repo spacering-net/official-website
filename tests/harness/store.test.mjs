@@ -356,3 +356,28 @@ test('a repository too big for one run is saved over several, and nothing is ret
   assert.equal(item(env, 'gone').status, 'retired');
   assert.equal(env.HARNESS_DB.rows("SELECT COUNT(*) AS n FROM items WHERE status = 'public' AND source_key LIKE 'github:someone/skills:skills/task-%'")[0].n, 45);
 });
+
+test('a numbered name stays a name: cut short enough for its number, and not on a hyphen', async () => {
+  const env = testEnv();
+  const name = `${'a'.repeat(61)}-bb`;
+  for (const n of [1, 2, 3]) await saveVersions(env, [versionInput({ name, sourceKey: `github:someone/skills:${n}`, dedupeKey: `skill:${n}` })]);
+  assert.deepEqual(
+    env.HARNESS_DB.rows('SELECT name FROM items ORDER BY seq').map((r) => r.name),
+    [name, `${'a'.repeat(61)}-2`, `${'a'.repeat(61)}-3`],
+  );
+});
+
+test('an unchanged version keeps the search row of what is stored of it, whatever a newer import makes of it', async () => {
+  const env = testEnv();
+  const body = () => env.HARNESS_DB.rows('SELECT body FROM item_search')[0]?.body;
+  await saveVersions(env, [versionInput({ excerpt: 'legacyprobe visible', repoStars: 120 })]);
+  // the same files, read by newer rules, while its stars move
+  await saveVersions(env, [versionInput({ excerpt: 'visible', repoStars: 121 })]);
+  assert.equal(env.HARNESS_DB.rows('SELECT v.excerpt FROM items i JOIN item_versions v ON v.id = i.latest_version_id')[0].excerpt, 'legacyprobe visible');
+  assert.ok(body().includes('legacyprobe'));
+  // off the shelves and on again: the row comes back from what is stored
+  await saveVersions(env, [versionInput({ excerpt: 'visible', checks: { ...versionInput().checks, quality: { reasons: ['duplicate'], score: 1 } } })]);
+  assert.equal(body(), undefined);
+  await saveVersions(env, [versionInput({ excerpt: 'visible' })]);
+  assert.ok(body().includes('legacyprobe'));
+});

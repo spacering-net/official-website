@@ -1,8 +1,9 @@
 // The pages beside the homepage (Harness, the policies; Space, the assistant
 // and open source): the shared HUD, menu and account dialog, what stays in
 // view while scrolling, Harness's in-place browsing, the edges they share, the
-// light theme, the prompts' gallery and the product pages' drawings and
-// previews, all without a page error or a refused script.
+// light theme, the prompts' gallery, the assistants' shelf and pages, and the
+// product pages' drawings and previews, all without a page error or a refused
+// script.
 // Usage: node scripts/check-pages.mjs [baseUrl]
 import { chromium } from 'playwright';
 
@@ -606,7 +607,109 @@ for (const [path, lang] of [
   await ctx.close();
 }
 
-// 10. Space, the assistant and open source: in the frame, with their HUD link
+// 10. assistants: their shelf of their own cards (a seal, what each may touch, rows that line up, no
+// runtime list), more of it in place, assistants among other items, and the page of one: instructions,
+// capabilities, its definition to download and to copy
+{
+  const { ctx, page, errors } = await open('/zh/harness/?kind=assistant');
+  const rowHeights = () =>
+    page.$$eval('[data-grid] > li', (lis) => {
+      const rows = new Map();
+      for (const li of lis) {
+        const r = li.getBoundingClientRect();
+        rows.set(Math.round(r.top), [...new Set([...(rows.get(Math.round(r.top)) ?? []), Math.round(r.height)])]);
+      }
+      return [...rows.values()];
+    });
+  const shelf = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll('[data-grid] > li.ac')];
+    return {
+      chip: document.querySelector('.kinds a[aria-current="page"]')?.textContent?.replace(/\s+/g, ' ').trim(),
+      note: !!document.querySelector('.results__note'),
+      cards: cards.length,
+      others: document.querySelectorAll('[data-grid] > li:not(.ac)').length,
+      seals: cards.filter((c) => c.querySelector('.seal svg .seal__node')).length,
+      said: cards.filter((c) => /^可以|^这几类/.test(c.querySelector('.access[role="img"]')?.getAttribute('aria-label') ?? '')).length,
+      runtime: !!document.querySelector('.browse__side .pick__select'),
+    };
+  });
+  const rows = await rowHeights();
+  report(
+    shelf.chip?.startsWith('助手') && shelf.note && shelf.cards > 0 && !shelf.others && shelf.seals === shelf.cards && shelf.said === shelf.cards && !shelf.runtime && rows.every((r) => r.length === 1),
+    'assistants: their own cards, each with a seal and what it may touch in words, rows that line up, no runtime list',
+    JSON.stringify({ ...shelf, rows: rows.length }),
+  );
+
+  const more = page.locator('[data-more]');
+  if (await more.count()) {
+    await mark(page);
+    await more.click();
+    await page.waitForFunction((n) => document.querySelectorAll('[data-grid] > li.ac').length > n, shelf.cards, { timeout: 8000 }).catch(() => {});
+    const after = await page.evaluate(() => ({ cards: document.querySelectorAll('[data-grid] > li.ac').length, others: document.querySelectorAll('[data-grid] > li:not(.ac)').length }));
+    report((await same(page)) && after.cards > shelf.cards && !after.others, 'more assistants load in place, as their own cards', JSON.stringify({ before: shelf.cards, ...after }));
+  }
+
+  // among other items: an ItemCard with its seal, the same rows, the same heights
+  await page.goto(`${base}/zh/harness/?q=reviewer`, { waitUntil: 'networkidle' });
+  const mixed = await page.evaluate(() => ({
+    assistants: document.querySelectorAll('[data-grid] > li.card--assistant').length,
+    sealed: document.querySelectorAll('[data-grid] > li.card--assistant .card__title .seal').length,
+    dots: document.querySelectorAll('[data-grid] > li.card--assistant .access--compact[aria-label]').length,
+  }));
+  const mixedRows = await rowHeights();
+  report(
+    mixed.assistants > 0 && mixed.sealed === mixed.assistants && mixed.dots === mixed.assistants && mixedRows.every((r) => r.length === 1),
+    'assistants among other items: a seal before the title, four dots that read as words, every row level',
+    JSON.stringify({ ...mixed, rows: mixedRows.slice(0, 4) }),
+  );
+
+  // the page of one kept here: its sections, its definition to download and to copy
+  await page.goto(`${base}/zh/harness/?kind=assistant`, { waitUntil: 'networkidle' });
+  const href = await page.locator('[data-grid] > li.ac a').first().getAttribute('href');
+  await page.goto(`${base}${href}`, { waitUntil: 'networkidle' });
+  const one = await page.evaluate(() => {
+    const download = document.querySelector('.side .install a[download]');
+    return {
+      sections: [...document.querySelectorAll('[data-section]')].map((s) => s.id).join(' '),
+      seal: !!document.querySelector('.head__title .seal'),
+      install: document.querySelector('.side .install h2')?.textContent,
+      file: download?.getAttribute('download'),
+      blob: download?.getAttribute('href'),
+      copy: !document.querySelector('.side .install .use__copy')?.hidden,
+      starters: document.querySelectorAll('#examples .starter').length,
+      starterCopies: document.querySelectorAll('#examples .starter .copy:not([hidden])').length,
+    };
+  });
+  const definition = one.blob ? await page.evaluate(async (u) => (await fetch(u)).text(), one.blob) : '';
+  await page.evaluate(() => navigator.clipboard.writeText(''));
+  if (one.copy) await page.click('.side .install .use__copy');
+  await page.waitForFunction(async (text) => (await navigator.clipboard.readText()) === text, definition, { timeout: 5000 }).catch(() => {});
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  report(
+    /^instructions( examples)? capabilities permissions checks/.test(one.sections) && !/files|readme|server/.test(one.sections) && one.seal && one.install === '安装' &&
+      /\.md$/.test(one.file ?? '') && /^\/api\/harness\/v1\/blobs\/[0-9a-f]{64}$/.test(one.blob ?? '') && definition.startsWith('---') && copied === definition &&
+      one.starterCopies === one.starters,
+    'an assistant’s page: instructions and capabilities, no file list, its definition downloaded and copied whole',
+    JSON.stringify({ ...one, definition: definition.length, copied: copied.length }),
+  );
+
+  // on a phone the kinds run past the screen: the one on show (the last) is scrolled into view, the row fading where it runs on
+  const phone = await open('/zh/harness/?kind=assistant', { phone: true });
+  const kinds = await phone.page.evaluate(() => {
+    const row = document.querySelector('.kinds');
+    const a = row.getBoundingClientRect();
+    const b = row.querySelector('[aria-current="page"]').getBoundingClientRect();
+    return { runsOn: row.scrollWidth > row.clientWidth, inView: b.left >= a.left - 1 && b.right <= a.right + 1, before: row.classList.contains('has-before'), after: row.classList.contains('has-more') };
+  });
+  report(!kinds.runsOn || (kinds.inView && kinds.before), 'on a phone, the kind on show is in its row’s view, the row fading where it runs on', JSON.stringify(kinds));
+  await phone.ctx.close();
+  errors.push(...phone.errors);
+
+  report(!errors.length, 'assistants: no errors', errors.join(' | '));
+  await ctx.close();
+}
+
+// 11. Space, the assistant and open source: in the frame, with their HUD link
 // current; a preview below the fold fills in as it scrolls into view (one
 // already in view is simply there); the hero's drawing waits while it is off
 // screen; "Get your ring" opens signing in; the closing still stays night in

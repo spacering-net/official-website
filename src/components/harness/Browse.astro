@@ -9,6 +9,7 @@
  */
 import ItemCard from './ItemCard.astro';
 import PromptCard from './PromptCard.astro';
+import AssistantCard from './AssistantCard.astro';
 import Filters from './Filters.astro';
 import { harnessDicts } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
@@ -37,8 +38,10 @@ const kinds = (['all', 'skill', 'mcp', 'prompt', 'assistant', 'connector'] as co
 const within = state.kind ? `@${state.kind}` : '';
 const dims = [state.runtime && `runtime:${state.runtime}${within}`, state.tag && `tag:${state.tag}${within}`].filter((d): d is string => !!d);
 const total = dims.length === 0 ? (state.kind ? counts[`kind:${state.kind}`] : counts.all) : dims.length === 1 && catalog ? (counts[dims[0]] ?? 0) : undefined;
-// prompts on their own shelf (or a publisher of prompts only) show as a gallery
-const gallery = state.kind === 'prompt' || (!catalog && (counts.all ?? 0) > 0 && counts['kind:prompt'] === counts.all);
+// prompts on their own shelf (or a publisher of prompts only) show as a gallery, assistants as their own cards
+const only = (kind: string) => state.kind === kind || (!catalog && (counts.all ?? 0) > 0 && counts[`kind:${kind}`] === counts.all);
+const gallery = only('prompt');
+const shelf = only('assistant');
 const active = [
   state.runtime && { label: h.runtime.names[state.runtime] ?? state.runtime, href: withQuery(path, state, { runtime: undefined }) },
   state.tag && { label: tagMap.get(state.tag)?.name[lang] ?? state.tag, href: withQuery(path, state, { tag: undefined }) },
@@ -127,10 +130,18 @@ const filtered = active.length;
         )}
       </div>
 
+      {state.kind === 'assistant' && catalog && <p class="results__note">{h.assistant.shelfNote}</p>}
+
       {list.items.length ? (
-        <ul class:list={['grid', gallery && 'grid--gallery']} data-grid>
+        <ul class:list={['grid', (gallery || shelf) && 'grid--gallery']} data-grid>
           {list.items.map((item) =>
-            gallery && item.prompt ? <PromptCard item={item} lang={lang} /> : <ItemCard item={item} lang={lang} tags={tagMap} />,
+            gallery && item.prompt ? (
+              <PromptCard item={item} lang={lang} />
+            ) : shelf && item.assistant ? (
+              <AssistantCard item={item} lang={lang} tags={tagMap} />
+            ) : (
+              <ItemCard item={item} lang={lang} tags={tagMap} />
+            ),
           )}
         </ul>
       ) : (
@@ -290,6 +301,21 @@ const filtered = active.length;
     display: none;
   }
 
+  /* more kinds past an edge fade into it (client/harness.ts) */
+  .kinds.has-before {
+    --fade-l: 36px;
+  }
+
+  .kinds.has-more {
+    --fade-r: 36px;
+  }
+
+  .kinds.has-before,
+  .kinds.has-more {
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 var(--fade-l, 0px), #000 calc(100% - var(--fade-r, 0px)), transparent);
+  }
+
   .browse__filters {
     display: none;
     flex: none;
@@ -363,6 +389,15 @@ const filtered = active.length;
     gap: var(--s-3) var(--s-4);
     min-height: var(--head-h);
     margin-bottom: var(--s-4);
+  }
+
+  /* what a kind is, above its shelf, where the word alone could mislead */
+  .results__note {
+    max-width: 62ch;
+    margin: calc(-1 * var(--s-2)) 0 var(--s-5);
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--corona-64);
   }
 
   .results__count {

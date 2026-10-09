@@ -1,0 +1,131 @@
+---
+/**
+ * An assistant's seal, standing in for a picture none of them has: the first
+ * letter of its title on a disc, with a tilted orbit passing behind it and a
+ * node on the orbit, in the logo's way of drawing. The tilt and where the node
+ * sits come from the item's address, so each assistant has its own and keeps
+ * it; the node takes the colour its definition names (Claude Code's eight),
+ * Bead when it names none. Flat, so the node does not glow.
+ */
+interface Props {
+  /** what tilts the orbit and places the node: the item's address */
+  seed: string;
+  title: string;
+  color: string | null | undefined;
+  /** in CSS pixels */
+  size: number;
+  class?: string;
+}
+const { seed, title, color, size, class: className } = Astro.props;
+// FNV-1a over the address: the same seal every time
+let hash = 2166136261;
+for (const ch of seed) {
+  hash ^= ch.codePointAt(0)!;
+  hash = Math.imul(hash, 16777619) >>> 0;
+}
+const tilt = -36 + (hash % 1400) / 100;
+// the node on the orbit where it shows beside the disc: within 36 degrees of either end
+const angle = ((((hash >>> 11) & 1 ? 180 : 0) - 36 + ((hash >>> 12) % 720) / 10) * Math.PI) / 180;
+const rx = 22.5;
+const ry = 7.2;
+const node = { x: 24 + rx * Math.cos(angle), y: 24 + ry * Math.sin(angle) };
+const letter = ([...title.trim()][0] ?? '·').toUpperCase();
+const turn = `rotate(${tilt.toFixed(2)} 24 24)`;
+---
+<span class:list={['seal', className]} style={`--seal-size:${size}px`} data-color={color ?? undefined} aria-hidden="true">
+  <svg viewBox="0 0 48 48" focusable="false">
+    <g transform={turn}>
+      <ellipse class="seal__orbit" cx="24" cy="24" rx={rx} ry={ry} vector-effect="non-scaling-stroke"></ellipse>
+      <circle class="seal__node" cx={node.x.toFixed(2)} cy={node.y.toFixed(2)} r="2.4"></circle>
+    </g>
+    <circle class="seal__disc" cx="24" cy="24" r="15.5" vector-effect="non-scaling-stroke"></circle>
+    <text class="seal__letter" x="24" y="24.6" text-anchor="middle" dominant-baseline="central">{letter}</text>
+  </svg>
+</span>
+
+<style>
+  .seal {
+    --seal-node: var(--bead);
+    display: inline-block;
+    flex: none;
+    width: var(--seal-size);
+    height: var(--seal-size);
+    line-height: 0;
+  }
+
+  .seal svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  /* the orbit passes behind the disc, showing beside it */
+  .seal__orbit {
+    fill: none;
+    stroke: rgb(var(--corona-rgb) / 0.38);
+    stroke-width: 1;
+  }
+
+  .seal__disc {
+    fill: var(--seal-disc, #121218);
+    stroke: rgb(var(--corona-rgb) / 0.16);
+    stroke-width: 1;
+  }
+
+  .seal__letter {
+    fill: var(--corona);
+    font-family: var(--f-display);
+    font-size: 18px;
+    font-weight: 300;
+  }
+
+  .seal__node {
+    fill: var(--seal-node);
+  }
+
+  :global(:root[data-theme='light']) .seal {
+    --seal-disc: #f4f3ef;
+  }
+
+  /* Claude Code's colours, at the palette's own brightness; deeper on paper */
+  .seal[data-color='red'] {
+    --seal-node: var(--prominence);
+  }
+  .seal[data-color='yellow'] {
+    --seal-node: var(--bead);
+  }
+  .seal[data-color='blue'] {
+    --seal-node: var(--ion);
+  }
+  .seal[data-color='orange'] {
+    --seal-node: #ffb27c;
+  }
+  .seal[data-color='green'] {
+    --seal-node: #8fe3b4;
+  }
+  .seal[data-color='cyan'] {
+    --seal-node: #7fe3ec;
+  }
+  .seal[data-color='purple'] {
+    --seal-node: #c6a8ff;
+  }
+  .seal[data-color='pink'] {
+    --seal-node: #ff9bc8;
+  }
+
+  :global(:root[data-theme='light']) .seal[data-color='orange'] {
+    --seal-node: #b4581a;
+  }
+  :global(:root[data-theme='light']) .seal[data-color='green'] {
+    --seal-node: #1f7a4e;
+  }
+  :global(:root[data-theme='light']) .seal[data-color='cyan'] {
+    --seal-node: #0f7884;
+  }
+  :global(:root[data-theme='light']) .seal[data-color='purple'] {
+    --seal-node: #6b46c1;
+  }
+  :global(:root[data-theme='light']) .seal[data-color='pink'] {
+    --seal-node: #b83a76;
+  }
+</style>

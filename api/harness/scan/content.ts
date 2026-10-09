@@ -17,8 +17,8 @@ const DOCUMENT = /\.(docx|xlsx|pptx|odt|ods|odp|jar|apk|epub)$/i;
 
 export const isScript = (path: string) => SCRIPT.test(path);
 
-/** Instructions a model reads: SKILL.md, an assistant or prompt body, and the Markdown beside them. */
-const isInstructions = (path: string) => /(^|\/)SKILL\.md$/i.test(path) || /^(AGENT|PROMPT|ASSISTANT)\.md$/i.test(path);
+/** Instructions a model reads, by their names: SKILL.md, an assistant or prompt body, and the Markdown beside them. */
+const isInstructionFile = (path: string) => /(^|\/)SKILL\.md$/i.test(path) || /^(AGENT|PROMPT|ASSISTANT)\.md$/i.test(path);
 
 // zero-width space and word joiner, direction overrides and isolates, a byte-order mark past the start.
 // Not the zero-width (non-)joiners: emoji sequences and some scripts need them.
@@ -72,9 +72,12 @@ export function printableStrings(data: Uint8Array, min = 8, max = 200_000): stri
  * padding, endless lines and walls of blank lines; invisible and
  * direction-changing characters; long encoded blobs; executables, nested and
  * password-protected archives; long HTML comments in instructions.
+ * `instructions`: every Markdown file of the package is instructions a model
+ * reads, whatever it is called (an assistant's definition keeps its own name).
  */
-export function scanStructure(files: PackageFile[]): Finding[] {
+export function scanStructure(files: PackageFile[], { instructions = false } = {}): Finding[] {
   const out: Finding[] = [];
+  const isInstructions = (path: string) => isInstructionFile(path) || (instructions && /\.(md|markdown)$/i.test(path));
   for (const f of files) {
     const text = asText(f.data);
     if (text === null) {

@@ -72,6 +72,42 @@ export interface HarnessDict {
     collected: string;
     credit: string;
   };
+  /** assistants: their cards, and what their pages show */
+  assistant: {
+    /** what an assistant is, above its shelf */
+    shelfNote: string;
+    access: Record<'read' | 'edit' | 'run' | 'web' | 'all', string> & { label: string; say: (a: { read: boolean; edit: boolean; run: boolean; web: boolean; all: boolean }) => string };
+    /** a model that is whatever the session runs */
+    inherit: string;
+    skills: (n: number) => string;
+    mcp: (n: number) => string;
+    plugin: string;
+    alsoIn: (n: number) => string;
+    instructions: string;
+    examples: string;
+    starters: string;
+    dialogues: string;
+    user: string;
+    reply: string;
+    why: string;
+    capabilities: string;
+    tools: string;
+    allToolsNote: string;
+    denied: string;
+    model: string;
+    skillsLabel: string;
+    mcpLabel: string;
+    notInHarness: string;
+    settings: string;
+    keeps: string;
+    drops: string;
+    download: string;
+    modelUnset: string;
+    copy: string;
+    note: string;
+    glance: string;
+    needs: string;
+  };
   item: {
     by: string;
     version: string;
@@ -154,7 +190,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     count: (n) => `${n.toLocaleString('en')} on the shelves`,
     search: {
       label: 'Search Harness',
-      placeholder: 'Search skills, MCP servers…',
+      placeholder: 'Search skills, MCP servers, assistants…',
       submit: 'Search',
       results: (n, q) => `${n === 200 ? '200+' : n} results for “${q}”`,
       none: 'Nothing matches.',
@@ -183,7 +219,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       allTags: (n) => `All ${n} tags`,
       about: {
         title: 'About Harness',
-        text: 'Imported from the official MCP Registry and curated skill repositories. Every version is checked for its format, leaked credentials and risky commands before it is listed.',
+        text: 'Imported from the official MCP Registry and curated repositories of skills, prompts and assistants. Every version is checked for its format, leaked credentials and risky commands before it is listed.',
         api: 'Read-only API',
       },
     },
@@ -214,6 +250,56 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       creators: 'Held by its creator',
       collected: 'Collected in',
       credit: 'Prompts and results belong to their creators. To have one corrected or removed, write to',
+    },
+    assistant: {
+      shelfNote: 'Specialist assistants, also called subagents. Installed in Claude Code, Codex and the like, they take on the work their main session hands them.',
+      access: {
+        read: 'Read',
+        edit: 'Edit',
+        run: 'Run',
+        web: 'Web',
+        all: 'All tools',
+        label: 'What it may touch',
+        say: (a) => {
+          if (a.all) return 'Can use every tool of its session';
+          const verbs = { read: 'read files', edit: 'change files', run: 'run commands', web: 'reach the web' } as const;
+          const keys = ['read', 'edit', 'run', 'web'] as const;
+          const yes = keys.filter((k) => a[k]).map((k) => verbs[k]);
+          const no = keys.filter((k) => !a[k]).map((k) => verbs[k]);
+          const list = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}` : xs[0]);
+          if (!yes.length) return 'Uses none of these tools';
+          return `Can ${list(yes)}${no.length ? `; cannot ${no.length > 1 ? `${no.slice(0, -1).join(', ')} or ${no[no.length - 1]}` : no[0]}` : ''}`;
+        },
+      },
+      inherit: 'Same as session',
+      skills: (n) => `${n} skill${n === 1 ? '' : 's'}`,
+      mcp: (n) => `${n} MCP server${n === 1 ? '' : 's'}`,
+      plugin: 'Plugin',
+      alsoIn: (n) => `Also in ${n} more plugin${n === 1 ? '' : 's'}`,
+      instructions: 'Instructions',
+      examples: 'Examples',
+      starters: 'Try saying',
+      dialogues: 'When it is called',
+      user: 'User',
+      reply: 'Main session',
+      why: 'Why',
+      capabilities: 'Capabilities',
+      tools: 'Tools',
+      allToolsNote: 'Its tools are not limited: it can use every tool of its session, MCP tools included.',
+      denied: 'Denied',
+      model: 'Model',
+      skillsLabel: 'Skills it loads',
+      mcpLabel: 'MCP servers',
+      notInHarness: 'not in Harness',
+      settings: 'Other settings',
+      keeps: 'Codeg keeps it',
+      drops: 'Codeg leaves it out unless you agree',
+      download: 'Download definition',
+      modelUnset: 'Not set',
+      copy: 'Copy definition',
+      note: 'Put it in ~/.claude/agents/ to use it in Claude Code. Codeg converts it for Codex and OpenCode when it installs it.',
+      glance: 'At a glance',
+      needs: 'Needs',
     },
     item: {
       by: 'by',
@@ -267,6 +353,10 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         hidden_characters: 'Invisible characters',
         encoded_blob: 'Long encoded text',
         long_html_comment: 'Long hidden comment',
+        skips_confirmation: 'Skips the agent\'s confirmations',
+        auto_approves: 'Approves changes itself',
+        runs_hooks: 'Hooks that run commands',
+        launches_mcp: 'Launches an MCP server of its own',
       },
       rule: 'Rule',
       minorFindings: (n) => `${n} minor mark${n === 1 ? '' : 's'}: common commands and the like, noted but not a concern`,
@@ -294,6 +384,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         format: 'its package has format errors',
         prompt_partial: 'its author shared only part of the prompt',
         prompt_short: 'too short to use on its own',
+        needs_plugin: 'it works only together with the rest of its plugin',
       },
       toc: 'On this page',
       expand: 'Show all',
@@ -334,7 +425,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     count: (n) => `已上架 ${n.toLocaleString('zh-CN')} 项`,
     search: {
       label: '搜索 Harness',
-      placeholder: '搜索技能、MCP 服务…',
+      placeholder: '搜索技能、MCP 服务、助手…',
       submit: '搜索',
       results: (n, q) => `「${q}」找到 ${n === 200 ? '200+' : n} 项`,
       none: '没有找到。',
@@ -363,7 +454,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       allTags: (n) => `全部 ${n} 个标签`,
       about: {
         title: '关于 Harness',
-        text: '收录自官方 MCP 注册表和精选技能仓库。每个版本上架前都检查过格式、泄露的凭据和有风险的命令。',
+        text: '收录自官方 MCP 注册表，以及精选的技能、提示词和助手仓库。每个版本上架前都检查过格式、泄露的凭据和有风险的命令。',
         api: '只读 API',
       },
     },
@@ -394,6 +485,55 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       creators: '归原作者',
       collected: '收录于',
       credit: '提示词和作品归各自的作者所有。如需更正或移除，请写信至',
+    },
+    assistant: {
+      shelfNote: '专职助手，也就是子智能体。装进 Claude Code、Codex 这类智能体后，主会话会把相关的活交给它。',
+      access: {
+        read: '读取',
+        edit: '修改',
+        run: '命令',
+        web: '联网',
+        all: '全部工具',
+        label: '能动什么',
+        say: (a) => {
+          if (a.all) return '可以使用主会话的全部工具';
+          const verbs = { read: '读取文件', edit: '修改文件', run: '运行命令', web: '联网' } as const;
+          const keys = ['read', 'edit', 'run', 'web'] as const;
+          const yes = keys.filter((k) => a[k]).map((k) => verbs[k]);
+          const no = keys.filter((k) => !a[k]).map((k) => verbs[k]);
+          if (!yes.length) return '这几类工具都不用';
+          return `可以${yes.join('、')}${no.length ? `，不能${no.join('、')}` : ''}`;
+        },
+      },
+      inherit: '跟随主会话',
+      skills: (n) => `${n} 个技能`,
+      mcp: (n) => `${n} 个 MCP 服务`,
+      plugin: '所在插件',
+      alsoIn: (n) => `另收录于 ${n} 个插件`,
+      instructions: '设定',
+      examples: '示例',
+      starters: '试试这样说',
+      dialogues: '什么时候交给它',
+      user: '用户',
+      reply: '主会话',
+      why: '说明',
+      capabilities: '能力',
+      tools: '工具',
+      allToolsNote: '没有限定工具：它能用主会话的全部工具，包括 MCP 的。',
+      denied: '禁用',
+      model: '模型',
+      skillsLabel: '预载的技能',
+      mcpLabel: 'MCP 服务',
+      notInHarness: '不在 Harness 中',
+      settings: '其他设置',
+      keeps: 'Codeg 保留',
+      drops: 'Codeg 默认去掉，你同意才保留',
+      download: '下载定义文件',
+      modelUnset: '未指定',
+      copy: '复制定义',
+      note: '放进 ~/.claude/agents/ 就能在 Claude Code 里用。Codeg 安装时会换算成 Codex、OpenCode 的格式。',
+      glance: '概要',
+      needs: '依赖',
     },
     item: {
       by: '发布者',
@@ -447,6 +587,10 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         hidden_characters: '不可见字符',
         encoded_blob: '长段编码文本',
         long_html_comment: '很长的隐藏注释',
+        skips_confirmation: '跳过操作确认',
+        auto_approves: '自动批准修改',
+        runs_hooks: '带运行命令的钩子',
+        launches_mcp: '自带启动命令的 MCP 服务',
       },
       rule: '规则',
       minorFindings: (n) => `另有 ${n} 处低风险标记：常见命令之类，只记录、不提醒`,
@@ -474,6 +618,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
         format: '包的格式有错误',
         prompt_partial: '作者只公开了一部分提示词',
         prompt_short: '太短，单独用不了',
+        needs_plugin: '要和所在插件一起装才能用',
       },
       toc: '本页内容',
       expand: '展开全部',

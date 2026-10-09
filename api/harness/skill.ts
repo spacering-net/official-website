@@ -76,7 +76,7 @@ export function quoteLooseValues(yaml: string): string | null {
 }
 
 /** Tools listed as text: separated by spaces or commas, a pattern's own spaces (and parentheses, one level deep) kept: `Bash(ls *)`. */
-const toolList = (text: string) => text.match(/[^\s,()]+(?:\((?:[^()]|\([^()]*\))*\))?/g) ?? [];
+export const toolList = (text: string) => text.match(/[^\s,()]+(?:\((?:[^()]|\([^()]*\))*\))?/g) ?? [];
 
 /**
  * Read and check a SKILL.md against the Agent Skills specification: `name`

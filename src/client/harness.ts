@@ -109,6 +109,28 @@ function initBrowse() {
     results?.removeAttribute('aria-busy');
   };
 
+  // On a small screen the kinds run past the row's edges: the one on show is scrolled into view,
+  // and an edge fades while there are more beyond it
+  const kinds = browse.querySelector<HTMLElement>('.kinds');
+  const edge = () => {
+    if (!kinds) return;
+    kinds.classList.toggle('has-before', kinds.scrollLeft > 2);
+    kinds.classList.toggle('has-more', kinds.scrollLeft + kinds.clientWidth < kinds.scrollWidth - 2);
+  };
+  const fitKinds = () => {
+    const chip = kinds?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (kinds && chip && kinds.scrollWidth > kinds.clientWidth) {
+      const row = kinds.getBoundingClientRect();
+      const box = chip.getBoundingClientRect();
+      if (box.left < row.left) kinds.scrollLeft += box.left - row.left - 16;
+      else if (box.right > row.right) kinds.scrollLeft += box.right - row.right + 16;
+    }
+    edge();
+  };
+  kinds?.addEventListener('scroll', edge, { passive: true });
+  window.addEventListener('resize', fitKinds, { passive: true });
+  fitKinds();
+
   /** Bring the top of the results under the bars, if the page is further down. */
   const toResults = () => {
     if (!results) return;
@@ -143,6 +165,7 @@ function initBrowse() {
         if (next) region.innerHTML = next.innerHTML;
       });
       revealCopy(browse);
+      fitKinds();
       list++;
       // the other language's link carries the same query
       const other = doc.querySelector('[data-lang-switch]')?.getAttribute('href');
@@ -340,6 +363,10 @@ function initItem() {
   fold(clamp, clamp?.querySelector('p'), clamp?.querySelector<HTMLButtonElement>('[data-clamp-toggle]'), 'is-clamped');
   const prompt = document.querySelector<HTMLElement>('[data-prompt]');
   fold(prompt, prompt?.querySelector<HTMLElement>('.prompt__text'), prompt?.querySelector<HTMLButtonElement>('[data-prompt-toggle]'), 'is-folded');
+  // an assistant's long instructions, to their first screens
+  document
+    .querySelectorAll<HTMLElement>('[data-fold]')
+    .forEach((box) => fold(box, box.querySelector<HTMLElement>('[data-fold-text]'), box.querySelector<HTMLButtonElement>('[data-fold-toggle]'), 'is-folded'));
 
   // the section bar marks the section being read, and moves to a section smoothly
   const toc = document.querySelector<HTMLElement>('[data-toc]');

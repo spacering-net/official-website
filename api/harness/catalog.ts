@@ -1,12 +1,25 @@
+import { accessOf } from './assistant';
 import { mediaPath } from './importers/media';
-import type { Checks, ItemKind, ItemStatus, PinnedPackage, PromptMeta, Risk, Showcase, StoredPromptCard } from './model';
+import type { AssistantMeta, Checks, ItemKind, ItemStatus, PinnedPackage, PromptMeta, Risk, Showcase, StoredAssistantCard, StoredPromptCard } from './model';
 import type { PermissionProfile } from './scan/permissions';
-import type { InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, PublisherSummary, TagInfo, VersionSummary } from './schemas';
+import type {
+  AssistantCard,
+  AssistantInfo,
+  InstallInfo,
+  ItemDetail,
+  ItemList,
+  ItemSummary,
+  PromptCard,
+  PublisherInfo,
+  PublisherSummary,
+  TagInfo,
+  VersionSummary,
+} from './schemas';
 import { facetKey, searchIds } from './search';
 import type { SkillMeta } from './skill';
 import { NAME_RE, type Localized } from './text';
 
-export type { InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
+export type { AssistantCard, AssistantInfo, InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
 
 /**
  * Reading the catalog: browsing, search, an item and its versions. The API
@@ -99,6 +112,7 @@ const pictureAt = (pictures: Map<string, Picture>, url: string | null) => {
 };
 
 const storedCard = (r: Row): StoredPromptCard | null => (r.kind === 'prompt' && r.card ? (JSON.parse(r.card) as StoredPromptCard) : null);
+const assistantCard = (r: Row): StoredAssistantCard | null => (r.kind === 'assistant' && r.card ? (JSON.parse(r.card) as StoredAssistantCard) : null);
 
 /** A prompt's card: the first of its pictures that moves (and is kept here), else the first still one. */
 function promptCard(card: StoredPromptCard, pictures: Map<string, Picture>): PromptCard {
@@ -118,6 +132,7 @@ function promptCard(card: StoredPromptCard, pictures: Map<string, Picture>): Pro
 
 function summarize(r: Row, tags: string[], pictures: Map<string, Picture>): ItemSummary {
   const card = storedCard(r);
+  const assistant = assistantCard(r);
   return {
     id: r.id,
     ref: `${r.handle}/${r.name}`,
@@ -138,6 +153,7 @@ function summarize(r: Row, tags: string[], pictures: Map<string, Picture>): Item
     installs: r.installs,
     latest: { revision: r.latest_revision, version: r.version, publishedAt: r.version_at },
     ...(card ? { prompt: promptCard(card, pictures) } : {}),
+    ...(assistant ? { assistant } : {}),
   };
 }
 
@@ -253,7 +269,22 @@ async function search(db: D1Database, q: string, query: ListQuery, publisherId: 
       return [h.id, (h.relevance / top) * r.quality * pop * (r.featured ? 1.3 : 1) * (r.p_verified ? 1.1 : 1)];
     }),
   );
-  const ranked = [...exact.filter((id) => rows.has(id)), ...hits.map((h) => h.id).filter((id) => !exact.includes(id) && rows.has(id)).sort((a, b) => (score.get(b) ?? 0) - (score.get(a) ?? 0))];
+  const byScore = hits
+    .map((h) => h.id)
+    .filter((id) => !exact.includes(id) && rows.has(id))
+    .sort((a, b) => (score.get(b) ?? 0) - (score.get(a) ?? 0));
+  // a publisher's later hits of a kind count less (the nth by 1/√n), so a collection of many alike (forty
+  // reviewers) does not fill the first pages; among its own hits the order stays
+  const nth = new Map<string, number>();
+  const spread = new Map(
+    byScore.map((id) => {
+      const r = rows.get(id)!;
+      const n = (nth.get(`${r.handle}:${r.kind}`) ?? 0) + 1;
+      nth.set(`${r.handle}:${r.kind}`, n);
+      return [id, (score.get(id) ?? 0) / Math.sqrt(n)];
+    }),
+  );
+  const ranked = [...exact.filter((id) => rows.has(id)), ...byScore.sort((a, b) => spread.get(b)! - spread.get(a)!)];
   const offset = Math.max(0, decodeCursor<{ o: number }>(query.cursor)?.o ?? 0);
   const page = ranked.slice(offset, offset + limit).map((id) => rows.get(id)!);
   const next = offset + limit < ranked.length ? encodeCursor({ o: offset + limit }) : null;
@@ -337,7 +368,15 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
     .prepare('SELECT path, sha256, size, executable FROM version_files WHERE version_id = ?1 ORDER BY path')
     .bind(v.id)
     .all<{ path: string; sha256: string; size: number; executable: number }>();
-  const metadata = JSON.parse(v.metadata) as { skill?: SkillMeta; repository?: string; path?: string; name?: string; prompt?: PromptMeta; showcases?: Showcase[] };
+  const metadata = JSON.parse(v.metadata) as {
+    skill?: SkillMeta;
+    repository?: string;
+    path?: string;
+    name?: string;
+    prompt?: PromptMeta;
+    showcases?: Showcase[];
+    assistant?: AssistantMeta;
+  };
   const perms = JSON.parse(v.permissions) as PermissionProfile;
   const info: InstallInfo = {
     item: { id: item.id, ref: item.ref, kind: item.kind, title: item.title },
@@ -376,7 +415,55 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
       }),
     };
   }
+  if (item.kind === 'assistant' && metadata.assistant) {
+    const a = metadata.assistant;
+    info.assistant = {
+      name: a.name,
+      file: a.file,
+      description: a.description,
+      model: a.model,
+      tools: a.tools,
+      disallowedTools: a.disallowedTools,
+      access: accessOf(a.tools, a.disallowedTools),
+      color: a.color,
+      skills: await skillLinks(db, item.publisher.handle, a.skills),
+      mcpServers: a.mcpServers,
+      mcpLaunches: a.mcpLaunches,
+      permissionMode: a.permissionMode,
+      hooks: a.hooks,
+      starters: a.starters,
+      examples: a.examples,
+      vibe: a.vibe,
+      emoji: a.emoji,
+      settings: a.settings,
+      plugin: a.plugin,
+      alsoIn: item.assistant?.alsoIn ?? [],
+    };
+  }
   return info;
+}
+
+/**
+ * The skills an assistant has loaded, each with its address when its
+ * publisher has a skill of that name here (a definition may name one by its
+ * folder's path; the last part is its name).
+ */
+async function skillLinks(db: D1Database, handle: string, skills: string[]): Promise<{ name: string; ref: string | null }[]> {
+  const names = skills.map((s) => s.replace(/\/+$/, '').split('/').pop()!.toLowerCase());
+  const wanted = [...new Set(names.filter((n) => NAME_RE.test(n)))];
+  const found = new Set<string>();
+  for (let i = 0; i < wanted.length; i += 90) {
+    const chunk = wanted.slice(i, i + 90);
+    const { results } = await db
+      .prepare(
+        `SELECT i.name FROM ${FROM} WHERE p.handle = ?1 AND i.kind = 'skill' AND i.status IN ('public', 'listed') AND i.visibility = 'public'
+            AND i.name IN (${marks(chunk.length, 2)})`,
+      )
+      .bind(handle, ...chunk)
+      .all<{ name: string }>();
+    for (const r of results) found.add(r.name);
+  }
+  return skills.map((s, i) => ({ name: s, ref: found.has(names[i]) ? `${handle}/${names[i]}` : null }));
 }
 
 /** A prompt's text, by its item's address (public or listed); null if there is none. */

@@ -1,4 +1,4 @@
-import MarkdownIt from 'markdown-it';
+import MarkdownIt, { type Token } from 'markdown-it';
 
 /**
  * Descriptions from packages, rendered to HTML that is safe to put on
@@ -39,11 +39,64 @@ md.renderer.rules.image = (tokens, i) => {
 
 export const renderMarkdown = (text: string): string => md.render(text, {} satisfies RenderState);
 
-/** The start of a description as plain text, for the search index. */
-export function excerpt(text: string, max = 2000): string {
+/** Line ends as markdown-it reads them (\n), and no NUL: what its block parser expects. */
+const normalize = (text: string) => text.replace(/\r\n?/g, '\n').replace(/\0/g, '\uFFFD');
+
+/** The block structure of a Markdown text, as markdown-it reads it (no inline parsing: quick and small). */
+function blocksOf(text: string): Token[] {
+  const tokens: Token[] = [];
+  md.block.parse(text, md, {}, tokens);
+  return tokens;
+}
+
+/**
+ * A Markdown text's prose: its code taken out (fenced and indented blocks, at
+ * any depth: in a list or a quote too, as markdown-it reads them), and the
+ * comments in what is left, each within the stretch of prose it is in, so
+ * taking the code out cannot pair one comment's start with another's end.
+ * Line ends as \n; the stretches parted by a blank line, as the code was.
+ */
+export function prose(text: string): string {
+  const src = normalize(text);
+  const code = new Set<number>();
+  for (const t of blocksOf(src)) {
+    if ((t.type === 'fence' || t.type === 'code_block') && t.map) for (let i = t.map[0]; i < t.map[1]; i++) code.add(i);
+  }
+  const runs: string[][] = [[]];
+  src.split('\n').forEach((line, i) => {
+    if (!code.has(i)) runs[runs.length - 1].push(line);
+    else if (runs[runs.length - 1].length) runs.push([]);
+  });
+  return runs
+    .filter((r) => r.length)
+    .map((r) => r.join('\n').replace(/<!--[\s\S]*?-->/g, ' '))
+    .join('\n\n');
+}
+
+/**
+ * A body's first top-level `#` heading among its first lines: what its author
+ * titled it. One in code is not (`# Read the build file` in a shell block is a
+ * comment), nor one inside a list, a quote or a table's head. Only those lines
+ * are read, and a few after them (a table's second line makes its first one).
+ */
+export function firstHeading(body: string, lines = 20): string | null {
+  const head = normalize(body).split('\n', lines + 10).join('\n');
+  const tokens = blocksOf(head);
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (t.type !== 'heading_open' || t.tag !== 'h1' || t.level !== 0 || t.markup !== '#' || !t.map || t.map[0] >= lines) continue;
+    const text = tokens[i + 1]?.content.trim() ?? '';
+    if (text.length >= 2 && text.length <= 80) return text;
+  }
+  return null;
+}
+
+/**
+ * Prose (see `prose`) as plain text, for the search index: pictures, link
+ * targets and markup taken out, spaces collapsed, cut to `max`.
+ */
+export function plainText(text: string, max = 2000): string {
   return text
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/```[\s\S]*?```/g, ' ')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/[#>*_`|~-]+/g, ' ')
@@ -51,3 +104,10 @@ export function excerpt(text: string, max = 2000): string {
     .trim()
     .slice(0, max);
 }
+
+/**
+ * The start of a description as plain text, for the search index: no code, no
+ * comments. Only its first 64 KiB are read (a SKILL.md may be megabytes; its
+ * start is what is wanted).
+ */
+export const excerpt = (text: string, max = 2000): string => plainText(prose(text.slice(0, 64 * 1024)), max);

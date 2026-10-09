@@ -1,0 +1,81 @@
+---
+/**
+ * What an assistant may touch, by its tools: four marks, read, edit, run and
+ * web, lit where it may, with "All tools" after them when its tools are not
+ * limited. Compact, four dots alone (in a row of other marks). Either way it
+ * reads as one sentence to a screen reader.
+ */
+import { harnessDicts } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+
+interface Props {
+  access: { read: boolean; edit: boolean; run: boolean; web: boolean; all: boolean };
+  lang: Lang;
+  compact?: boolean;
+}
+const { access, lang, compact = false } = Astro.props;
+const a = harnessDicts[lang].assistant.access;
+const kinds = ['read', 'edit', 'run', 'web'] as const;
+const sentence = a.say(access);
+---
+<span class:list={['access', compact && 'access--compact']} role="img" aria-label={sentence} title={compact ? sentence : undefined}>
+  {kinds.map((k) => (
+    <span class:list={['access__mark', access[k] && 'is-on']} aria-hidden="true">
+      <span class="access__dot"></span>
+      {!compact && <span class="access__name">{a[k]}</span>}
+    </span>
+  ))}
+  {!compact && access.all && <span class="access__all" aria-hidden="true">{a.all}</span>}
+</span>
+
+<style>
+  .access {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-4);
+    min-width: 0;
+    font-size: 12.5px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .access__mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--graphite);
+  }
+
+  .access__mark.is-on {
+    color: var(--corona-80);
+  }
+
+  .access__dot {
+    width: 7px;
+    height: 7px;
+    border: 1px solid rgb(var(--corona-rgb) / 0.3);
+    border-radius: 50%;
+  }
+
+  .is-on .access__dot {
+    border-color: transparent;
+    background: var(--bead);
+  }
+
+  .access__all {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--bead);
+  }
+
+  /* four dots, close together */
+  .access--compact {
+    gap: 4px;
+  }
+
+  .access--compact .access__dot {
+    width: 6px;
+    height: 6px;
+  }
+</style>

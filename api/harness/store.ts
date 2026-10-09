@@ -3,7 +3,7 @@ import { buildZip, putArchive, putBlob, sha256, type PackageFile } from './files
 import { renderMarkdown } from './markdown';
 import type { Checks, ItemKind, ItemStatus, Listing, PinnedPackage, Risk } from './model';
 import type { PermissionProfile } from './scan/permissions';
-import { searchDoc, searchStatements } from './search';
+import { docsFor, searchDoc, searchStatements, type SearchDoc } from './search';
 import { loadTags } from './tags';
 
 /** Who an imported item is published under, as its source names them. */
@@ -58,6 +58,8 @@ export interface VersionInput {
   card?: unknown;
   /** what its own signals add to its popularity (items.boost): a prompt's results */
   boost?: number;
+  /** where it stands among its collection's items of its kind, from 1 (rankInputs): its share of their stars */
+  rank?: number;
 }
 
 export interface SaveResult {
@@ -81,9 +83,39 @@ export function decideStatus(current: ItemStatus | undefined, risk: Risk, reason
   return reasons.length ? 'listed' : 'public';
 }
 
-/** log10(1 + stars), with what the item's own signals add (`boost`), lowered for stuffed descriptions; installs join in H3. */
-export const popularityOf = (quality: number, repoStars: number | null | undefined, featured = false, boost = 0) =>
-  Math.round(quality * (Math.log10(1 + Math.max(0, repoStars ?? 0)) + boost + (featured ? 2 : 0)) * 1000) / 1000;
+/**
+ * log10(1 + stars), with what the item's own signals add (`boost`), lowered for stuffed descriptions; installs join in H3.
+ * A repository's stars are its items' together: the r-th of a collection (`rank`) counts a 1/r share of them, the
+ * way attention to a collection's items usually falls off, so a collection of hundreds does not fill the shelves.
+ */
+export const popularityOf = (quality: number, repoStars: number | null | undefined, featured = false, boost = 0, rank = 1) =>
+  Math.round(quality * (Math.log10(1 + Math.max(0, repoStars ?? 0) / Math.max(1, rank)) + boost + (featured ? 2 : 0)) * 1000) / 1000;
+
+/** FNV-1a: an order of their own for items nothing else tells apart, the same on every run. */
+const fnv = (text: string) => {
+  let hash = 2166136261;
+  for (const ch of text) hash = Math.imul(hash ^ ch.codePointAt(0)!, 16777619) >>> 0;
+  return hash;
+};
+
+/**
+ * Rank the items of one collection (a repository's import), kind by kind
+ * (VersionInput.rank): by the popularity their own signals give them (a
+ * careful description, a prompt's results), those kept off the shelves last,
+ * ties in an order of their own. Until Harness has installs, nothing else
+ * says which of a collection's items its stars are for.
+ */
+export function rankInputs(inputs: VersionInput[]): void {
+  const off = (i: VersionInput) => i.risk === 'high' || i.checks.quality.reasons.length > 0 || i.checks.secrets.length > 0 || i.checks.format.errors.length > 0;
+  const kinds = new Map<string, VersionInput[]>();
+  for (const i of inputs) kinds.set(i.kind, [...(kinds.get(i.kind) ?? []), i]);
+  for (const list of kinds.values()) {
+    list
+      .map((i) => ({ i, off: off(i), base: popularityOf(i.checks.quality.score, i.repoStars, false, i.boost ?? 0), tie: fnv(i.sourceKey) }))
+      .sort((a, b) => Number(a.off) - Number(b.off) || b.base - a.base || a.tie - b.tie)
+      .forEach((x, n) => (x.i.rank = n + 1));
+  }
+}
 
 const json = (v: unknown) => JSON.stringify(v);
 const unique = <T>(xs: T[]) => [...new Set(xs)];
@@ -114,9 +146,11 @@ interface ItemRow {
   published_at: string | null;
   quality: number;
   repo_stars: number | null;
+  popularity: number;
   featured: number;
   card: string | null;
   boost: number;
+  dedupe_key: string | null;
   content_sha256: string | null;
 }
 
@@ -171,7 +205,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
   const { results: itemRows } = await db
     .prepare(
       `SELECT i.id, i.latest_version_id, i.publisher_id, i.name, i.status, i.listed_reasons, i.latest_revision, i.source_key, i.published_at,
-              i.quality, i.repo_stars, i.featured, i.card, i.boost, v.content_sha256
+              i.quality, i.repo_stars, i.popularity, i.featured, i.card, i.boost, i.dedupe_key, v.content_sha256
          FROM items i LEFT JOIN item_versions v ON v.id = i.latest_version_id
         WHERE i.source_key IN (${marks(keys.length)})`,
     )
@@ -190,18 +224,18 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
       .all<{ publisher_id: string; name: string }>();
     for (const r of results) taken.add(`${r.publisher_id}/${r.name}`);
   }
-  /** a free name under the publisher: the one asked for, or it with -2, -3, ... */
+  /** a free name under the publisher: the one asked for, or it with -2, -3, ... (cut short enough for the number, never on a hyphen) */
   const freeName = async (pubId: string, name: string) => {
     if (!taken.has(`${pubId}/${name}`)) return name;
-    const base = name.slice(0, 60);
+    const stem = (n: number) => name.slice(0, 63 - String(n).length).replace(/-+$/, '');
     const { results } = await db
-      .prepare("SELECT name FROM items WHERE publisher_id = ?1 AND name LIKE ?2 || '-%'")
-      .bind(pubId, base)
+      .prepare("SELECT name FROM items WHERE publisher_id = ?1 AND name LIKE ?2 || '%'")
+      .bind(pubId, stem(99999))
       .all<{ name: string }>();
     for (const r of results) taken.add(`${pubId}/${r.name}`);
     let n = 2;
-    while (taken.has(`${pubId}/${base}-${n}`)) n++;
-    return `${base}-${n}`;
+    while (taken.has(`${pubId}/${stem(n)}-${n}`)) n++;
+    return `${stem(n)}-${n}`;
   };
 
   // Who holds each dedupe key: an item already on the shelves (or waiting for review) keeps it.
@@ -229,6 +263,8 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
   const tagNames = new Map((await loadTags(db)).map((t) => [t.id, t]));
 
   const groups: D1PreparedStatement[][] = [];
+  /** unchanged items coming on or off the shelves, whose search rows are written from what is stored of them */
+  const restore: { group: D1PreparedStatement[]; id: string; version: string; fallback: SearchDoc }[] = [];
   /** R2 writes for the new versions, each object once (many skills share a file) */
   const writes = new Map<string, () => Promise<unknown>>();
 
@@ -261,7 +297,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
     const quality = input.checks.quality.score;
     const repoStars = input.repoStars ?? old?.repo_stars ?? null;
     const boost = input.boost ?? 0;
-    const popularity = popularityOf(quality, repoStars, !!old?.featured, boost);
+    const popularity = popularityOf(quality, repoStars, !!old?.featured, boost, input.rank);
     const card = input.card === undefined || input.card === null ? null : json(input.card);
     const { title, summary, tags } = input.listing;
     // files, and anything read from them, are kept only when the license allows it
@@ -280,20 +316,34 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
 
     if (old && old.content_sha256 === input.contentSha256) {
       // same content: only where it stands may have changed (a source's status, a publisher found to publish in bulk),
-      // and what its card shows (the pictures it picks from, as they are found)
+      // what its card shows (the pictures it picks from, as they are found), whether it stands for its copies, and
+      // where it ranks among its collection's items; its search row changes only with whether it is on the shelves
       result.unchanged++;
-      if (old.status !== status || old.listed_reasons !== json(reasons) || old.repo_stars !== repoStars || old.card !== card || old.boost !== boost) {
+      const dedupeKey = input.dedupeKey ?? null;
+      if (
+        old.status !== status ||
+        old.listed_reasons !== json(reasons) ||
+        old.repo_stars !== repoStars ||
+        old.card !== card ||
+        old.boost !== boost ||
+        old.dedupe_key !== dedupeKey
+      ) {
         group.push(
           db
             .prepare(
               `UPDATE items SET status = ?1, listed_reasons = ?2, repo_stars = ?3, popularity = ?4, updated_at = ?5, card = ?7, boost = ?8,
-                      published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN version_at END)
+                      dedupe_key = ?9, published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN version_at END)
                 WHERE id = ?6`,
             )
-            .bind(status, json(reasons), repoStars, popularity, now, old.id, card, boost),
+            .bind(status, json(reasons), repoStars, popularity, now, old.id, card, boost, dedupeKey),
         );
-        if (old.status !== status) group.push(event(db, old.id, null, status, old.status, now));
-        group.push(...searchStatements(db, old.id, old.latest_version_id, doc(old.name)));
+        if (old.status !== status) {
+          group.push(event(db, old.id, null, status, old.status, now));
+          // on or off the shelves, its search row comes or goes (added to the group below)
+          restore.push({ group, id: old.id, version: old.latest_version_id, fallback: doc(old.name) });
+        }
+      } else if (old.popularity !== popularity) {
+        group.push(db.prepare('UPDATE items SET popularity = ?1 WHERE id = ?2').bind(popularity, old.id));
       }
       if (group.length) groups.push(group);
       continue;
@@ -401,6 +451,12 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
   }
 
   // each one is a round trip, so they overlap
+  // what is stored of a version, not what the import would make of it now (its tags or excerpt by newer rules,
+  // say): the same text repairs and rescans write, read for all these items at once
+  if (restore.length) {
+    const docs = await docsFor(db, restore.map((r) => r.id));
+    for (const r of restore) r.group.push(...searchStatements(db, r.id, r.version, docs.get(r.id)?.doc ?? r.fallback));
+  }
   await inParallel(writes.values());
   await runGroups(db, groups);
 }

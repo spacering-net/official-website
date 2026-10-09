@@ -102,6 +102,77 @@ export interface StoredPromptCard {
   partial: boolean;
 }
 
+/**
+ * One of the examples a definition's description gives (Anthropic writes them
+ * in `<example>` blocks): when it is called, what the user says, what the
+ * main session answers, and why.
+ */
+export interface AssistantExample {
+  context: string | null;
+  user: string;
+  assistant: string | null;
+  commentary: string | null;
+}
+
+/** What an assistant may touch, by its tools: read files, change them, run commands, reach the web; `all` when its tools are not limited. */
+export interface Access {
+  read: boolean;
+  edit: boolean;
+  run: boolean;
+  web: boolean;
+  all: boolean;
+}
+
+/** An assistant as a version keeps it (item_versions.metadata.assistant): its definition's frontmatter, read. */
+export interface AssistantMeta {
+  /** as the definition gives it: what the assistant is called where it is installed */
+  name: string;
+  /** when to hand it work, without the examples written into it */
+  description: string;
+  /** null: not limited, it may use every tool the agent has */
+  tools: string[] | null;
+  disallowedTools: string[];
+  /** as written: an alias (sonnet, opus, haiku, fable, inherit) or a model id */
+  model: string | null;
+  /** one of Claude Code's eight colours, the nearest when it named another; null when it names none */
+  color: string | null;
+  /** skills it has loaded when it starts, by name */
+  skills: string[];
+  /** MCP servers it may use, by name */
+  mcpServers: string[];
+  /** MCP servers it defines itself with a command to launch */
+  mcpLaunches: string[];
+  permissionMode: string | null;
+  hooks: boolean;
+  /** a line about itself, for people (agency-agents' `vibe`) */
+  vibe: string | null;
+  emoji: string | null;
+  /** things to say to it: its own example prompts, and the user's turns in its examples */
+  starters: string[];
+  examples: AssistantExample[];
+  /** the rest of its frontmatter, as written */
+  settings: Record<string, unknown>;
+  /** its file's name, in its folder (the version's metadata.path) */
+  file: string;
+  /** the plugin it comes in, when its repository keeps it in one */
+  plugin: string | null;
+}
+
+/** What an assistant's card shows (items.card). */
+export interface StoredAssistantCard {
+  /** its description, without examples, cut to what a card can show */
+  role: string;
+  model: string | null;
+  tools: string[] | null;
+  access: Access;
+  color: string | null;
+  skills: number;
+  mcpServers: number;
+  plugin: string | null;
+  /** the other plugins of its repository that carry the same assistant */
+  alsoIn: string[];
+}
+
 export const listingOf = (title: Localized, summary: Localized, tags: string[]): Listing => ({
   title,
   summary,

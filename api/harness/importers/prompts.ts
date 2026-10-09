@@ -7,7 +7,7 @@ import { riskOf, scanStructure } from '../scan/content';
 import { emptyPermissions } from '../scan/permissions';
 import { applyRules, loadRules } from '../scan/rules';
 import { redactSecrets, scanSecrets } from '../scan/secrets';
-import { retireItems, saveVersions, type VersionInput } from '../store';
+import { rankInputs, retireItems, saveVersions, type VersionInput } from '../store';
 import { autoTags, loadTags } from '../tags';
 import { clip, localize, toName, type Localized } from '../text';
 import { gh, type Repo, type RepoResult } from './github';
@@ -304,6 +304,7 @@ export async function importPrompts(
     });
   }
   result.skills = inputs.length;
+  rankInputs(inputs);
 
   // the pictures, for the media job to copy (each address once)
   const now = new Date().toISOString();

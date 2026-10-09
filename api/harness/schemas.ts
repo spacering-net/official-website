@@ -40,6 +40,30 @@ export const PromptCard = z
   })
   .openapi('PromptCard');
 
+export const Access = z
+  .object({
+    read: z.boolean().openapi({ description: 'It may read files (Read, Grep, Glob).' }),
+    edit: z.boolean().openapi({ description: 'It may change files (Write, Edit).' }),
+    run: z.boolean().openapi({ description: 'It may run commands (Bash).' }),
+    web: z.boolean().openapi({ description: 'It may reach the web (WebFetch, WebSearch).' }),
+    all: z.boolean().openapi({ description: 'Its tools are not limited: every tool the agent has, MCP tools included.' }),
+  })
+  .openapi('Access', { description: "What an assistant may touch, by its definition's tools." });
+
+export const AssistantCard = z
+  .object({
+    role: z.string().openapi({ description: 'What it does: its description without examples, cut to what a card shows.' }),
+    model: z.string().nullable().openapi({ example: 'sonnet', description: 'As its definition gives it: an alias (sonnet, opus, haiku, fable, inherit) or a model id.' }),
+    tools: z.array(z.string()).nullable().openapi({ description: 'The tools it lists; null when it lists none (not limited).' }),
+    access: Access,
+    color: z.string().nullable().openapi({ example: 'blue', description: "One of Claude Code's eight colours for subagents, the nearest to the one it names; null for none." }),
+    skills: z.number().int().openapi({ description: 'How many skills it has loaded when it starts.' }),
+    mcpServers: z.number().int().openapi({ description: 'How many MCP servers it names.' }),
+    plugin: z.string().nullable().openapi({ description: 'The plugin of its repository it comes in.' }),
+    alsoIn: z.array(z.string()).openapi({ description: 'Other plugins of its repository that carry the same assistant (listed as copies).' }),
+  })
+  .openapi('AssistantCard');
+
 export const ItemSummary = z
   .object({
     id: z.string().openapi({ description: 'Stable id (UUIDv7); survives renames.' }),
@@ -61,6 +85,7 @@ export const ItemSummary = z
     installs: z.number().int(),
     latest: z.object({ revision: z.number().int(), version: z.string().nullable(), publishedAt: z.string() }),
     prompt: PromptCard.optional().openapi({ description: 'Prompts only: what their cards show.' }),
+    assistant: AssistantCard.optional().openapi({ description: 'Assistants only: what their cards show.' }),
   })
   .openapi('ItemSummary');
 
@@ -80,7 +105,7 @@ export const Permissions = z
     network: z.array(z.string()),
     secrets: z.array(z.string()),
     paths: z.array(z.string()),
-    tools: z.array(z.string()),
+    tools: z.array(z.string()).openapi({ description: "Agent tools it asks for; an assistant that lists none may use all of them, given as ['*']." }),
   })
   .openapi('Permissions');
 
@@ -133,6 +158,42 @@ export const PromptInfo = z
   })
   .openapi('PromptInfo');
 
+export const AssistantExample = z
+  .object({
+    context: z.string().nullable(),
+    user: z.string().openapi({ description: 'What the user says.' }),
+    assistant: z.string().nullable().openapi({ description: 'How the main session answers, handing the work over.' }),
+    commentary: z.string().nullable().openapi({ description: 'Why it is handed over.' }),
+  })
+  .openapi('AssistantExample', { description: "An example from its definition's description, written for the agent that decides when to hand it work." });
+
+export const AssistantInfo = z
+  .object({
+    name: z.string().openapi({ description: 'As its definition gives it: what it is called once installed (it may differ from the address).' }),
+    file: z.string().openapi({ example: 'code-reviewer.md', description: 'The definition, the one file of the package.' }),
+    description: z.string().openapi({ description: 'When to hand it work, without the examples written into it.' }),
+    model: z.string().nullable(),
+    tools: z.array(z.string()).nullable().openapi({ description: 'null: not limited.' }),
+    disallowedTools: z.array(z.string()),
+    access: Access,
+    color: z.string().nullable(),
+    skills: z
+      .array(z.object({ name: z.string(), ref: z.string().nullable().openapi({ description: "The skill's address in Harness (same publisher), if it has one." }) }))
+      .openapi({ description: 'Skills it has loaded when it starts: install them with it.' }),
+    mcpServers: z.array(z.string()).openapi({ description: 'MCP servers it may use, by the names the user has them under.' }),
+    mcpLaunches: z.array(z.string()).openapi({ description: 'MCP servers it defines itself with a command to launch.' }),
+    permissionMode: z.string().nullable(),
+    hooks: z.boolean().openapi({ description: 'It brings hooks, which run commands.' }),
+    starters: z.array(z.string()).openapi({ description: 'Things to say to it.' }),
+    examples: z.array(AssistantExample),
+    vibe: z.string().nullable().openapi({ description: 'A line about itself, for people.' }),
+    emoji: z.string().nullable(),
+    settings: z.record(z.string(), z.unknown()).openapi({ description: 'The rest of its frontmatter, as written (effort, maxTurns, initialPrompt, ...).' }),
+    plugin: z.string().nullable(),
+    alsoIn: z.array(z.string()),
+  })
+  .openapi('AssistantInfo');
+
 export const FileEntry = z.object({ path: z.string(), sha256: z.string(), size: z.number().int(), executable: z.boolean() }).openapi('FileEntry');
 
 export const InstallInfo = z
@@ -159,6 +220,7 @@ export const InstallInfo = z
       .optional(),
     server: z.looseObject({ name: z.string() }).optional().openapi({ description: "The registry's server.json, as published." }),
     prompt: PromptInfo.optional().openapi({ description: 'Prompts only. The package is PROMPT.md: this text, with frontmatter.' }),
+    assistant: AssistantInfo.optional().openapi({ description: 'Assistants only. The package is the definition (`file`), a Claude Code subagent as written.' }),
     packages: z.array(PinnedPackage).optional(),
     permissions: Permissions,
     risk: Risk,
@@ -241,3 +303,5 @@ export type PublisherSummary = z.infer<typeof Publisher>;
 export type FileEntry = z.infer<typeof FileEntry>;
 export type PromptCard = z.infer<typeof PromptCard>;
 export type PromptInfo = z.infer<typeof PromptInfo>;
+export type AssistantCard = z.infer<typeof AssistantCard>;
+export type AssistantInfo = z.infer<typeof AssistantInfo>;

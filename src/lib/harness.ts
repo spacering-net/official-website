@@ -12,6 +12,8 @@ import {
   listItems,
   listTags,
   SORTS,
+  type AssistantCard,
+  type AssistantInfo,
   type ItemDetail,
   type ItemList,
   type ItemSummary,
@@ -22,8 +24,9 @@ import {
 } from '../../api/harness/catalog';
 import type { ItemKind } from '../../api/harness/model';
 
-export type { ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
+export type { AssistantCard, AssistantInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
 export { modelName } from '../../api/harness/prompt';
+export { roleText, withoutAgentWord } from '../../api/harness/assistant';
 
 export interface BrowseState {
   q: string;

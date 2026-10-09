@@ -9,6 +9,8 @@ export interface Tag {
 
 interface CompiledTag extends Tag {
   words: { re: RegExp; han: boolean }[];
+  /** phrases that do not count for it ("!writing code" for Writing), taken out before its words are looked for */
+  not: RegExp[];
 }
 
 const TTL = 10 * 60 * 1000;
@@ -21,15 +23,18 @@ const HAN = /\p{Script=Han}/u;
 export async function loadTags(db: D1Database): Promise<CompiledTag[]> {
   if (cached && Date.now() - cached.at < TTL) return cached.tags;
   const { results } = await db.prepare('SELECT id, name_en, name_zh, match, sort FROM tags ORDER BY sort, id').all<Tag & { match: string }>();
-  const tags = results.map(({ match, ...t }) => ({
-    ...t,
-    words: (JSON.parse(match) as string[]).map((w) =>
-      HAN.test(w)
-        ? { re: new RegExp(escape(w), 'u'), han: true }
-        : // whole words: not inside a longer word, so "map" does not match "mapping"
-          { re: new RegExp(`(?<![\\p{L}\\p{N}])${escape(w)}(?![\\p{L}\\p{N}])`, 'iu'), han: false },
-    ),
-  }));
+  // whole words: not inside a longer word, so "map" does not match "mapping"
+  const whole = (w: string, flags: string) => new RegExp(`(?<![\\p{L}\\p{N}])${escape(w)}(?![\\p{L}\\p{N}])`, flags);
+  const tags = results.map(({ match, ...t }) => {
+    const list = JSON.parse(match) as string[];
+    return {
+      ...t,
+      words: list
+        .filter((w) => !w.startsWith('!'))
+        .map((w) => (HAN.test(w) ? { re: new RegExp(escape(w), 'u'), han: true } : { re: whole(w, 'iu'), han: false })),
+      not: list.filter((w) => w.startsWith('!')).map((w) => (HAN.test(w) ? new RegExp(escape(w.slice(1)), 'gu') : whole(w.slice(1), 'giu'))),
+    };
+  });
   cached = { at: Date.now(), tags };
   return tags;
 }
@@ -44,9 +49,11 @@ export function autoTags(tags: CompiledTag[], text: { name: string; title?: stri
   const scored: { id: string; score: number; sort: number }[] = [];
   for (const t of tags) {
     let score = 0;
+    const without = (s: string) => t.not.reduce((x, re) => x.replace(re, ' '), s);
+    const [n, r] = t.not.length ? [without(name), without(rest)] : [name, rest];
     for (const w of t.words) {
-      if (w.re.test(name)) score += 3;
-      if (w.re.test(rest)) score += 1;
+      if (w.re.test(n)) score += 3;
+      if (w.re.test(r)) score += 1;
     }
     if (score) scored.push({ id: t.id, score, sort: t.sort });
   }

@@ -1,6 +1,6 @@
 import { asText, readTar, sha256, type PackageFile } from '../files';
 import { licenseFromText, REDISTRIBUTABLE, spdx } from '../limits';
-import { excerpt } from '../markdown';
+import { excerpt, firstHeading } from '../markdown';
 import { listingOf, type Checks } from '../model';
 import { normalizePackage, type RawFile } from '../package';
 import { riskOf, scanStructure } from '../scan/content';
@@ -8,9 +8,10 @@ import { skillPermissions } from '../scan/permissions';
 import { applyRules, loadRules } from '../scan/rules';
 import { redactDeep, redactSecrets, scanSecrets } from '../scan/secrets';
 import { parseSkill } from '../skill';
-import { retireItems, saveVersions, type VersionInput } from '../store';
+import { rankInputs, retireItems, saveVersions, type VersionInput } from '../store';
 import { autoTags, loadTags } from '../tags';
 import { clip, descriptionQuality, localize } from '../text';
+import { assistantInputs, findAssistantFiles, pluginOf, type AssistantConfig } from './assistants';
 
 /**
  * Skills from GitHub repositories (docs: section 12): a curated list to begin
@@ -18,7 +19,8 @@ import { clip, descriptionQuality, localize } from '../text';
  * once; every folder with a SKILL.md becomes an item under the repository's
  * owner, unclaimed until they sign in. Files are kept only when the license
  * allows; otherwise only their list and hashes, and clients fetch them from
- * GitHub at the same commit.
+ * GitHub at the same commit. A source may take the repository's assistants
+ * too, in the same run (importers/assistants.ts), or only those.
  */
 
 const API = 'https://api.github.com';
@@ -35,12 +37,17 @@ export interface RepoConfig {
    * usually copies made for one agent (.claude/skills, .codex/skills).
    */
   hidden?: boolean;
+  /** false: not this repository's skills (a source of assistants only) */
+  skills?: boolean;
+  /** its assistants too, found as this says; none without it */
+  assistants?: AssistantConfig;
 }
 
 export interface RepoResult {
   commit: string;
   changed: boolean;
   skills: number;
+  assistants?: number;
   created: number;
   updated: number;
   retired: number;
@@ -92,9 +99,12 @@ export async function importRepo(
   if (!force && commit.sha === lastCommit) return result;
   result.changed = true;
 
-  // which folders are skills: the tree lists every path with its size, before anything is downloaded
+  // which folders are skills, and which files may be assistants: the tree lists every path with its
+  // size, before anything is downloaded
   const tree = await gh<{ tree: { path: string; type: string; size?: number }[]; truncated: boolean }>(env, `/repos/${repo.full_name}/git/trees/${commit.sha}?recursive=1`);
   if (tree.truncated) throw new Error(`${repo.full_name}: tree too large to list`);
+  const blobs = tree.tree.filter((e) => e.type === 'blob');
+  const paths = new Set(blobs.map((e) => e.path));
   const within = (p: string) =>
     (config.paths?.length ? config.paths : ['']).some((root) => {
       const r = root.replace(/\/$/, '');
@@ -102,20 +112,37 @@ export async function importRepo(
       const folders = (r ? p.slice(r.length + 1) : p).split('/').slice(0, -1);
       return config.hidden || !folders.some((f) => f.startsWith('.'));
     });
-  const skillDirs = tree.tree
-    .filter((e) => e.type === 'blob' && /(^|\/)SKILL\.md$/.test(e.path) && within(e.path))
-    .map((e) => e.path.replace(/\/?SKILL\.md$/, ''))
-    // a skill inside another skill's folder is part of that skill
-    .filter((d, _, all) => !all.some((o) => o !== d && (o === '' || d.startsWith(`${o}/`))))
-    .sort();
+  // a skill inside another skill's folder is part of that skill
+  const outermost = (dirs: string[]) => dirs.filter((d, _, all) => !all.some((o) => o !== d && (o === '' || d.startsWith(`${o}/`))));
+  const skillFiles = blobs.filter((e) => /(^|\/)SKILL\.md$/.test(e.path));
+  const skillDirs = config.skills === false ? [] : outermost(skillFiles.filter((e) => within(e.path)).map((e) => e.path.replace(/\/?SKILL\.md$/, ''))).sort();
   const dirOf = (path: string) => skillDirs.find((d) => d === '' || path === d || path.startsWith(`${d}/`));
-  const bytes = tree.tree.filter((e) => e.type === 'blob' && dirOf(e.path) !== undefined).reduce((n, e) => n + (e.size ?? 0), 0);
+  // an agent inside any skill's folder is that skill's own, whether or not the skills are taken
+  const assistantFiles = config.assistants
+    ? findAssistantFiles(
+        blobs.map((e) => e.path),
+        config.assistants,
+        outermost(skillFiles.map((e) => e.path.replace(/\/?SKILL\.md$/, ''))),
+      )
+    : [];
+  const wanted = new Set(assistantFiles);
+  // the folders above each assistant, where its license may be
+  const above = new Set<string>();
+  for (const p of assistantFiles) for (let d = parentOf(p); ; d = parentOf(d)) {
+    above.add(d);
+    if (!d) break;
+  }
+  const isLicense = (path: string) => /^LICEN[CS]E(\.(md|txt))?$/i.test(path.slice(path.lastIndexOf('/') + 1));
+  const bytes = blobs.filter((e) => dirOf(e.path) !== undefined || wanted.has(e.path)).reduce((n, e) => n + (e.size ?? 0), 0);
   if (bytes > MAX_SKILLS_BYTES) throw new Error(`${repo.full_name}: skills too large (${bytes} bytes)`);
 
-  // one download: the commit's tarball, keeping only files inside skill folders
+  // one download: the commit's tarball, keeping only files inside skill folders, the assistants, and
+  // the license files above them
   const raw = new Map<string, RawFile[]>(skillDirs.map((d) => [d, []]));
   const licenses = new Map<string, string>();
-  if (skillDirs.length) {
+  const assistantData = new Map<string, Uint8Array>();
+  const folderLicenses = new Map<string, string>();
+  if (skillDirs.length || assistantFiles.length) {
     const res = await fetch(`https://codeload.github.com/${repo.full_name}/tar.gz/${commit.sha}`, {
       headers: { 'User-Agent': 'spacering.net-harness' },
       signal: AbortSignal.timeout(120_000),
@@ -128,13 +155,21 @@ export async function importRepo(
       (e) => {
         const path = strip(e.path);
         const dir = dirOf(path);
-        if (dir === undefined) return false;
+        if (dir === undefined) return e.type === 'file' && (wanted.has(path) || (isLicense(path) && above.has(parentOf(path))));
         if (e.type !== 'file' && e.type !== 'dir') raw.get(dir)!.push({ path: path.slice(dir ? dir.length + 1 : 0), data: new Uint8Array(), type: e.type });
         return e.type === 'file';
       },
       (e, data) => {
         const path = strip(e.path);
-        const dir = dirOf(path)!;
+        const dir = dirOf(path);
+        if (dir === undefined) {
+          if (wanted.has(path)) assistantData.set(path, data);
+          else {
+            const id = licenseFromText(asText(data) ?? '');
+            if (id) folderLicenses.set(parentOf(path), id);
+          }
+          return;
+        }
         const rel = path.slice(dir ? dir.length + 1 : 0);
         raw.get(dir)!.push({ path: rel, data, executable: (e.mode & 0o111) !== 0, type: 'file' });
         if (/^LICEN[CS]E(\.(md|txt))?$/i.test(rel)) {
@@ -177,7 +212,7 @@ export async function importRepo(
     const description = clean(meta.description);
     const summary = localize(description);
     // skills have no title field; the body's first heading is the author's own
-    const heading = /^#\s+(.{2,80})$/m.exec(parsed.body.split('\n').slice(0, 20).join('\n'))?.[1].trim();
+    const heading = firstHeading(parsed.body);
     const title = localize(heading && heading.toLowerCase() !== meta.name ? clean(heading.replace(/[*_`]/g, '')) : '');
     const checks: Checks = {
       format: { errors: [], warnings: parsed.warnings, dropped: pkg.dropped },
@@ -222,22 +257,57 @@ export async function importRepo(
     });
   }
   result.skills = inputs.length;
+  const prefix = `github:${repo.full_name.toLowerCase()}:`;
+
+  // the assistants, named clear of the skills of this import
+  const assistants = assistantFiles.length
+    ? await assistantInputs(
+        db,
+        {
+          fullName: repo.full_name,
+          htmlUrl: repo.html_url,
+          commit: commit.sha,
+          committedAt: commit.commit.committer?.date ?? new Date().toISOString(),
+          stars: repo.stargazers_count,
+          publisher: { kind: 'github', handle: repo.owner.login.toLowerCase(), name: repo.owner.login, githubLogin: repo.owner.login, githubId: repo.owner.id },
+          license: repoLicense,
+        },
+        assistantData,
+        folderLicenses,
+        new Map(assistantFiles.map((p) => [p, pluginOf(p, (path) => paths.has(path))])),
+        new Map(inputs.map((i) => [i.name, i.sourceKey])),
+        { rules, hash },
+      )
+    : { inputs: [], rejected: [] };
+  result.assistants = assistants.inputs.length;
+  result.rejected.push(...assistants.rejected);
+  rankInputs([...inputs, ...assistants.inputs]);
+
   const saved = await saveVersions(env, inputs, until);
   result.created = saved.created;
   result.updated = saved.updated;
-  result.remaining = saved.remaining;
+  result.remaining = saved.remaining + (saved.remaining ? assistants.inputs.length : 0);
+  if (result.remaining) return result;
+  // The assistants' copies inside this repository are told apart by the import itself, on every run:
+  // its own items saved before hold no body against one another (one may be changing now)
+  const savedAssistants = await saveVersions(env, assistants.inputs, until, prefix);
+  result.created += savedAssistants.created;
+  result.updated += savedAssistants.updated;
+  result.remaining = savedAssistants.remaining;
   if (result.remaining) return result;
 
-  // skills that were in this repository before and are gone now
-  const prefix = `github:${repo.full_name.toLowerCase()}:`;
+  // skills and assistants that were in this repository before and are gone now
   const { results: before } = await db
     .prepare("SELECT source_key FROM items WHERE source_key >= ?1 AND source_key < ?2 AND status NOT IN ('retired', 'removed')")
     .bind(prefix, `${prefix}\u{10FFFF}`)
     .all<{ source_key: string }>();
-  const now = new Set(inputs.map((i) => i.sourceKey));
+  const now = new Set([...inputs, ...assistants.inputs].map((i) => i.sourceKey));
   result.retired = await retireItems(db, before.map((b) => b.source_key).filter((k) => !now.has(k)));
   return result;
 }
+
+/** A path's folder ('' at the top). */
+const parentOf = (path: string) => (path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '');
 
 /** One hash for a set of files: their paths, modes and contents. A re-import that changed nothing makes no new version. */
 async function treeHash(files: PackageFile[]): Promise<string> {

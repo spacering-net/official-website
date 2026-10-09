@@ -1,6 +1,7 @@
 import { uuidv7 } from '../ids';
+import { assistantFindings } from './assistant';
 import type { PackageFile } from './files';
-import type { Checks, ItemStatus, PromptMeta, Risk, Showcase } from './model';
+import type { AssistantMeta, Checks, ItemStatus, PromptMeta, Risk, Showcase } from './model';
 import { promptFileOf } from './prompt';
 import { riskOf, scanStructure } from './scan/content';
 import { applyRules, loadRules } from './scan/rules';
@@ -40,8 +41,14 @@ export async function rescan(env: Env, limit = 50, after = 0): Promise<{ count: 
       continue;
     }
     const checks = JSON.parse(r.checks) as Checks;
-    // structural checks only make sense on a package's files; a registry entry is one server.json
-    const findings = [...(r.kind === 'mcp' ? [] : scanStructure(files)), ...applyRules(rules, files)];
+    // structural checks only make sense on a package's files (a registry entry is one server.json); an
+    // assistant's file is instructions whatever it is called, and its frontmatter has checks of its own
+    const assistant = r.kind === 'assistant' ? (JSON.parse(r.metadata) as { assistant?: AssistantMeta }).assistant : undefined;
+    const findings = [
+      ...(r.kind === 'mcp' ? [] : scanStructure(files, { instructions: r.kind === 'assistant' })),
+      ...applyRules(rules, files),
+      ...(assistant ? assistantFindings(assistant) : []),
+    ];
     const risk = riskOf(findings);
     const status = decideStatus(r.status, risk, JSON.parse(r.listed_reasons) as string[]);
     // The version's own checks always; the item only if it is still where it was read:

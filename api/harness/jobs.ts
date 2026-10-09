@@ -194,7 +194,7 @@ async function githubRepo(env: Env, id: string, force: boolean, part: number): P
       : await importRepo(env, fullName, config as RepoConfig, row.synced_ref, force, Date.now() + SAVE_MS);
     if (result.remaining) {
       // not finished: the commit is not marked as imported, so the next job carries on with it
-      const left = `${result.remaining} of ${result.skills} ${prompts ? 'prompts' : 'skills'} left after part ${part}`;
+      const left = `${result.remaining} of ${result.skills + (result.assistants ?? 0)} ${prompts ? 'prompts' : 'skills and assistants'} left after part ${part}`;
       await db
         .prepare('UPDATE import_sources SET stats = ?1, last_error = ?2, updated_at = ?3 WHERE id = ?4')
         .bind(JSON.stringify(result), part < PARTS ? null : `stopped: ${left}`, now, id)
@@ -209,7 +209,7 @@ async function githubRepo(env: Env, id: string, force: boolean, part: number): P
       .run();
     if (result.changed) {
       console.info(
-        `[harness] ${fullName}@${result.commit.slice(0, 7)}: ${result.skills} ${prompts ? 'prompts' : 'skills'}, ${result.created} new, ${result.updated} updated, ${result.retired} retired, ${result.rejected.length} rejected`,
+        `[harness] ${fullName}@${result.commit.slice(0, 7)}: ${result.skills} ${prompts ? 'prompts' : 'skills'}${result.assistants ? `, ${result.assistants} assistants` : ''}, ${result.created} new, ${result.updated} updated, ${result.retired} retired, ${result.rejected.length} rejected`,
       );
       await env.HARNESS_JOBS.send({ type: 'facets' } satisfies Job);
       // the pictures it named, for the cards

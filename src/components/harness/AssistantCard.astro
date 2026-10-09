@@ -1,0 +1,213 @@
+---
+/**
+ * An assistant on its own shelf (and on the page of a publisher of assistants
+ * only): its seal, its title over who publishes it (in which plugin) and
+ * their repository's stars; what it does, in three lines; what it may touch;
+ * then its model, the skills and MCP servers it brings, and its tags. Every
+ * card has the same rows at the same heights, so a row of them lines up.
+ * Among other items an assistant is an ItemCard, with its seal before its
+ * title.
+ */
+import Seal from './Seal.astro';
+import Access from './Access.astro';
+import { harnessDicts, pick } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+import { compact } from '../../lib/github';
+import { modelName, roleText, type ItemSummary, type TagInfo } from '../../lib/harness';
+
+interface Props {
+  item: ItemSummary;
+  lang: Lang;
+  tags: Map<string, TagInfo>;
+}
+const { item, lang, tags } = Astro.props;
+const h = harnessDicts[lang];
+const a = item.assistant!;
+const title = pick(item.title, lang) ?? item.name;
+const role = roleText(pick(item.summary, lang) ?? a.role);
+const model = a.model === 'inherit' ? h.assistant.inherit : modelName(a.model, true);
+---
+<li class="ac">
+  <a class="ac__link" href={`${h.base}${item.ref}`} aria-label={title}>
+    <span class="ac__head">
+      <Seal seed={item.ref} title={title} color={a.color} size={44} />
+      <span class="ac__id">
+        <span class="ac__title">{title}</span>
+        <span class="ac__by">
+          <span class="ac__pub">
+            {item.publisher.handle}
+            {a.plugin && <span class="ac__plugin">· {a.plugin}</span>}
+          </span>
+          {item.repoStars !== null && item.repoStars > 0 && (
+            <span class="ac__stars" title={h.card.stars}><span aria-hidden="true">★</span> {compact(item.repoStars)}</span>
+          )}
+        </span>
+      </span>
+    </span>
+    <span class="ac__role">{role}</span>
+    <span class="ac__access"><Access access={a.access} lang={lang} /></span>
+    <span class="ac__foot">
+      {model && <span class="badge ac__model">{model}</span>}
+      {item.risk !== 'low' && (
+        <span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{h.item.risk[item.risk]}</span>
+      )}
+      {item.status === 'listed' && <span class="badge badge--listed">{h.card.listed}</span>}
+      {a.skills > 0 && <span class="ac__dep">{h.assistant.skills(a.skills)}</span>}
+      {a.mcpServers > 0 && <span class="ac__dep">{h.assistant.mcp(a.mcpServers)}</span>}
+      {item.tags.slice(0, 3).map((t) => <span class="ac__tag">{tags.get(t)?.name[lang] ?? t}</span>)}
+    </span>
+  </a>
+</li>
+
+<style>
+  .ac {
+    display: flex;
+    min-width: 0;
+    transition: translate 0.4s var(--ease-out);
+  }
+
+  .ac:hover {
+    translate: 0 -2px;
+  }
+
+  .ac__link {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: var(--s-5);
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    background: var(--card-bg);
+    transition:
+      border-color 0.3s,
+      box-shadow 0.4s;
+  }
+
+  .ac:hover .ac__link {
+    border-color: rgb(var(--bead-rgb) / 0.4);
+    box-shadow: var(--card-lift);
+  }
+
+  .ac__link:focus-visible {
+    outline-offset: 2px;
+    border-radius: 13px;
+  }
+
+  /* the seal, the title over who publishes it and the stars */
+  .ac__head {
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+    height: 44px;
+    min-width: 0;
+  }
+
+  .ac__id {
+    display: grid;
+    flex: 1;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .ac__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 17px;
+    line-height: 22px;
+    color: var(--corona);
+  }
+
+  .ac__by {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-3);
+    min-width: 0;
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    line-height: 16px;
+    letter-spacing: 0.02em;
+    color: var(--corona-64);
+  }
+
+  .ac__pub {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ac__plugin {
+    margin-left: 4px;
+    color: var(--graphite);
+  }
+
+  .ac__stars {
+    flex: none;
+    font-size: 11px;
+    letter-spacing: 0;
+    color: var(--graphite);
+  }
+
+  /* what it does: three lines, written or not */
+  .ac__role {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: calc(3 * 1.55em);
+    margin-top: var(--s-4);
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--corona-64);
+  }
+
+  .ac__access {
+    display: flex;
+    height: 22px;
+    margin: var(--s-4) 0;
+    align-items: center;
+    overflow: hidden;
+  }
+
+  /* one line of marks under a hairline; what does not fit fades out at the edge */
+  .ac__foot {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    height: 22px;
+    margin-top: auto;
+    padding-top: var(--s-4);
+    border-top: 1px solid var(--hairline);
+    box-sizing: content-box;
+    overflow: hidden;
+    white-space: nowrap;
+    font-size: 12.5px;
+    line-height: 1;
+    color: var(--graphite);
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent);
+  }
+
+  .ac__foot > * {
+    flex: none;
+  }
+
+  .ac__model {
+    height: 20px;
+  }
+
+  .ac__dep {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--corona-64);
+  }
+
+  .ac__tag::before {
+    content: '#';
+    margin-right: 1px;
+    color: rgb(var(--corona-rgb) / 0.3);
+  }
+</style>

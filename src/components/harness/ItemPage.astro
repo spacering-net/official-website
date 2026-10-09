@@ -5,14 +5,17 @@
  * below, its description, what it needs (declared beside detected), what the
  * checks found, its files and versions, with a bar to move between them.
  * A prompt shows itself instead (with a button that copies it) and the
- * results made with it, and is used rather than installed.
+ * results made with it, and is used rather than installed. An assistant shows
+ * its seal, its instructions, what to say to it and what it may use.
  */
 import Copy from './Copy.astro';
 import Avatar from './Avatar.astro';
 import Shot from './Shot.astro';
+import Seal from './Seal.astro';
+import Access from './Access.astro';
 import { harnessDicts, pick } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
-import { modelName, type ItemDetail, type VersionSummary } from '../../lib/harness';
+import { modelName, withoutAgentWord, type ItemDetail, type VersionSummary } from '../../lib/harness';
 import { compact } from '../../lib/github';
 
 interface Props {
@@ -61,6 +64,33 @@ const promptBlob = prompt && install.archive ? install.files.find((f) => f.path 
 const model = modelName(prompt?.model);
 const chars = prompt ? [...prompt.text].length : 0;
 
+// an assistant: its definition (the one file), what to say to it, and its other settings
+const assistant = item.kind === 'assistant' ? install.assistant : undefined;
+const definition = assistant && install.archive ? install.files.find((f) => f.path === assistant.file) : undefined;
+const assistantModel = assistant ? (assistant.model === 'inherit' ? h.assistant.inherit : modelName(assistant.model)) : null;
+// what its examples' user turns say is shown with them, not again among the starters
+const starters = assistant ? assistant.starters.filter((s) => !assistant.examples.some((e) => e.user === s)) : [];
+const show = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v)).slice(0, 160);
+/** its other settings, and whether Codeg keeps each when it installs it */
+const settings = assistant
+  ? [
+      ...(assistant.permissionMode ? [{ key: 'permissionMode', value: assistant.permissionMode, drops: !['default', 'manual', 'plan'].includes(assistant.permissionMode) }] : []),
+      ...(assistant.hooks ? [{ key: 'hooks', value: '…', drops: true }] : []),
+      ...assistant.mcpLaunches.map((n) => ({ key: `mcpServers.${n}`, value: 'command', drops: true })),
+      ...Object.entries(assistant.settings).map(([key, value]) => ({ key, value: show(value), drops: false })),
+    ]
+  : [];
+const needs = assistant ? [assistant.skills.length && h.assistant.skills(assistant.skills.length), assistant.mcpServers.length && h.assistant.mcp(assistant.mcpServers.length)].filter(Boolean) : [];
+// what it may touch, in words for the glance: the kinds it may use, or all tools
+const reach = assistant
+  ? assistant.access.all
+    ? h.assistant.access.all
+    : (['read', 'edit', 'run', 'web'] as const)
+        .filter((k) => assistant.access[k])
+        .map((k) => h.assistant.access[k])
+        .join(' · ')
+  : '';
+
 // files by folder, the top level first
 const folders = new Map<string, typeof install.files>();
 for (const f of install.files) {
@@ -72,7 +102,16 @@ const totalSize = install.files.reduce((s, f) => s + f.size, 0);
 const fewFiles = install.files.length <= 24;
 
 const sections = (
-  prompt
+  assistant
+    ? [
+        { id: 'instructions', label: h.assistant.instructions, show: !!readme || !!install.source },
+        { id: 'examples', label: h.assistant.examples, show: starters.length > 0 || assistant.examples.length > 0 },
+        { id: 'capabilities', label: h.assistant.capabilities, show: true },
+        { id: 'permissions', label: t.permissions, show: true },
+        { id: 'checks', label: t.checks, show: true },
+        { id: 'versions', label: t.versions, show: versions.length > 0 },
+      ]
+    : prompt
     ? [
         { id: 'prompt', label: h.prompt.text, show: true },
         { id: 'results', label: h.prompt.showcases, show: showcases.length > 0 },
@@ -89,10 +128,12 @@ const sections = (
       ]
 ).filter((s) => s.show);
 // a description that opens with the item's own title says it once, in the page's heading
+// (an assistant's title may be its heading without "Agent")
 const opening = readme ? /^\s*<h1[^>]*>(.*?)<\/h1>\s*/s.exec(readme) : null;
 const plain = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').trim().toLowerCase();
-const body = readme && opening && [title, item.name].some((x) => plain(opening[1]) === x.toLowerCase()) ? readme.slice(opening[0].length) : readme;
-const needs = {
+const said = opening ? [plain(opening[1]), withoutAgentWord(plain(opening[1]))] : [];
+const body = readme && opening && [title, item.name].some((x) => said.includes(x.toLowerCase())) ? readme.slice(opening[0].length) : readme;
+const usage = {
   runs: detected.runsCode,
   hosts: detected.network.length,
   secrets: detected.secrets.length,
@@ -115,7 +156,15 @@ const needs = {
           {item.status === 'listed' && <span class="badge badge--listed">{t.listed}</span>}
           {item.publisher.unclaimed && <span class="badge">{h.card.unclaimed}</span>}
         </p>
-        <h1>{title}</h1>
+        {assistant ? (
+          <div class="head__title">
+            <Seal seed={item.ref} title={title} color={assistant.color} size={72} />
+            <h1>{title}</h1>
+          </div>
+        ) : (
+          <h1>{title}</h1>
+        )}
+        {assistant?.vibe && <p class="head__vibe">{assistant.vibe}</p>}
         {summary && (
           <div class="head__summary" data-clamp>
             <p>{summary}</p>
@@ -142,6 +191,7 @@ const needs = {
             <Copy lang={lang} text={item.ref} />
           </span>
           {item.repoStars !== null && item.repoStars > 0 && <span class="head__meta" title={t.stars}>★ {compact(item.repoStars)}</span>}
+          {assistant?.plugin && <span class="head__meta">{h.assistant.plugin} · {assistant.plugin}</span>}
           <span class="head__meta">{t.updated} {h.date(item.latest.publishedAt)}</span>
         </p>
       </header>
@@ -202,6 +252,135 @@ const needs = {
         </section>
       )}
 
+      {sections.some((s) => s.id === 'instructions') && (
+        <section class="section" id="instructions" data-section>
+          <h2 class="eyebrow section__title">{h.assistant.instructions}</h2>
+          {readme ? (
+            <div class="setting" data-fold>
+              <div class="readme setting__text" data-fold-text set:html={body} />
+              <button class="setting__more" type="button" data-fold-toggle data-less={t.collapse} hidden>{t.expand}</button>
+            </div>
+          ) : (
+            <p class="elsewhere">
+              {t.readmeElsewhere}
+              {sourceTree && <a href={sourceTree} rel="nofollow ugc noopener" target="_blank">{item.install.source?.repository} ↗</a>}
+            </p>
+          )}
+        </section>
+      )}
+
+      {assistant && sections.some((s) => s.id === 'examples') && (
+        <section class="section" id="examples" data-section>
+          <h2 class="eyebrow section__title">{h.assistant.examples}</h2>
+          {starters.length > 0 && (
+            <>
+              <h3 class="sub">{h.assistant.starters}</h3>
+              <ul class="starters">
+                {starters.map((s) => (
+                  <li class="starter">
+                    <span class="starter__text">{s}</span>
+                    <Copy lang={lang} text={s} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {assistant.examples.length > 0 && (
+            <>
+              <h3 class="sub">{h.assistant.dialogues}</h3>
+              <ol class="dialogues">
+                {assistant.examples.map((e) => (
+                  <li class="dialogue">
+                    {e.context && <p class="dialogue__context">{e.context}</p>}
+                    <p class="bubble bubble--user">
+                      <span class="bubble__who">{h.assistant.user}</span>
+                      {e.user}
+                    </p>
+                    {e.assistant && (
+                      <p class="bubble bubble--main">
+                        <span class="bubble__who">{h.assistant.reply}</span>
+                        {e.assistant}
+                      </p>
+                    )}
+                    {e.commentary && (
+                      <details class="dialogue__why">
+                        <summary>{h.assistant.why}</summary>
+                        <p>{e.commentary}</p>
+                      </details>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </section>
+      )}
+
+      {assistant && (
+        <section class="section" id="capabilities" data-section>
+          <h2 class="eyebrow section__title">{h.assistant.capabilities}</h2>
+          <dl class="caps">
+            <div>
+              <dt>{h.assistant.tools}</dt>
+              <dd>
+                <Access access={assistant.access} lang={lang} />
+                {assistant.tools ? (
+                  <p class="caps__codes">{assistant.tools.map((x) => <code>{x}</code>)}</p>
+                ) : (
+                  <p class="caps__note">{h.assistant.allToolsNote}</p>
+                )}
+                {assistant.disallowedTools.length > 0 && (
+                  <p class="caps__codes">
+                    <span class="caps__label">{h.assistant.denied}</span>
+                    {assistant.disallowedTools.map((x) => <code>{x}</code>)}
+                  </p>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>{h.assistant.model}</dt>
+              <dd>{assistantModel ?? <span class="muted">{h.assistant.modelUnset}</span>}</dd>
+            </div>
+            <div>
+              <dt>{h.assistant.skillsLabel}</dt>
+              <dd>
+                {assistant.skills.length ? (
+                  <ul class="caps__list">
+                    {assistant.skills.map((sk) => (
+                      <li>
+                        {sk.ref ? <a href={`${h.base}${sk.ref}`}>{sk.name}</a> : <code>{sk.name}</code>}
+                        {!sk.ref && <span class="muted"> · {h.assistant.notInHarness}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span class="muted">{t.nothing}</span>
+                )}
+              </dd>
+            </div>
+            <div>
+              <dt>{h.assistant.mcpLabel}</dt>
+              <dd>{assistant.mcpServers.length ? <p class="caps__codes">{assistant.mcpServers.map((x) => <code>{x}</code>)}</p> : <span class="muted">{t.nothing}</span>}</dd>
+            </div>
+            {settings.length > 0 && (
+              <div>
+                <dt>{h.assistant.settings}</dt>
+                <dd>
+                  <ul class="caps__list">
+                    {settings.map((x) => (
+                      <li>
+                        <code>{x.key}: {x.value}</code>
+                        <span class:list={['caps__keep', x.drops && 'caps__keep--drops']}> · {x.drops ? h.assistant.drops : h.assistant.keeps}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+            )}
+          </dl>
+        </section>
+      )}
+
       {sections.some((s) => s.id === 'readme') && (
         <section class="section" id="readme" data-section>
           <h2 class="eyebrow section__title">{t.description}</h2>
@@ -246,7 +425,7 @@ const needs = {
                   {d === undefined ? <span class="muted">—</span> : d.length ? d.map((x) => <code>{x}</code>) : <span class="muted">{t.nothing}</span>}
                 </span>
                 <span class="perms__values" role="cell">
-                  {found.length ? found.map((x) => <code class:list={[extra.includes(x) && 'differs']}>{x}</code>) : <span class="muted">{t.nothing}</span>}
+                  {found.length ? found.map((x) => <code class:list={[extra.includes(x) && 'differs']}>{x === '*' ? h.assistant.access.all : x}</code>) : <span class="muted">{t.nothing}</span>}
                 </span>
               </div>
             );
@@ -296,7 +475,7 @@ const needs = {
         )}
       </section>
 
-      {!prompt && install.files.length > 0 && (
+      {!prompt && !assistant && install.files.length > 0 && (
         <section class="section" id="files" data-section>
           <h2 class="eyebrow section__title">
             {t.files}
@@ -381,6 +560,38 @@ const needs = {
             </div>
             <p class="install__note">{h.prompt.useNote}</p>
           </section>
+        ) : assistant ? (
+          <section class="panel install" data-install aria-labelledby="install-title">
+            <h2 class="eyebrow" id="install-title">{t.install}</h2>
+            <div class="install__actions">
+              <a class="btn btn--primary" href={codeg}>
+                {t.openInCodeg}
+                <svg class="btn__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+              </a>
+              {definition && (
+                <a class="btn btn--ghost" href={`/api/harness/v1/blobs/${definition.sha256}`} download={assistant.file} title={assistant.file}>
+                  {h.assistant.download}
+                  <span class="install__size">{size(definition.size)}</span>
+                </a>
+              )}
+              {definition && (
+                <button class="btn btn--ghost use__copy" type="button" data-copy="" data-copy-src={`/api/harness/v1/blobs/${definition.sha256}`} data-done={h.copy.done} hidden>
+                  <span class="use__idle">{h.assistant.copy}</span>
+                  <span class="use__done">{h.copy.done}</span>
+                </button>
+              )}
+            </div>
+            <p class="install__note">
+              {install.source ? (
+                <>
+                  {t.notHosted}{' '}
+                  <a href={sourceTree} rel="nofollow ugc noopener" target="_blank">{t.commit} {install.source.commit.slice(0, 7)} ↗</a>
+                </>
+              ) : (
+                h.assistant.note
+              )}
+            </p>
+          </section>
         ) : (
         <section class="panel install" data-install aria-labelledby="install-title">
           <h2 class="eyebrow" id="install-title">{t.install}</h2>
@@ -453,6 +664,29 @@ const needs = {
               )}
             </dl>
           </section>
+        ) : assistant ? (
+          <section class="panel glance" aria-labelledby="glance-title">
+            <h2 class="eyebrow" id="glance-title">{h.assistant.glance}</h2>
+            <dl class="facts-list">
+              <div>
+                <dt>{t.checks}</dt>
+                <dd><span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{t.risk[item.risk]}</span></dd>
+              </div>
+              <div>
+                <dt>{h.assistant.model}</dt>
+                <dd>{assistantModel ?? <span class="muted">{h.assistant.modelUnset}</span>}</dd>
+              </div>
+              <div>
+                <dt>{h.assistant.access.label}</dt>
+                <dd>{reach || <span class="muted">{t.nothing}</span>}</dd>
+              </div>
+              <div>
+                <dt>{h.assistant.needs}</dt>
+                <dd>{needs.length ? needs.join(' · ') : <span class="muted">{t.nothing}</span>}</dd>
+              </div>
+            </dl>
+            <a class="panel__more" href="#capabilities">{h.assistant.capabilities} <span aria-hidden="true">→</span></a>
+          </section>
         ) : (
         <section class="panel glance" aria-labelledby="glance-title">
           <h2 class="eyebrow" id="glance-title">{t.safety}</h2>
@@ -463,15 +697,15 @@ const needs = {
             </div>
             <div>
               <dt>{t.perms.runsCode}</dt>
-              <dd>{needs.runs.length ? <code>{needs.runs.join(', ')}</code> : <span class="muted">{t.nothing}</span>}</dd>
+              <dd>{usage.runs.length ? <code>{usage.runs.join(', ')}</code> : <span class="muted">{t.nothing}</span>}</dd>
             </div>
             <div>
               <dt>{t.perms.network}</dt>
-              <dd>{needs.hosts ? t.hosts(needs.hosts) : <span class="muted">{t.nothing}</span>}</dd>
+              <dd>{usage.hosts ? t.hosts(usage.hosts) : <span class="muted">{t.nothing}</span>}</dd>
             </div>
             <div>
               <dt>{t.perms.secrets}</dt>
-              <dd>{needs.secrets ? t.credentials(needs.secrets) : <span class="muted">{t.nothing}</span>}</dd>
+              <dd>{usage.secrets ? t.credentials(usage.secrets) : <span class="muted">{t.nothing}</span>}</dd>
             </div>
           </dl>
           <a class="panel__more" href="#permissions">{t.permissions} <span aria-hidden="true">→</span></a>
@@ -508,7 +742,16 @@ const needs = {
                 <dd>{firstShared.by.url ? <a href={firstShared.by.url} rel="nofollow ugc noopener" target="_blank">@{firstShared.by.name} ↗</a> : `@${firstShared.by.name}`}</dd>
               </div>
             )}
-            {!prompt && (
+            {assistant?.plugin && (
+              <div>
+                <dt>{h.assistant.plugin}</dt>
+                <dd>
+                  <code>{assistant.plugin}</code>
+                  {assistant.alsoIn.length > 0 && <span class="facts__more">{h.assistant.alsoIn(assistant.alsoIn.length)}</span>}
+                </dd>
+              </div>
+            )}
+            {!prompt && !assistant && (
               <div>
                 <dt>{t.runtime}</dt>
                 <dd>{h.runtime.names[item.runtime] ?? item.runtime}</dd>
@@ -811,6 +1054,256 @@ const needs = {
 
   .elsewhere a {
     color: var(--bead);
+  }
+
+  /* ------------------------------------------------------------ an assistant */
+
+  /* its seal beside its title */
+  .head__title {
+    display: flex;
+    align-items: center;
+    gap: var(--s-5);
+    margin-top: var(--s-4);
+  }
+
+  .head__title h1 {
+    margin-top: 0;
+  }
+
+  /* a line about itself, before what it does */
+  .head__vibe {
+    margin-top: var(--s-4);
+    font-family: var(--f-display);
+    font-size: 19px;
+    font-weight: 300;
+    font-style: italic;
+    color: var(--corona-80);
+  }
+
+  /* its instructions fold to their first screens (client/harness.ts) */
+  .setting.is-folded .setting__text {
+    max-height: calc(26 * 1.75em);
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(#000 calc(100% - 5em), transparent);
+    mask-image: linear-gradient(#000 calc(100% - 5em), transparent);
+  }
+
+  .setting__more {
+    margin-top: var(--s-3);
+    font-size: 13.5px;
+    color: var(--bead);
+  }
+
+  .setting__more:hover {
+    color: var(--bead-hot);
+  }
+
+  .sub {
+    margin: var(--s-5) 0 var(--s-3);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--corona-64);
+  }
+
+  .sub:first-of-type {
+    margin-top: 0;
+  }
+
+  /* things to say to it, each to copy */
+  .starters {
+    display: grid;
+    gap: var(--s-2);
+  }
+
+  .starter {
+    display: flex;
+    align-items: center;
+    gap: var(--s-3);
+    padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+    border: 1px solid var(--hairline);
+    border-left: 2px solid rgb(var(--bead-rgb) / 0.5);
+    border-radius: 10px;
+    background: var(--well);
+  }
+
+  .starter__text {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--corona);
+    overflow-wrap: anywhere;
+  }
+
+  /* when it is called: the user, then the main session handing the work over */
+  .dialogues {
+    display: grid;
+    gap: var(--s-5);
+  }
+
+  .dialogue {
+    display: grid;
+    gap: var(--s-2);
+    justify-items: start;
+  }
+
+  .dialogue__context {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    color: var(--graphite);
+  }
+
+  .bubble {
+    max-width: min(100%, 38rem);
+    padding: var(--s-3) var(--s-4);
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--corona-80);
+    overflow-wrap: anywhere;
+  }
+
+  .bubble--user {
+    border-bottom-left-radius: 4px;
+    background: var(--well);
+    color: var(--corona);
+  }
+
+  .bubble--main {
+    margin-left: var(--s-6);
+    border-bottom-right-radius: 4px;
+    background: rgb(var(--bead-rgb) / 0.05);
+    border-color: rgb(var(--bead-rgb) / 0.22);
+  }
+
+  .bubble__who {
+    display: block;
+    margin-bottom: 2px;
+    font-family: var(--f-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--graphite);
+  }
+
+  .dialogue__why summary {
+    font-size: 13px;
+    color: var(--corona-64);
+    cursor: pointer;
+  }
+
+  .dialogue__why p {
+    margin-top: var(--s-2);
+    font-size: 14px;
+    color: var(--corona-64);
+  }
+
+  /* what it may use: label beside value, as the side's panels */
+  .caps {
+    display: grid;
+  }
+
+  .caps > div {
+    display: grid;
+    grid-template-columns: var(--label-w) minmax(0, 1fr);
+    gap: var(--s-4);
+    padding: var(--s-4) 0;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .caps > div:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .caps dt {
+    font-size: 13.5px;
+    color: var(--graphite);
+  }
+
+  .caps dd {
+    display: grid;
+    gap: var(--s-3);
+    justify-items: start;
+    min-width: 0;
+    font-size: 14.5px;
+    color: var(--corona-80);
+  }
+
+  .caps__codes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .caps__codes code,
+  .caps__list code {
+    padding: 2px 7px;
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    background: var(--well);
+    font-size: 12px;
+    color: var(--corona-80);
+    overflow-wrap: anywhere;
+  }
+
+  .caps__label {
+    margin-right: var(--s-2);
+    font-size: 13px;
+    color: var(--graphite);
+  }
+
+  .caps__note {
+    font-size: 13.5px;
+    color: var(--corona-64);
+  }
+
+  .caps__list {
+    display: grid;
+    gap: var(--s-2);
+  }
+
+  .caps__list a {
+    color: var(--bead);
+  }
+
+  .caps__list a:hover {
+    color: var(--bead-hot);
+  }
+
+  .caps__keep {
+    font-size: 12.5px;
+    color: var(--graphite);
+  }
+
+  .caps__keep--drops {
+    color: var(--bead);
+  }
+
+  .facts__more {
+    display: block;
+    margin-top: 2px;
+    font-size: 12.5px;
+    color: var(--graphite);
+  }
+
+  /* the marks of what it may touch wrap here, where a card would cut them */
+  .caps :global(.access) {
+    flex-wrap: wrap;
+    row-gap: var(--s-2);
+  }
+
+  @media (max-width: 760px) {
+    .caps > div {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--s-2);
+    }
+
+    .head__title {
+      gap: var(--s-4);
+    }
   }
 
   /* A prompt, as written: its own line breaks, the column's width, the
@@ -1381,6 +1874,8 @@ const needs = {
   .install__actions .btn {
     justify-content: center;
     width: 100%;
+    /* a long label stays inside the panel */
+    min-width: 0;
   }
 
   .install__size {
