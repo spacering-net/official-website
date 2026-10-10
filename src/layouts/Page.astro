@@ -68,7 +68,7 @@ const skip = lang === 'en' ? 'Skip to content' : '跳到正文';
     <meta property="og:locale" content={lang === 'zh' ? 'zh_CN' : 'en_US'} />
     <meta name="twitter:card" content="summary_large_image" />
     {image && <meta name="twitter:image:alt" content={image.alt} />}
-    {/* from one of these pages to the next, the HUD stays put and the page cross-fades */}
+    {/* from one of these pages to the next, the page cross-fades and the HUD's ends glide to where the next page has them (site.css) */}
     <style is:inline>
       @view-transition { navigation: auto; }
       ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.28s; }

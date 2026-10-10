@@ -42,11 +42,15 @@ document.querySelectorAll<HTMLAnchorElement>('[data-lang-switch]').forEach((a) =
 // light, dark or as the system is (client/theme-switch.ts)
 initTheme();
 
-// the HUD draws a veil once the page scrolls under it
+// At the page's top the HUD is the homepage's, its ends at the window's edges;
+// once the page scrolls under it, they gather into the column over a veil,
+// and part again back at the top (site.css). The page opens with the HUD as
+// it finds it, and the HUD eases between the two from the next frame on.
 const hud = document.querySelector<HTMLElement>('.hud');
-const veil = () => hud?.classList.toggle('is-scrolled', window.scrollY > 2);
-window.addEventListener('scroll', veil, { passive: true });
-veil();
+const dock = () => hud?.classList.toggle('is-scrolled', window.scrollY > 2);
+window.addEventListener('scroll', dock, { passive: true });
+dock();
+requestAnimationFrame(() => requestAnimationFrame(() => hud?.classList.add('is-eased')));
 
 // back to this page from the history: the menu was left open when it was left
 window.addEventListener('pageshow', (e) => {

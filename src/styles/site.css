@@ -1049,30 +1049,103 @@ html.menu-open {
 /* ----------------------------------------------------------------- pages */
 
 /* Every page but the homepage (layouts/Page.astro): the HUD sits at the top of
-   the page and stays there, over a veil once the page scrolls under it. Going
-   from one of these pages to another, it stays put while the page cross-fades. */
+   the page and stays there. At the page's top it is the homepage's, its ends
+   at the window's edges; once the page scrolls under it (page.ts), the ends
+   gather into the page's column over a veil, and they part again when the
+   page is back at its top. Only a window wider than the column has them move;
+   in a narrower one only the veil comes and goes. From one of these pages to
+   another, the ends glide to where the next page has them while the page
+   cross-fades. */
 
 .hud--page {
   position: sticky;
   top: 0;
-  padding-inline: var(--page-pad);
   pointer-events: auto;
-  border-bottom: 1px solid transparent;
+  /* how far the column's edges lie inside the window's: the ends' way in */
+  container-type: inline-size;
+  --hud-in: max(0px, (100cqw + 2 * var(--edge) - var(--page-max)) / 2);
+  /* the veil's hairline is drawn inside, so the words sit as high as the homepage's */
+  box-shadow: inset 0 -1px transparent;
   view-transition-name: site-hud;
+}
+
+.hud--page > .brand {
+  view-transition-name: site-brand;
+}
+
+.hud--page > .hud__right {
+  view-transition-name: site-hud-end;
+}
+
+/* the page opens with the HUD as it finds it; from then on the ends glide, the veil with them */
+.hud--page.is-eased {
   transition:
-    background-color 0.3s,
-    border-color 0.3s;
+    background-color 0.45s var(--ease-out),
+    box-shadow 0.45s var(--ease-out);
+}
+
+.hud--page.is-eased > .brand,
+.hud--page.is-eased > .hud__right {
+  transition: translate 0.7s var(--ease-out);
 }
 
 .hud--page.is-scrolled {
   background: rgb(var(--void-rgb) / 0.8);
-  border-bottom-color: var(--hairline);
+  box-shadow: inset 0 -1px var(--hairline);
   -webkit-backdrop-filter: blur(18px) saturate(1.3);
   backdrop-filter: blur(18px) saturate(1.3);
 }
 
-/* the menu opens over the same column, its close button on the menu button */
-.orbit-menu--page {
+.hud--page.is-scrolled > .brand {
+  translate: var(--hud-in) 0;
+}
+
+.hud--page.is-scrolled > .hud__right {
+  translate: calc(-1 * var(--hud-in)) 0;
+}
+
+/* A page change: the ends glide as they do here, while their words cross-fade
+   with the page (Page.astro), kept at their own size (the two languages'
+   differ in width). The veil the old page had holds until that page has
+   faded, so none of it shows through the bar. While the menu or a dialog
+   covers the page, the HUD stays in the page's own picture, under it; from
+   the open menu, its top bar's ends are the ones that glide. */
+::view-transition-group(site-brand),
+::view-transition-group(site-hud-end) {
+  animation-duration: 0.5s;
+  animation-timing-function: var(--ease-out);
+}
+
+::view-transition-image-pair(site-brand),
+::view-transition-image-pair(site-hud-end) {
+  animation-duration: 0.28s;
+}
+
+::view-transition-old(site-hud-end),
+::view-transition-new(site-hud-end) {
+  inline-size: auto;
+  inset-inline: auto 0;
+}
+
+::view-transition-old(site-hud) {
+  animation-delay: 0.25s;
+}
+
+html.is-locked .hud--page,
+html.is-locked .hud--page > * {
+  view-transition-name: none;
+}
+
+html.menu-open .orbit-menu--page .orbit-menu__top > .brand {
+  view-transition-name: site-brand;
+}
+
+html.menu-open .orbit-menu--page .orbit-menu__actions {
+  view-transition-name: site-hud-end;
+}
+
+/* the menu opens over the HUD's span, the window's or the column's, its close button on the menu button */
+.hud--page.is-scrolled ~ .orbit-menu--page {
   padding-inline: var(--page-pad);
 }
 
@@ -1235,5 +1308,11 @@ html.is-locked {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+
+  /* a page change still cross-fades, but the HUD's ends are at once where the next page has them */
+  ::view-transition-group(site-brand),
+  ::view-transition-group(site-hud-end) {
+    animation-duration: 0.001ms;
   }
 }

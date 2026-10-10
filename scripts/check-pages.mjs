@@ -411,12 +411,15 @@ for (const [path, lang] of [
   await ctx.close();
 }
 
-// 8. one column and its lines, at a 5K-wide window: the HUD, the bar, the
-// sidebar, the grid and the footer keep to the same edges, and the sidebar's
-// runtime list to the search's; an item's side starts level with its head, its
-// publisher first, its text and code as wide as the column. Then the theme:
-// switched, kept for the next page from its first paint, the homepage's
-// included, whose scene turns to day with it, and switched back from there.
+// 8. one column and its lines, at a 5K-wide window: the bar, the sidebar, the
+// grid and the footer keep to the same edges, and the sidebar's runtime list
+// to the search's; the HUD is the homepage's at the page's top, gathers onto
+// the column's edges once the page scrolls and parts again back at the top,
+// the menu opening over its span each time; an item's side starts level with
+// its head, its publisher first, its text and code as wide as the column.
+// Then the theme: switched, kept for the next page from its first paint, the
+// homepage's included, whose scene turns to day with it, and switched back
+// from there.
 {
   const ctx = await browser.newContext({ viewport: { width: 2560, height: 1440 }, locale: 'en-US' });
   const page = await ctx.newPage();
@@ -434,8 +437,8 @@ for (const [path, lang] of [
       return range.getBoundingClientRect().left;
     };
     return {
-      left: [r('.hud .brand').left, r('.browse .search').left, r('.browse__side .filters').left, r('.page-foot .brand').left].map(x),
-      right: [r('.hud .menu-btn').right, r('.grid').right, r('.sort').right].map(x),
+      left: [r('.browse .search').left, r('.browse__side .filters').left, r('.page-foot .brand').left].map(x),
+      right: [r('.grid').right, r('.sort').right].map(x),
       columns: [r('.browse .kinds').left, r('.grid').left].map(x),
       rows: [x(heading.top + heading.height / 2), x(count.top + count.height / 2)],
       first: [x(pick.top), x(card.top)],
@@ -448,8 +451,43 @@ for (const [path, lang] of [
   const level = (a, d = 1) => Math.max(...a) - Math.min(...a) <= d;
   report(
     level(lines.left) && level(lines.right) && level(lines.columns) && level(lines.rows, 2) && level(lines.first),
-    'one column: the HUD, bar, sidebar, grid and footer share their edges',
+    'one column: the bar, sidebar, grid and footer share their edges',
     JSON.stringify(lines),
+  );
+
+  // the HUD's ends and the open menu's, as it is at the page's top, scrolled, and back at the top
+  const hudEnds = () =>
+    page.evaluate(() => {
+      const r = (s) => document.querySelector(s).getBoundingClientRect();
+      return { left: Math.round(r('.hud .brand').left), right: Math.round(r('.hud .menu-btn').right), nav: +r('.hud .nav').top.toFixed(1), veil: document.querySelector('.hud').classList.contains('is-scrolled') };
+    });
+  const menuEnds = async () => {
+    await page.click('.hud [data-menu-open]');
+    await page.waitForTimeout(900);
+    const ends = await page.evaluate(() => {
+      const r = (s) => document.querySelector(s).getBoundingClientRect();
+      return { left: Math.round(r('.orbit-menu__top .brand').left), right: Math.round(r('.orbit-menu .menu-close').right) };
+    });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(700);
+    return ends;
+  };
+  const hud = { top: await hudEnds() };
+  hud.topMenu = await menuEnds();
+  await page.mouse.wheel(0, 700);
+  await page.waitForTimeout(1000);
+  hud.scrolled = await hudEnds();
+  hud.scrolledMenu = await menuEnds();
+  await page.mouse.wheel(0, -2000);
+  await page.waitForTimeout(1000);
+  hud.back = await hudEnds();
+  report(
+    level([hud.scrolled.left, ...lines.left]) && level([hud.scrolled.right, ...lines.right]) && hud.scrolled.veil &&
+      hud.scrolledMenu.left === hud.scrolled.left && hud.scrolledMenu.right === hud.scrolled.right &&
+      hud.topMenu.left === hud.top.left && hud.topMenu.right === hud.top.right &&
+      JSON.stringify(hud.back) === JSON.stringify(hud.top) && !hud.top.veil,
+    'scrolled, the HUD keeps to the column’s edges over its veil, and parts again at the top; the menu opens over its span',
+    JSON.stringify(hud),
   );
   report(
     level(lines.sideLeft) && level(lines.sideRight) && level(lines.words),
@@ -503,6 +541,12 @@ for (const [path, lang] of [
   };
   const near = (rgb, target, d = 8) => rgb.every((v, i) => Math.abs(v - target[i]) <= d);
   await page.waitForTimeout(5200);
+  const homeHud = await hudEnds();
+  report(
+    homeHud.left === hud.top.left && homeHud.right === hud.top.right && homeHud.nav === hud.top.nav,
+    'at a page’s top its HUD is the homepage’s, to the pixel',
+    JSON.stringify({ home: homeHud, page: hud.top }),
+  );
   const home = await page.evaluate(() => ({
     theme: document.documentElement.dataset.theme ?? 'dark',
     atReady: window.__themeAtReady,

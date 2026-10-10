@@ -328,6 +328,32 @@ function boot() {
     a.addEventListener('focus', warm, { once: true });
   });
 
+  // ------------------------------------------------------- to the other pages
+  // At their top the other pages' HUD is laid out as this one (and as the
+  // menu's top bar), so it holds still while the page cross-fades: the ends
+  // on show take the names theirs have (site.css) and pair up with them. Not
+  // into the other language's homepage, which takes the scene over, nor from
+  // under the intro or a dialog.
+  const ends = (bar: string, end: string) =>
+    [
+      ['site-brand', document.querySelector<HTMLElement>(`${bar} > .brand`)],
+      ['site-hud-end', document.querySelector<HTMLElement>(`${bar} > ${end}`)],
+    ] as const;
+  const hudEnds = ends('.hud', '.hud__right');
+  const menuEnds = ends('.orbit-menu__top', '.orbit-menu__actions');
+  const nameEnds = (shown: typeof hudEnds | null) =>
+    [hudEnds, menuEnds].forEach((set) => set.forEach(([name, el]) => el?.style.setProperty('view-transition-name', set === shown ? name : null)));
+  window.addEventListener('pageswap', (e) => {
+    const to = e.activation?.entry.url;
+    if (!e.viewTransition || !to || /^\/(?:zh\/)?(?:index\.html)?$/.test(new URL(to).pathname)) return;
+    if (root.classList.contains('is-intro') || document.querySelector('dialog[open]')) return;
+    nameEnds(menu.isOpen() ? menuEnds : hudEnds);
+  });
+  // back from the history: the next page change pairs them only if it leads there too
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) nameEnds(null);
+  });
+
   // ------------------------------------------------------------------ layout
   let layoutRaf = 0;
   const relayout = () => {

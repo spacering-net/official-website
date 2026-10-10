@@ -8,7 +8,9 @@ interface Props {
   /**
    * Any page but the homepage, and the page of PAGES this is or belongs to
    * (its link is marked as the current page). The ring's link then leads to
-   * the homepage instead of scrolling to its top.
+   * the homepage instead of scrolling to its top. At the page's top the HUD
+   * is laid out as the homepage's; once the page scrolls, its ends gather
+   * into the page's column (site.css, client/page.ts).
    */
   page?: { current?: keyof typeof PAGES };
 }
