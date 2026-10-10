@@ -1,8 +1,12 @@
-// The theme of a page in the site's frame (layouts/Page.astro), set before its
-// first paint: light if that was chosen here (sr-theme: light, dark, system),
-// or "system" was and the system is light; dark otherwise. A plain blocking
-// script, as these pages allow no inline ones. client/page.ts switches it.
+// The theme of a page, set before its first paint: light if that was chosen
+// here (sr-theme: light, dark, system), or "system" was and the system is
+// light; dark otherwise. A plain blocking script: a file of its own on the
+// pages in the site's frame (layouts/Page.astro), which allow no inline ones,
+// and inlined on the homepage (layouts/Base.astro). client/theme-switch.ts
+// switches it in place. The homepage's stills for share images (?capture)
+// are of the night, whatever was chosen.
 (function () {
+  if (/[?&]capture\b/.test(location.search)) return;
   var pref = null;
   try {
     pref = localStorage.getItem('sr-theme');

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { SIMPLEX } from './glsl';
 import { seeded } from '../math';
+import { INK, PAPER, setVariant } from './ink';
 
 /**
  * Full-screen backdrop: a faint nebula. The fbm is expensive and nearly
@@ -53,6 +54,8 @@ export function createNebula() {
     uIntensity: { value: 0 },
     tNebula: { value: target.texture },
     uShift: { value: new THREE.Vector2() },
+    uPaper: { value: PAPER },
+    uInk: { value: new THREE.Vector2(0.8, 0.6) },
   };
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -65,13 +68,22 @@ export function createNebula() {
         gl_Position = vec4(position.xy, 0.0, 1.0);
       }`,
     fragmentShader: /* glsl */ `
+      ${INK}
       uniform sampler2D tNebula;
       uniform float uIntensity;
       uniform vec2 uShift;
+      uniform vec3 uPaper;
+      uniform vec2 uInk;
       varying vec2 vUv;
       void main() {
         vec2 uv = (vUv - 0.5) * 0.96 + 0.5 + uShift;
-        gl_FragColor = vec4(texture2D(tNebula, uv).rgb * uIntensity, 1.0);
+        vec3 sky = texture2D(tNebula, uv).rgb * uIntensity;
+        #ifdef DAY
+        // the page itself, with the nebula as a faint wash in it
+        gl_FragColor = vec4(uPaper * ink(sky, uInk), 1.0);
+        #else
+        gl_FragColor = vec4(sky, 1.0);
+        #endif
       }`,
   });
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
@@ -81,6 +93,10 @@ export function createNebula() {
   return {
     mesh,
     uniforms,
+    /** By day the backdrop is the page, the nebula a faint wash in it. */
+    setDay(day: boolean) {
+      setVariant(material, day);
+    },
     /** Re-bake at a quarter of the CSS size; the nebula has no fine detail. */
     bake(renderer: THREE.WebGLRenderer, cssWidth: number, cssHeight: number) {
       const w = Math.max(64, Math.round(cssWidth / 4));

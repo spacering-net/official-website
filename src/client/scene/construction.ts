@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PHI } from '../math';
 import { RING } from './ring';
+import { INK, setInk } from './ink';
 
 /**
  * The logo's construction drawing, in 3D: axes and circle projections drawn
@@ -49,7 +50,7 @@ export function createConstruction() {
   geometry.setAttribute('aDist', new THREE.Float32BufferAttribute(dist, 1));
   geometry.setAttribute('aProg', new THREE.Float32BufferAttribute(prog, 1));
 
-  const uniforms = { uDraw: { value: 0 }, uAlpha: { value: 0 } };
+  const uniforms = { uDraw: { value: 0 }, uAlpha: { value: 0 }, uInk: { value: new THREE.Vector2(1, 1.6) } };
   const material = new THREE.ShaderMaterial({
     uniforms,
     transparent: true,
@@ -67,21 +68,35 @@ export function createConstruction() {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: /* glsl */ `
+      ${INK}
       varying float vDist;
       varying float vProg;
       uniform float uDraw;
       uniform float uAlpha;
+      uniform vec2 uInk;
       void main() {
         if (vProg > uDraw) discard;
         // dash-dot 14 3 2 3, in units of 0.01
         float m = mod(vDist * 100.0, 22.0);
         if (!(m < 14.0 || (m >= 17.0 && m < 19.0))) discard;
         float head = smoothstep(uDraw - 0.04, uDraw, vProg);
-        gl_FragColor = vec4(vec3(0.93, 0.92, 0.96) * (0.55 + head * 1.6), uAlpha);
+        vec3 col = vec3(0.93, 0.92, 0.96) * (0.55 + head * 1.6);
+        #ifdef DAY
+        // in graphite, as the logo's construction sheet is drawn
+        gl_FragColor = vec4(ink(col * uAlpha, uInk), 1.0);
+        #else
+        gl_FragColor = vec4(col, uAlpha);
+        #endif
       }`,
   });
   const lines = new THREE.LineSegments(geometry, material);
   lines.frustumCulled = false;
   lines.renderOrder = 15;
-  return { lines, uniforms };
+  return {
+    lines,
+    uniforms,
+    setDay(day: boolean) {
+      setInk(material, day);
+    },
+  };
 }

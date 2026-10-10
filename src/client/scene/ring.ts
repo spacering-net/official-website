@@ -179,11 +179,13 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
-        '#include <common>\nattribute float aProfile;\nvarying vec3 vObjPos;\nvarying vec3 vObjNormal;\nvarying float vProfile;',
+        '#include <common>\nattribute float aProfile;\nvarying vec3 vObjPos;\nvarying vec3 vObjNormal;\nvarying float vProfile;\nvarying vec3 vRound;\nvarying vec3 vAcross;',
       )
       .replace(
         '#include <begin_vertex>',
-        '#include <begin_vertex>\nvObjPos = position;\nvObjNormal = normal;\nvProfile = aProfile;',
+        // the band's directions here, round it and across it, as the camera
+        // sees them: the node's dome leans its normal along them
+        '#include <begin_vertex>\nvObjPos = position;\nvObjNormal = normal;\nvProfile = aProfile;\nvRound = normalize((modelViewMatrix * vec4(position.z, 0.0, -position.x, 0.0)).xyz);\nvAcross = normalize((modelViewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz);',
       );
 
     shader.fragmentShader = shader.fragmentShader
@@ -193,6 +195,8 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         varying vec3 vObjPos;
         varying vec3 vObjNormal;
         varying float vProfile;
+        varying vec3 vRound;
+        varying vec3 vAcross;
         uniform vec3 uDotColor;
         uniform float uDotIntensity;
         uniform float uRo;
@@ -207,11 +211,26 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         uniform vec4 uInscriptionRect;
         uniform float uInscriptionI;
         uniform float uInscriptionReveal;
+        #ifdef DAY
+        // three.js's ACES fit (the chunk that has it is left out of shaders
+        // that draw into a render target)
+        vec3 dayRRT(vec3 v) {
+          vec3 a = v * (v + 0.0245786) - 0.000090537;
+          vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081;
+          return a / b;
+        }
+        vec3 dayTone(vec3 color) {
+          const mat3 ACESInputMat = mat3(vec3(0.59719, 0.07600, 0.02840), vec3(0.35458, 0.90834, 0.13383), vec3(0.04823, 0.01566, 0.83777));
+          const mat3 ACESOutputMat = mat3(vec3(1.60475, -0.10208, -0.00327), vec3(-0.53108, 1.10813, -0.07276), vec3(-0.07367, -0.00605, 1.07602));
+          color = ACESOutputMat * dayRRT(ACESInputMat * (color / 0.6));
+          return clamp(color, 0.0, 1.0);
+        }
+        #endif
         // The node: a circle of radius uDotR measured along the outer surface,
-        // centred on the band's mid-line at angle 0 (+Z).
-        float nodeDistance() {
-          float ang = atan(vObjPos.x, vObjPos.z);
-          return length(vec2(ang * uRo, vObjPos.y));
+        // centred on the band's mid-line at angle 0 (+Z). Where a point lies
+        // from its centre, round the band and across it:
+        vec2 nodeOffset() {
+          return vec2(atan(vObjPos.x, vObjPos.z) * uRo, vObjPos.y);
         }
         float outerWall() {
           vec3 radial = normalize(vec3(vObjPos.x, 0.0, vObjPos.z) + 1e-6);
@@ -226,13 +245,16 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
       .replace(
         '#include <color_fragment>',
         /* glsl */ `#include <color_fragment>
-        float nodeD = nodeDistance();
+        vec2 nodeOff = nodeOffset();
+        float nodeD = length(nodeOff);
         float nodeAA = fwidth(nodeD) * 1.25 + 1e-4;
         float wallMask = outerWall();
         float nodeMask = (1.0 - smoothstep(uDotR - nodeAA, uDotR + nodeAA, nodeD)) * wallMask;
         float bezel = smoothstep(uDotR - nodeAA, uDotR + nodeAA, nodeD)
                     * (1.0 - smoothstep(uDotR + 0.014 - nodeAA, uDotR + 0.014 + nodeAA, nodeD)) * wallMask;
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.025), nodeMask);
+        // the node is a stone of clear glass: what shows through it is its
+        // polished setting
+        diffuseColor.rgb *= 1.0 - 0.35 * nodeMask;
         diffuseColor.rgb *= 1.0 - 0.6 * bezel;
 
         // The inscription: the ring number engraved on the inner wall, at the
@@ -258,6 +280,7 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         float veinPulse = 0.0;
         float veinWave = 0.0;
         float veinLit = 0.0;
+        float veinInlay = 0.0;
         vec3 veinCol = uVeinWarm;
         #ifdef RING_VEINS
         {
@@ -271,7 +294,12 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
           float fw = fwidth(f);
           // where a line shows, it tapers in and out like a brush stroke
           float seg = field.g;
+          #ifdef DAY
+          // by day an inlay, a little wider
+          float hw = 0.042 * (0.35 + 0.65 * seg);
+          #else
           float hw = 0.03 * (0.35 + 0.65 * seg);
+          #endif
           // Box-filtered coverage. A line is never drawn thinner than ~1.5 px,
           // only dimmer, or a bright one beads where it crosses pixel rows; where
           // lines crowd under a pixel they settle to their average tone.
@@ -285,6 +313,9 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
           // the lettering keeps the veins out from under it
           float plain = 1.0 - 0.85 * underLetters;
           vein = cover * seg * clear * strength * plain;
+          #ifdef DAY
+          veinInlay = clamp(cover * seg * clear * plain * (0.75 + 0.5 * strength), 0.0, 1.0);
+          #endif
           // gone by halfway to the next line, which has its own pulses
           veinHalo = exp(-d * 6.0) * (1.0 - smoothstep(0.3, 0.5, d)) * seg * clear * strength * (1.0 - far) * plain;
 
@@ -303,27 +334,69 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
           veinCol = mix(uVeinWarm, uVeinCool, smoothstep(0.3, 2.6, a));
         }
         diffuseColor.rgb *= 1.0 - 0.15 * vein;
+        #ifdef DAY
+        // by day the lines are enamel inlaid in the silver, in deeper shades
+        // of their colours: lit by the room rather than mirroring it, they
+        // show on the bright metal and on its dark mirrors alike
+        diffuseColor.rgb = mix(diffuseColor.rgb, pow(veinCol, vec3(3.0)) * 0.35, veinInlay);
+        #endif
         #endif
         // engraved: the groove is darker and matte
         diffuseColor.rgb *= 1.0 - 0.55 * letters;`,
       )
       .replace(
         '#include <roughnessmap_fragment>',
-        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.06, nodeMask);\nroughnessFactor = mix(roughnessFactor, 0.3, vein);\nroughnessFactor = mix(roughnessFactor, 0.5, letters);',
+        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.06, nodeMask);\nroughnessFactor = mix(roughnessFactor, 0.3, vein);\n#ifdef DAY\nroughnessFactor = mix(roughnessFactor, 0.22, veinInlay);\n#endif\nroughnessFactor = mix(roughnessFactor, 0.5, letters);',
       )
       .replace(
         '#include <metalnessmap_fragment>',
-        '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.15, nodeMask);',
+        '#include <metalnessmap_fragment>\n#ifdef DAY\nmetalnessFactor = mix(metalnessFactor, 0.0, veinInlay);\n#endif',
+      )
+      .replace(
+        '#include <normal_fragment_maps>',
+        /* glsl */ `#include <normal_fragment_maps>
+        // The stone's dome, a cap whose normal leans out toward its rim; the
+        // setting seen through it leans the other way, as a lens turns what
+        // lies under it.
+        vec2 nodeUV = nodeOff / uDotR;
+        vec3 nodeTilt = (nodeUV.x * vRound + nodeUV.y * vAcross) * inversesqrt(max(2.2 - dot(nodeUV, nodeUV), 0.05)) * nodeMask;
+        normal = normalize(normal - 0.5 * nodeTilt);`,
+      )
+      .replace(
+        '#include <clearcoat_normal_fragment_maps>',
+        '#include <clearcoat_normal_fragment_maps>\nclearcoatNormal = normalize(clearcoatNormal + nodeTilt);',
+      )
+      .replace(
+        '#include <lights_physical_fragment>',
+        // the dome is glass: a polished coat over the whole of it
+        '#include <lights_physical_fragment>\nmaterial.clearcoat = mix(material.clearcoat, 1.0, nodeMask);\nmaterial.clearcoatRoughness = mix(material.clearcoatRoughness, 0.06, nodeMask);',
       )
       .replace(
         '#include <emissivemap_fragment>',
         /* glsl */ `#include <emissivemap_fragment>
-        float nodeCore = 1.0 - smoothstep(0.0, uDotR * 0.9, nodeD);
-        totalEmissiveRadiance += uDotColor * uDotIntensity * nodeMask * (0.45 + 0.55 * nodeCore + 0.8 * nodeCore * nodeCore);
+        // The light in the stone: a point at its heart, a little of its glow
+        // in the glass, and the glass's edge catching it. The rest is clear.
+        float nodeR2 = dot(nodeUV, nodeUV);
+        float nodePoint = exp(-nodeR2 / 0.025);
+        float nodeFill = exp(-nodeR2 / 0.35);
+        float nodeEdge = smoothstep(0.55, 0.95, nodeR2);
+        #ifdef DAY
+        // by day in amber; it lights the silver round it a little
+        totalEmissiveRadiance += uDotIntensity * nodeMask * (uDotColor * (0.9 * nodeFill + 0.12 * nodeEdge) + mix(uDotColor, vec3(1.0), 0.4) * 2.0 * nodePoint);
+        totalEmissiveRadiance += uDotColor * uDotIntensity * (1.0 - nodeMask) * wallMask * 0.06 * exp(-max(nodeD - uDotR, 0.0) / 0.05);
+        #else
+        totalEmissiveRadiance += uDotIntensity * nodeMask * (uDotColor * uDotColor * (0.16 * nodeFill + 0.05 * nodeEdge) + mix(uDotColor, vec3(1.0), 0.5) * 1.3 * nodePoint);
+        #endif
         totalEmissiveRadiance += veinCol * uVeins * (veinLit * (vein * (0.18 + 1.1 * veinPulse) + veinHalo * (0.03 + 0.45 * veinPulse))
                                                    + veinWave * (vein * 1.4 + veinHalo * 0.4));
         // a little light stays in the letters; more where the burn-in is passing
         totalEmissiveRadiance += uVeinWarm * (letters * 0.1 + letterLight * 2.4);`,
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        // By day the frame is paper and ink, finished as it is drawn (post.ts):
+        // the ring brings its own tone mapping.
+        '#include <opaque_fragment>\n#ifdef DAY\ngl_FragColor.rgb = dayTone(gl_FragColor.rgb);\n#endif',
       );
   };
   material.customProgramCacheKey = () => (veins ? 'spacering-ring-v3-veins' : 'spacering-ring-v3');

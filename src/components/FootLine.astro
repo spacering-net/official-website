@@ -1,9 +1,8 @@
 ---
 /**
- * The last line of a page's foot: the languages (and, where a page offers
- * it, the theme) on the left, the small print on the right. The same at the
- * foot of every page but the homepage (SiteFooter.astro) and of the orbit
- * menu, the homepage's included.
+ * The last line of a page's foot: the languages and the theme on the left,
+ * the small print on the right. The same at the foot of every page but the
+ * homepage (SiteFooter.astro) and of the orbit menu, the homepage's included.
  */
 import LangSwitch from './LangSwitch.astro';
 import ThemeSwitch from './ThemeSwitch.astro';
@@ -13,16 +12,14 @@ interface Props {
   t: Dict;
   /** this page in the other language (by default, that language's homepage) */
   alternate?: string;
-  /** the theme switch: not on the homepage, which stays dark */
-  theme?: boolean;
   class?: string;
 }
-const { t, alternate, theme = true, class: className } = Astro.props;
+const { t, alternate, class: className } = Astro.props;
 ---
 <div class:list={['foot-line', className]}>
   <div class="foot-line__prefs">
     <LangSwitch t={t} href={alternate} />
-    {theme && <ThemeSwitch t={t} />}
+    <ThemeSwitch t={t} />
   </div>
   <p class="foot-line__legal">
     <span>© {new Date().getFullYear()} SpaceRing · spacering.net</span>

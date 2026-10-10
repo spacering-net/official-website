@@ -1,9 +1,12 @@
 import * as THREE from 'three';
 import { seeded } from '../math';
+import { INK, setInk } from './ink';
 
 export interface Stars {
   points: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   uniforms: { uTime: { value: number }; uPx: { value: number }; uOpacity: { value: number } };
+  /** By day the stars are ink: a printed chart of the same sky. */
+  setDay(day: boolean): void;
 }
 
 export function createStars(count: number): Stars {
@@ -38,7 +41,7 @@ export function createStars(count: number): Stars {
   geometry.setAttribute('aPhase', new THREE.BufferAttribute(aPhase, 1));
   geometry.setAttribute('aColor', new THREE.BufferAttribute(aColor, 3));
 
-  const uniforms = { uTime: { value: 0 }, uPx: { value: 1 }, uOpacity: { value: 0 } };
+  const uniforms = { uTime: { value: 0 }, uPx: { value: 1 }, uOpacity: { value: 0 }, uInk: { value: new THREE.Vector2(0.5, 1.6) } };
   const material = new THREE.ShaderMaterial({
     uniforms,
     transparent: true,
@@ -60,18 +63,38 @@ export function createStars(count: number): Stars {
         vAlpha = uOpacity * tw * clamp(size, 0.0, 1.0);
         vColor = aColor;
         gl_PointSize = max(size, 1.0);
+        #ifdef DAY
+        // by day a printed chart: small dots, the brighter stars' the blacker
+        float b = max(aColor.r, max(aColor.g, aColor.b));
+        vAlpha *= b * b;
+        gl_PointSize = max(min(size * 0.7, 2.2 * uPx), 1.0);
+        #endif
       }`,
     fragmentShader: /* glsl */ `
+      ${INK}
       varying vec3 vColor;
       varying float vAlpha;
+      uniform vec2 uInk;
       void main() {
         float d = length(gl_PointCoord - 0.5);
+        #ifdef DAY
+        // in the orbit field's ink: one graphite for every star
+        float a = smoothstep(0.5, 0.3, d);
+        gl_FragColor = vec4(ink(vec3(max(vColor.r, max(vColor.g, vColor.b)) * vAlpha * a), uInk), 1.0);
+        #else
         float a = smoothstep(0.5, 0.0, d);
         gl_FragColor = vec4(vColor, vAlpha * a * a);
+        #endif
       }`,
   });
   const points = new THREE.Points(geometry, material);
   points.renderOrder = -20;
   points.frustumCulled = false;
-  return { points, uniforms };
+  return {
+    points,
+    uniforms,
+    setDay(day) {
+      setInk(material, day);
+    },
+  };
 }

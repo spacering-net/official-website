@@ -4,6 +4,7 @@ import Logo from './Logo.astro';
 import Icon from './Icon.astro';
 import Hud from './Hud.astro';
 import LangSwitch from './LangSwitch.astro';
+import ThemeSwitch from './ThemeSwitch.astro';
 import Dial from './Dial.astro';
 import OrbitMenu from './OrbitMenu.astro';
 import Account from './Account.astro';
@@ -56,6 +57,7 @@ const isLong = (title: string) => title.length > 10;
 
   <div class="hud-foot">
     <LangSwitch t={t} />
+    <ThemeSwitch t={t} />
     <div class="telemetry" aria-hidden="true">
       <span>θ <b data-tel="theta">210.0°</b></span>
       <span>T+<b data-tel="clock">00:00:00</b></span>

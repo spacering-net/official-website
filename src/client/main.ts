@@ -6,6 +6,7 @@ import { initMenu } from './menu';
 import { initAccount } from './account';
 import { initScramble } from './scramble';
 import { initNavRail } from './navrail';
+import { initTheme } from './theme-switch';
 import { detectQuality } from './quality';
 import { clamp, easeInOutCubic } from './math';
 import { viewW } from './viewport';
@@ -63,11 +64,14 @@ function boot() {
   const hashIndex = chapters.indexOfHash(location.hash);
   const startAt = handoff ? clamp(Math.round(handoff.chapter) || 0, 0, chapters.count - 1) : hashIndex;
 
+  // stills for share images (?capture) are always of the night
+  const capture = root.classList.contains('capture');
   const canvas = document.getElementById('scene') as HTMLCanvasElement | null;
   let stage: Stage | null = null;
   if (canvas) {
     try {
-      stage = new Stage(canvas, detectQuality());
+      // the theme was set before the first paint (client/theme.js, inlined in Base.astro)
+      stage = new Stage(canvas, detectQuality(), !capture && root.dataset.theme === 'light');
       stage.setLayouts(chapters.layouts(), chapters.introLayout());
       if (handoff?.stage) stage.restore(handoff.stage);
     } catch (err) {
@@ -110,7 +114,6 @@ function boot() {
       dialBead.style.setProperty('--bx', item.style.getPropertyValue('--x'));
       dialBead.style.setProperty('--by', item.style.getPropertyValue('--y'));
     }
-    rail.setCurrent(index);
   };
 
   /** Move focus with the projection, so Tab continues inside the new chapter. */
@@ -164,6 +167,14 @@ function boot() {
 
   // ------------------------------------------------------------- interaction
   const menu = initMenu({ scroll: lenis, goTo, reduceMotion });
+  // Light or dark: the scene follows the page. Switched from the menu, the
+  // still behind it is taken again, in the new light.
+  let recapture = false;
+  if (!capture)
+    initTheme((light) => {
+      stage?.setDay(light);
+      recapture = true;
+    });
   initScramble(document, root.dataset.scramble || '');
   initAccount({
     scroll: lenis,
@@ -184,6 +195,12 @@ function boot() {
       /* ignore */
     }
     if (startAt > 0 && !handoff) goTo(startAt, true);
+    // once the page has settled, the other theme's shaders compile in the
+    // background, so that a switch to it does not wait for them
+    if (stage && !capture) {
+      const idle = (fn: () => void) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: 3000 }) : setTimeout(fn, 600));
+      setTimeout(() => idle(() => stage?.prepareSwitch()), 1500);
+    }
   };
 
   document.addEventListener('click', (e) => {
@@ -421,7 +438,7 @@ function boot() {
   // turns the projection off (alone) and poses the ring, inks its band, then
   // has the last frame drawn again, the same but for that.
   let alone = false;
-  if (stage && root.classList.contains('capture')) {
+  if (stage && capture) {
     const still = stage;
     Object.assign(window, {
       __srCapture: {
@@ -462,7 +479,7 @@ function boot() {
     const opened = menu.isOpen() && !menuWasOpen;
     menuWasOpen = menu.isOpen();
     const hidden = menu.covers();
-    if (stage && (!hidden || opened)) {
+    if (stage && (!hidden || opened || recapture)) {
       // the menu's opening and closing frames say nothing about the scene's own cost
       if (opened || sceneHidden) stage.resetFrameStats();
       lastFrame = {
@@ -476,8 +493,9 @@ function boot() {
         reduceMotion,
       };
       stage.update(lastFrame);
-      if (opened) menu.capture(stage.canvas);
+      if (opened || (recapture && menu.isOpen())) menu.capture(stage.canvas);
     }
+    recapture = false;
     sceneHidden = hidden;
     if (intro.done || chapters.enabled) setActive(trip ? trip.to : clamp(Math.round(s), 0, chapters.count - 1));
     snap(now);

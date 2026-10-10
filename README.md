@@ -39,7 +39,8 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | Harness: imports, checks, search and the API | `api/harness/` (the API's shapes: `api/harness/schemas.ts`, published at `/api/harness/v1/openapi.json`) |
 | Harness pages and their copy | `src/pages/[...lang]/harness/`, `src/components/harness/`, `src/i18n/harness.ts` |
 | The frame of every page but the homepage (HUD, menu, sign-in, footer; one column, `--page-max`) | `src/layouts/Page.astro`, `src/client/page.ts` |
-| Light and dark on every page but the homepage (which stays dark): the light palette, the switch, the choice applied before the first paint | `:root[data-theme='light']` in `src/styles/site.css`, `src/components/ThemeSwitch.astro`, `src/client/theme.js` |
+| Light and dark on every page: the light palette, the switch, the choice applied before the first paint and switched in place | `:root[data-theme='light']` in `src/styles/site.css` (and `src/styles/home.css` for the homepage's panes), `src/components/ThemeSwitch.astro`, `src/client/theme.js`, `src/client/theme-switch.ts` |
+| The homepage's scene by day: the ring silver in a white room, its light turned to ink on paper | `src/client/scene/ink.ts`, `setDay()` in `src/client/scene/stage.ts`, `createEnvironment()` in `src/client/scene/environment.ts` |
 | Publishers' pictures (GitHub avatars, sites' icons; kept in R2, looked for again every 30 days by the daily jobs) | `api/harness/importers/avatars.ts`, `src/components/harness/Avatar.astro` |
 | The HUD's pages (Space, the assistant, Harness, open source; Ring opens the homepage); the homepage chapters of Space, the assistant and Harness end with a button to theirs. The menu's products without a page are homepage chapters | `PAGES` in `src/i18n/index.ts` |
 | The not-found page, per language (`404.html`, `zh/404.html`; also for Harness addresses with nothing behind them) | `src/components/NotFound.astro`, `src/pages/404.astro`, `src/pages/zh/404.astro` |
@@ -63,12 +64,12 @@ The scripts drive the local Chrome with Playwright. Run `pnpm build && pnpm prev
 ```bash
 pnpm qa:shots   # intro and chapter screenshots (desktop)
 pnpm qa:modes   # no WebGL, reduced motion, keyboard focus
-pnpm qa:nav     # deep links, focus, chapter dial, HUD nav highlight, the pages it and the chapters' buttons open, language switch
+pnpm qa:nav     # deep links, focus, chapter dial, the HUD nav's current page (Ring, whatever the chapter), the pages it and the chapters' buttons open, language switch
 pnpm qa:jump    # jumps across several chapters project only the start and end chapters
 pnpm qa:switch  # language switch hand-over: same chapter, no intro replay, no flash
 pnpm qa:menu    # menu on short screens: scrolls, locks the page, Esc and focus return; pauses the scene, no live blur
 pnpm qa:fit     # panels fit between the HUD and the bottom edge at every size
-pnpm qa:pages   # the other pages: shared HUD, menu and sign-in, what sticks while scrolling, Harness's in-place search and filters, shared edges, the light theme, the product pages' drawings and previews
+pnpm qa:pages   # the other pages: shared HUD, menu and sign-in, what sticks while scrolling, Harness's in-place search and filters, shared edges, the light theme (the homepage's too), the product pages' drawings and previews
 pnpm qa:perf    # frame times at 1x and 2x pixel ratio
 pnpm og         # re-renders the share images; then convert them to public/og.jpg and og-zh.jpg
 ```

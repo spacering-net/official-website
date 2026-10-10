@@ -6,6 +6,8 @@ import '../styles/site.css';
 import '../styles/home.css';
 import type { Dict } from '../i18n';
 import { SITE } from '../config';
+// light or dark before the first paint: the inner pages' file, inlined here
+import themeScript from '../client/theme.js?raw';
 
 interface Props {
   t: Dict;
@@ -26,6 +28,7 @@ const canonical = new URL(t.path, SITE.url).href;
     <link rel="alternate" hreflang="x-default" href={`${SITE.url}/`} />
     <meta name="theme-color" content="#050507" />
     <meta name="color-scheme" content="dark" />
+    <script is:inline set:html={themeScript}></script>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

@@ -7,6 +7,8 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 /**
  * One full-screen pass instead of two: ACES tone mapping + sRGB output
  * (what OutputPass does) plus radial chromatic aberration, vignette and grain.
+ * By day (DAY) the frame is already finished, paper and ink with a ring that
+ * tone-maps itself (ring.ts), so it is only written out.
  */
 const FinalShader = {
   name: 'SpaceRingFinal',
@@ -49,7 +51,9 @@ const FinalShader = {
         texture2D(tDiffuse, vUv).g,
         texture2D(tDiffuse, vUv + off).b
       );
+      #ifndef DAY
       col = ACESFilmicToneMapping(col);
+      #endif
       vec4 outColor = sRGBTransferOETF(vec4(col, 1.0));
       vec2 q = c * vec2(uRes.x / uRes.y, 1.0);
       float vig = 1.0 - smoothstep(0.35, 1.05, length(q));

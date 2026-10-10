@@ -415,8 +415,8 @@ for (const [path, lang] of [
 // sidebar, the grid and the footer keep to the same edges, and the sidebar's
 // runtime list to the search's; an item's side starts level with its head, its
 // publisher first, its text and code as wide as the column. Then the theme:
-// switched, kept for the next page from its first paint, and never on the
-// homepage (whose menu has no switch).
+// switched, kept for the next page from its first paint, the homepage's
+// included, whose scene turns to day with it, and switched back from there.
 {
   const ctx = await browser.newContext({ viewport: { width: 2560, height: 1440 }, locale: 'en-US' });
   const page = await ctx.newPage();
@@ -488,15 +488,43 @@ for (const [path, lang] of [
   await page.goto(`${base}/zh/harness/`, { waitUntil: 'networkidle' });
   const next = await page.evaluate(() => ({ atReady: window.__themeAtReady, pressed: document.querySelector('.page-foot [aria-pressed="true"]')?.dataset.themeSet }));
   await page.goto(`${base}/`, { waitUntil: 'load' });
+  // the scene's own colour, in an empty corner of the sky: paper by day, night by night
+  const sky = async () => {
+    const shot = await page.screenshot({ clip: { x: 260, y: 150, width: 1, height: 1 } });
+    const { data } = await page.evaluate(async (png) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${png}`;
+      await img.decode();
+      const c = new OffscreenCanvas(1, 1).getContext('2d');
+      c.drawImage(img, 0, 0);
+      return { data: [...c.getImageData(0, 0, 1, 1).data.slice(0, 3)] };
+    }, shot.toString('base64'));
+    return data;
+  };
+  const near = (rgb, target, d = 8) => rgb.every((v, i) => Math.abs(v - target[i]) <= d);
+  await page.waitForTimeout(5200);
   const home = await page.evaluate(() => ({
     theme: document.documentElement.dataset.theme ?? 'dark',
+    atReady: window.__themeAtReady,
     bg: getComputedStyle(document.documentElement).backgroundColor,
-    switch: !!document.querySelector('[data-theme-switch]'),
+    pressed: [...document.querySelectorAll('[aria-pressed="true"][data-theme-set]')].map((b) => b.dataset.themeSet).join(),
+    shown: [...document.querySelectorAll('[data-theme-switch]')].every((s) => !s.hidden),
   }));
+  home.sky = await sky();
+  await page.click('.hud-foot [data-theme-set="dark"]');
+  await page.waitForTimeout(300);
+  const night = await page.evaluate(() => ({ theme: document.documentElement.dataset.theme ?? 'dark', stored: localStorage.getItem('sr-theme'), bg: getComputedStyle(document.documentElement).backgroundColor }));
+  night.sky = await sky();
   report(
-    switched.theme === 'light' && switched.stored === 'light' && switched.bg === 'rgb(246, 245, 241)' && next.atReady === 'light' && next.pressed === 'light' && home.theme === 'dark' && home.bg === 'rgb(5, 5, 7)' && !home.switch,
-    'the theme switches, holds from the next page’s first paint, and leaves the homepage dark',
-    JSON.stringify({ switched, next, home }),
+    switched.theme === 'light' && switched.stored === 'light' && switched.bg === 'rgb(246, 245, 241)' && next.atReady === 'light' && next.pressed === 'light',
+    'the theme switches and holds from the next page’s first paint',
+    JSON.stringify({ switched, next }),
+  );
+  report(
+    home.theme === 'light' && home.atReady === 'light' && home.bg === 'rgb(246, 245, 241)' && home.pressed === 'light,light' && home.shown && near(home.sky, [246, 245, 241]) &&
+      night.theme === 'dark' && night.stored === 'dark' && night.bg === 'rgb(5, 5, 7)' && night.sky.every((v) => v < 40),
+    'the homepage too: its scene by day, and back to night from its own switch',
+    JSON.stringify({ home, night }),
   );
   report(!errors.length, 'lines and themes: no errors', errors.join(' | '));
   await ctx.close();

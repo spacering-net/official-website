@@ -11,6 +11,7 @@ import { createBeam } from './beam';
 import { createGlow } from './glow';
 import { createConstruction } from './construction';
 import { createPost } from './post';
+import { NIGHT, PAPER, setVariant } from './ink';
 import { viewW } from '../viewport';
 
 /** Where the ring sits for one chapter, in CSS pixels, plus its in-plane roll. */
@@ -87,6 +88,12 @@ export interface FrameInput {
 }
 
 const CAM_DIST = 11;
+/**
+ * By day: the node's light amber and fainter, beside a bright room, the band
+ * polished harder, and no colour fringes from the lens, which would split
+ * fine ink into red and blue.
+ */
+const DAY = { node: 0.1, nodeColor: new THREE.Color('#ffa64d'), roughness: 0.08, ca: 0 };
 const FOV = 28;
 const TILT = 60 * DEG; // ring plane at 30° to the picture plane → ellipses with b/a = cos30°
 
@@ -105,6 +112,16 @@ export class Stage {
   private glow: ReturnType<typeof createGlow>;
   private construction: ReturnType<typeof createConstruction>;
   private post: ReturnType<typeof createPost>;
+  /** The ring's reflections, night's and (once it is first needed) day's. */
+  private envs: { night?: THREE.Texture; day?: THREE.Texture } = {};
+  /** The light theme: the scene on paper (see ink.ts). */
+  private day = false;
+  /** ?off=bloom keeps bloom off whatever the theme. */
+  private bloomOff = false;
+  /** the ring's own iridescence (?off=iri sets it to 0), roughness and node colour, at night */
+  private ringIridescence = 0;
+  private ringRoughness = 0;
+  private nodeColor = new THREE.Color();
 
   private layouts: RingLayout[] = [];
   private introLayout: RingLayout = { x: 0, y: 0, r: 100, roll: -30, band: 0 };
@@ -144,6 +161,7 @@ export class Stage {
   constructor(
     canvas: HTMLCanvasElement,
     private quality: QualityProfile,
+    day = false,
   ) {
     this.dpr = quality.dpr;
     const renderer = new THREE.WebGLRenderer({
@@ -163,7 +181,8 @@ export class Stage {
     this.camera = new THREE.PerspectiveCamera(FOV, viewW() / window.innerHeight, 0.1, 400);
     this.camera.position.set(0, 0, CAM_DIST);
 
-    const env = createEnvironment(renderer);
+    const env = createEnvironment(renderer, day);
+    this.envs[day ? 'day' : 'night'] = env;
     this.ring = createRing(env, quality.ringSegments, quality.tier !== 'low');
     this.ring.bake(renderer);
     this.disk = createDisk(quality.particles, CAM_DIST);
@@ -184,7 +203,8 @@ export class Stage {
 
     // Profiling switches, e.g. ?off=bloom,nebula,glow
     const off = new URLSearchParams(location.search).get('off')?.split(',') ?? [];
-    if (off.includes('bloom')) this.post.bloom.enabled = false;
+    this.bloomOff = off.includes('bloom');
+    if (this.bloomOff) this.post.bloom.enabled = false;
     if (off.includes('final')) this.post.final.enabled = false;
     if (off.includes('nebula')) this.nebula.mesh.visible = false;
     if (off.includes('corona')) this.corona.mesh.visible = false;
@@ -193,6 +213,78 @@ export class Stage {
     if (off.includes('stars')) this.stars.points.visible = false;
     if (off.includes('iri')) this.ring.mesh.material.iridescence = 0;
     if (off.includes('ring')) this.ring.mesh.visible = false;
+    this.ringIridescence = this.ring.mesh.material.iridescence;
+    this.ringRoughness = this.ring.mesh.material.roughness;
+    this.nodeColor.copy(this.ring.uniforms.uDotColor.value);
+    this.setDay(day);
+  }
+
+  /**
+   * Night (the dark theme) or day (the light one). By day the ring is silver in
+   * a white room and the rest of the scene ink on paper (ink.ts); there is no
+   * bloom, as nothing in the frame is brighter than the page.
+   */
+  setDay(day: boolean) {
+    this.day = day;
+    const key = day ? 'day' : 'night';
+    const env = (this.envs[key] ??= createEnvironment(this.renderer, day));
+    this.ring.mesh.material.envMap = env;
+    setVariant(this.ring.mesh.material, day);
+    // thin-film colour is a sheen on the night's highlights, but by day the
+    // whole band is a highlight: it would turn it blue. Polished harder by
+    // day, so the room's edges stay crisp in it.
+    this.ring.mesh.material.iridescence = this.ringIridescence * (day ? 0.3 : 1);
+    this.ring.mesh.material.roughness = day ? DAY.roughness : this.ringRoughness;
+    this.ring.uniforms.uDotColor.value.copy(day ? DAY.nodeColor : this.nodeColor);
+    this.renderer.setClearColor(day ? PAPER : NIGHT, 1);
+    this.post.bloom.enabled = !day && !this.bloomOff;
+    setVariant(this.post.final.material, day);
+    const fin = this.post.final.uniforms;
+    fin.uVignette.value = day ? 0 : 0.32;
+    fin.uGrain.value = day ? 0.012 : 0.03;
+    for (const layer of [this.nebula, this.stars, this.disk, this.corona, this.beam, this.glow, this.construction]) layer.setDay(day);
+    this.resetFrameStats();
+  }
+
+  /**
+   * Compile the other theme's shaders now, in the background (three.js waits
+   * for none of them, and the browser compiles them on threads of its own),
+   * so that switching to it later does not stop the scene for them: the
+   * ring's alone takes half a second on a first visit. Call it when nothing
+   * else is going on. A browser that cannot compile in the background would
+   * stop the scene for them now, at a moment nobody chose: there they wait
+   * for the switch.
+   */
+  prepareSwitch() {
+    if (!this.renderer.extensions.has('KHR_parallel_shader_compile')) return;
+    const final = this.post.final.material;
+    const variants = [
+      this.ring.mesh.material,
+      ...[this.nebula.mesh, this.stars.points, this.disk.points, this.corona.mesh, this.beam.mesh, this.beam.dust, this.glow.mesh, this.construction.lines].map((o) => o.material),
+      final,
+    ];
+    variants.forEach((m) => setVariant(m, !this.day));
+    // and the night's bloom, never drawn on a page that opened by day
+    const { bloom } = this.post;
+    // the passes' full-screen triangle (three's FullScreenQuad): the same
+    // attributes make the same programs
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([-1, 3, 0, -1, -1, 0, 3, -1, 0], 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 2, 0, 0, 2, 0], 2));
+    const passes = new THREE.Group();
+    if (this.day) {
+      for (const m of [bloom.materialHighPassFilter, ...bloom.separableBlurMaterials, bloom.compositeMaterial, bloom.blendMaterial]) passes.add(new THREE.Mesh(geometry, m));
+    }
+    // as they are drawn: into the composer's buffers, the last pass to the screen
+    const target = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.post.composer.readBuffer);
+    this.renderer.compile(this.scene, this.camera);
+    this.renderer.compile(passes, this.camera);
+    this.renderer.setRenderTarget(null);
+    this.renderer.compile(new THREE.Mesh(geometry, final), this.camera);
+    this.renderer.setRenderTarget(target);
+    geometry.dispose();
+    variants.forEach((m) => setVariant(m, this.day));
   }
 
   setLayouts(layouts: RingLayout[], intro: RingLayout) {
@@ -429,8 +521,12 @@ export class Stage {
     const beadI = Math.max(intro.bead, restBead) * heartbeat;
 
     // The node stays dark through totality; only the glint and the flash light it.
+    // At rest, and while a card's beam holds, it is a point of light in a
+    // glass stone, the stone clear round it (ring.ts); only the flash and a
+    // scan's flare make it glare.
     const ru = this.ring.uniforms;
-    ru.uDotIntensity.value = 1.4 * intro.env + beadI * 5.5;
+    const glare = Math.max(0, beadI - 2.8);
+    ru.uDotIntensity.value = (0.45 * intro.env + 2.2 * Math.sqrt(beadI) + glare * 6) * (this.day ? DAY.node : 1);
     // The veins light with the band, the first light running round from the
     // node as the orbit field unfurls; then pulses keep leaving the node.
     ru.uTime.value = time;
@@ -451,7 +547,7 @@ export class Stage {
 
     const ndc = this.posB.copy(bead).project(this.camera);
     const aspect = this.vw / this.vh;
-    // projected direction of the ring's major axis, for the spikes
+    // projected direction of the ring's major axis, for the rays
     const tip = this.v1.set(0.3, 0, RING.Ro);
     ringMesh.localToWorld(tip).project(this.camera);
     const spikeAngle = Math.atan2(tip.y - ndc.y, (tip.x - ndc.x) * aspect);
@@ -463,9 +559,14 @@ export class Stage {
     g.uSize.value = clamp(ringPx / (this.vh / 2) * 2.1, 0.32, 0.95);
     g.uCore.value = 0.032;
     g.uI.value = beadI * 0.42 * visible;
+    g.uGlare.value = clamp((beadI - 2.6) / 2.5);
     g.uSpike.value = Math.max(intro.spike, 0.12 + projF * 0.1 + this.beadBoost * 0.25);
-    g.uAngle.value = spikeAngle;
+    g.uPixel.value = 1 / (g.uSize.value * (this.vh / 2) * this.dpr);
+    this.glow.aim(spikeAngle);
+    // the spikes are gone well within 3.5 of their lengths; the glare's halo needs the lot
+    g.uExtent.value = g.uGlare.value > 0 ? 1 : clamp(g.uSpike.value * 3.5, 0.3, 1);
     g.uTime.value = time;
+    g.uFlow.value = f.reduceMotion ? 0 : 1;
 
     // ------------------------------------------------------------------ beam
     if (proj && (projI > 0.002 || projF > 0.002) && visible > 0) {
@@ -548,7 +649,7 @@ export class Stage {
     const fin = this.post.final.uniforms;
     fin.toneMappingExposure.value = intro.exposure;
     fin.uTime.value = time;
-    fin.uCA.value = intro.ca + activity * 0.02;
+    fin.uCA.value = (intro.ca + activity * 0.02) * (this.day ? DAY.ca : 1);
 
     this.post.composer.render(dt);
   }

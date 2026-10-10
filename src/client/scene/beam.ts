@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { VALUE_NOISE } from './glsl';
 import { seeded } from '../math';
+import { INK, setInk } from './ink';
 
 /**
  * The projection beam, drawn in screen space (NDC) so it always lands exactly
@@ -19,6 +20,7 @@ export function createBeam() {
     uFront: { value: 0 },
     uColorA: { value: new THREE.Color('#fff4e2') },
     uColorB: { value: new THREE.Color('#ffd9a0') },
+    uInk: { value: new THREE.Vector2(3.5, 0.35) },
   };
   const material = new THREE.ShaderMaterial({
     uniforms,
@@ -37,6 +39,8 @@ export function createBeam() {
       }`,
     fragmentShader: /* glsl */ `
       ${VALUE_NOISE}
+      ${INK}
+      uniform vec2 uInk;
       varying vec2 vCoord;
       uniform float uTime;
       uniform float uI;
@@ -59,7 +63,11 @@ export function createBeam() {
                     + uFront * smoothstep(0.85, 1.0, along) * side * 0.25;
         float I = uI * (body * 0.42 + rim * 0.2 * fall + lens) + front;
         vec3 col = mix(uColorA, uColorB, clamp(ax * 0.8 + along * 0.25, 0.0, 1.0));
+        #ifdef DAY
+        gl_FragColor = vec4(ink(col * I, uInk), 1.0);
+        #else
         gl_FragColor = vec4(col * I, 1.0);
+        #endif
       }`,
   });
   const mesh = new THREE.Mesh(geometry, material);
@@ -81,6 +89,7 @@ export function createBeam() {
     uApex: { value: new THREE.Vector2() },
     uB0: { value: new THREE.Vector2() },
     uB1: { value: new THREE.Vector2() },
+    uInk: { value: new THREE.Vector2(1.5, 0.5) },
   };
   const dustMat = new THREE.ShaderMaterial({
     uniforms: dustUniforms,
@@ -108,11 +117,17 @@ export function createBeam() {
         vA = sin(t * 3.14159) * uI * (0.35 + 0.65 * fract(aRand.x * 13.7));
       }`,
     fragmentShader: /* glsl */ `
+      ${INK}
+      uniform vec2 uInk;
       varying float vA;
       void main() {
         float d = length(gl_PointCoord - 0.5);
         float a = smoothstep(0.5, 0.0, d);
+        #ifdef DAY
+        gl_FragColor = vec4(ink(vec3(1.0, 0.9, 0.75) * vA * a, uInk), 1.0);
+        #else
         gl_FragColor = vec4(vec3(1.0, 0.9, 0.75), vA * a);
+        #endif
       }`,
   });
   const dust = new THREE.Points(dustGeo, dustMat);
@@ -124,6 +139,11 @@ export function createBeam() {
     dust,
     uniforms,
     dustUniforms,
+    /** By day the beam is a warm wash on the page, its dust warm specks. */
+    setDay(day: boolean) {
+      setInk(material, day);
+      setInk(dustMat, day);
+    },
     /** Apex and base endpoints in NDC. */
     set(ax: number, ay: number, b0x: number, b0y: number, b1x: number, b1y: number) {
       position[0] = ax;

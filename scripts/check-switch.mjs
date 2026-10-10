@@ -27,16 +27,17 @@ const ARRIVAL = () => ({
   clock: document.querySelector('[data-tel="clock"]')?.textContent,
 });
 
-async function open(url, viewport = { width: 1440, height: 900 }) {
+async function open(url, viewport = { width: 1440, height: 900 }, theme = 'dark') {
   const mobile = viewport.width < 700;
   const ctx = await browser.newContext({ viewport, locale: 'zh-CN', isMobile: mobile, hasTouch: mobile });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.addInitScript(() => {
+  await page.addInitScript((theme) => {
     sessionStorage.setItem('sr-intro', '1');
+    localStorage.setItem('sr-theme', theme);
     addEventListener('pagereveal', (e) => (window.__vt = !!e.viewTransition));
-  });
+  }, theme);
   await page.goto(`${base}${url}`, { waitUntil: 'load' });
   await page.waitForTimeout(2600);
   return { ctx, page, errors };
@@ -105,7 +106,8 @@ async function open(url, viewport = { width: 1440, height: 900 }) {
   await ctx.close();
 }
 
-// 5. film the switch: brightness must stay level (no black frame, no intro flash)
+// 5. film the switch, by night and by day: brightness must stay level (no
+// black frame, no intro flash, no night showing through the day)
 let ffmpeg = true;
 try {
   execFileSync('ffmpeg', ['-version'], { stdio: 'ignore' });
@@ -113,8 +115,8 @@ try {
   ffmpeg = false;
 }
 if (!ffmpeg) console.log('-   brightness film skipped (no ffmpeg)');
-else {
-  const { ctx, page } = await open('/zh/');
+else for (const theme of ['dark', 'light']) {
+  const { ctx, page } = await open('/zh/', undefined, theme);
   await page.waitForTimeout(2500); // let the hero's projection settle first
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-switch-'));
   const cdp = await ctx.newCDPSession(page);
@@ -141,7 +143,7 @@ else {
   const after = y.slice(clickedAt);
   const lo = Math.min(...after);
   const hi = Math.max(...after);
-  report(n > 20 && clickedAt > 5 && lo > first * 0.8 && hi < first * 1.25, 'switch stays level on screen', `${n} frames, brightness ${lo.toFixed(1)}–${hi.toFixed(1)} after the click (before ${first.toFixed(1)})`);
+  report(n > 20 && clickedAt > 5 && lo > first * 0.8 && hi < first * 1.25, `switch stays level on screen (${theme})`, `${n} frames, brightness ${lo.toFixed(1)}–${hi.toFixed(1)} after the click (before ${first.toFixed(1)})`);
   fs.rmSync(dir, { recursive: true, force: true });
   await ctx.close();
 }

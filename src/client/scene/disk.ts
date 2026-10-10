@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PHI, seeded } from '../math';
 import { RING } from './ring';
+import { INK, setInk } from './ink';
 
 /**
  * The orbit field: a Saturn-like disk of particles in the ring's plane.
@@ -65,6 +66,10 @@ const vertexShader = /* glsl */ `
     float hl = 1.0 + uHighlight.y * exp(-pow((r - uHighlight.x) / 0.22, 2.0));
     float twinkle = 0.72 + 0.28 * sin(uTime * (0.8 + aSeed * 2.6) + aSeed * 61.0);
     float size = aSize * uPx * uSizeScale * (uCamDist / max(-mv.z, 0.1));
+    #ifdef DAY
+    // finer by day: a pen's dots, not a glow's
+    size = min(size * 0.75, 2.6 * uPx);
+    #endif
     vAlpha = uOpacity * twinkle * hl * smoothstep(0.0, 0.3, b) * (1.0 + f * 1.4) * clamp(size, 0.0, 1.0);
     vColor = aColor;
     gl_PointSize = max(size, 1.0);
@@ -72,12 +77,23 @@ const vertexShader = /* glsl */ `
 `;
 
 const fragmentShader = /* glsl */ `
+  ${INK}
   varying vec3 vColor;
   varying float vAlpha;
+  uniform vec2 uInk;
   void main() {
     float d = length(gl_PointCoord - 0.5);
+    #ifdef DAY
+    // a stipple: crisp dots in one ink, the page's graphite, their tone all
+    // in how dark they are; the faint ones fainter still, so the field's
+    // bands show through
+    float a = smoothstep(0.5, 0.28, d);
+    float b = max(vColor.r, max(vColor.g, vColor.b)) * vAlpha;
+    gl_FragColor = vec4(ink(vec3(pow(b, 1.5) * 1.6 * a), uInk), 1.0);
+    #else
     float a = smoothstep(0.5, 0.0, d);
     gl_FragColor = vec4(vColor, vAlpha * a * a);
+    #endif
   }
 `;
 
@@ -95,7 +111,9 @@ export interface Disk {
     uMouseAmt: { value: number };
     uHighlight: { value: THREE.Vector2 };
     uRo: { value: number };
+    uInk: { value: THREE.Vector2 };
   };
+  setDay(day: boolean): void;
 }
 
 function gauss(random: () => number): number {
@@ -203,6 +221,7 @@ export function createDisk(count: number, camDist: number): Disk {
     uMouseAmt: { value: 0 },
     uHighlight: { value: new THREE.Vector2(1.5, 0) },
     uRo: { value: RING.Ro },
+    uInk: { value: new THREE.Vector2(1.1, 1.15) },
   };
 
   const material = new THREE.ShaderMaterial({
@@ -216,5 +235,11 @@ export function createDisk(count: number, camDist: number): Disk {
 
   const points = new THREE.Points(geometry, material);
   points.frustumCulled = false;
-  return { points, uniforms };
+  return {
+    points,
+    uniforms,
+    setDay(day) {
+      setInk(material, day);
+    },
+  };
 }

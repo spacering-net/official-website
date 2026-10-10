@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RING } from './ring';
+import { INK, setInk } from './ink';
 
 /**
  * The eclipse corona: a glow in the ring's plane, just outside the band,
@@ -11,6 +12,7 @@ export function createCorona() {
     uTime: { value: 0 },
     uI: { value: 0 },
     uRo: { value: RING.Ro },
+    uInk: { value: new THREE.Vector2(1.2, 0.35) },
   };
   const geometry = new THREE.PlaneGeometry(extent * 2, extent * 2);
   geometry.rotateX(-Math.PI / 2);
@@ -30,10 +32,12 @@ export function createCorona() {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: /* glsl */ `
+      ${INK}
       varying vec2 vXZ;
       uniform float uTime;
       uniform float uI;
       uniform float uRo;
+      uniform vec2 uInk;
       void main() {
         float r = length(vXZ);
         float a = atan(vXZ.x, vXZ.y);
@@ -48,11 +52,22 @@ export function createCorona() {
         float edge = 1.0 - smoothstep(1.4, 2.15, x);
         float I = (limb * 1.25 + streams * 0.75) * edge * uI;
         vec3 col = mix(vec3(1.0, 0.93, 0.84), vec3(0.72, 0.84, 1.0), clamp(x * 1.6, 0.0, 1.0));
+        #ifdef DAY
+        // a wash of the corona's own colours round the ring, as in the old eclipse plates
+        gl_FragColor = vec4(ink(col * I, uInk), 1.0);
+        #else
         gl_FragColor = vec4(col * I, 1.0);
+        #endif
       }`,
   });
   const mesh = new THREE.Mesh(geometry, material);
   mesh.renderOrder = -10;
   mesh.frustumCulled = false;
-  return { mesh, uniforms };
+  return {
+    mesh,
+    uniforms,
+    setDay(day: boolean) {
+      setInk(material, day);
+    },
+  };
 }

@@ -173,7 +173,7 @@ export interface Dict {
     home: string;
     harness: string;
   };
-  /** the theme switch, on every page but the homepage */
+  /** the theme switch, on every page */
   theme: {
     label: string;
     light: string;

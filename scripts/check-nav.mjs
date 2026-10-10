@@ -48,24 +48,30 @@ await page.click('.roadmap__item[href="#harness"]');
 await page.waitForTimeout(2800);
 console.log('roadmap → harness:', await page.evaluate(() => ({ chapter: document.documentElement.dataset.chapter, focus: document.activeElement?.id })));
 
-// 4. HUD nav: Space, Assistant and Harness light on their own chapters, Ring on the
-// hero and the ring's other products, Open source on Codeg and the finale. Only
-// Ring stays on this page (back to the top, a clean address); Space, Assistant,
-// Harness and Open source open their own pages, the projections left alone, and
-// there their own link is the current one. The chapters of Space, the assistant
-// and Harness end with a button to the same pages.
+// 4. HUD nav: the links are pages, not chapters. On the homepage Ring is the
+// current one whichever chapter is projected (the dial follows the chapters),
+// and only it stays on this page (back to the top, a clean address); Space,
+// Assistant, Harness and Open source open their own pages, the projections
+// left alone, and there their own link is the current one. The chapters of
+// Space, the assistant and Harness end with a button to the same pages.
 const lit = [];
 for (let i = 0; i <= lastIndex; i++) {
   await page.click(`.dial__item[data-goto="${i}"]`, { force: true });
   await page.waitForTimeout(2600);
-  lit.push(await page.evaluate(() => document.querySelector('.nav__link[aria-current="true"]')?.getAttribute('href') ?? '-'));
+  lit.push(
+    await page.evaluate(() => {
+      const current = [...document.querySelectorAll('.nav__link[aria-current]')].map((a) => `${a.getAttribute('href')}=${a.getAttribute('aria-current')}`);
+      const dial = document.querySelector('.dial__item[aria-current="step"]')?.dataset.goto;
+      return `${current.join('+') || '-'}@${dial}`;
+    }),
+  );
 }
 const gotos = await page.evaluate(() => [...document.querySelectorAll('.nav__link')].map((a) => a.dataset.goto ?? '-').join());
 await page.click('.nav__link[href="#top"]');
 await page.waitForTimeout(2800);
 const top = await page.evaluate(() => `${document.documentElement.dataset.chapter}${location.hash}`);
 const market = await page.evaluate(() => [
-  document.querySelector('.nav__link[data-range="3"]')?.getAttribute('href'),
+  document.querySelectorAll('.nav__link')[3]?.getAttribute('href'),
   ...['space', 'assistant', 'harness'].map((id) => document.querySelector(`#${id} .projection__actions a`)?.getAttribute('href')),
 ]);
 const opened = [];
@@ -78,7 +84,7 @@ for (const href of ['/space/', '/assistant/', '/open-source/']) {
   await page.waitForTimeout(3200);
 }
 const navOk =
-  lit.join() === '#top,/space/,/assistant/,/harness/,#top,#top,/open-source/,/open-source/' &&
+  lit.join() === [...Array(lastIndex + 1).keys()].map((i) => `#top=page@${i}`).join() &&
   gotos === '0,-,-,-,-' &&
   top === '0' &&
   opened.join() === '/space/=/space/,/assistant/=/assistant/,/open-source/=/open-source/' &&
