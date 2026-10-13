@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { PHI, seeded } from '../math';
 import { RING } from './ring';
 import { INK, setInk } from './ink';
+import type { Gas } from './gas';
 
 /**
  * The orbit field: a Saturn-like disk of particles in the ring's plane.
@@ -30,6 +31,8 @@ const vertexShader = /* glsl */ `
   uniform float uMouseAmt;
   uniform vec2 uHighlight;
   uniform float uRo;
+  uniform sampler2D tGas;
+  uniform vec2 uGasRange;
 
   varying vec3 vColor;
   varying float vAlpha;
@@ -63,6 +66,15 @@ const vertexShader = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
 
+    // The gas round it as the camera sees it (gas.ts): a star in a cloud
+    // shines out; one behind dust dims, by as much of the dust as lies in
+    // front of it, most of which lies in the midplane (the gas's scale
+    // height as there).
+    vec2 guv = vec2(th / (2.0 * PI), (log(r) - uGasRange.x) / (uGasRange.y - uGasRange.x));
+    vec4 gas = textureLod(tGas, guv, 0.0);
+    float front = clamp(0.5 - y / (0.144 * pow(r, 1.2)), 0.15, 0.9);
+    float cloud = mix(0.5, 1.4, smoothstep(0.0, 0.12, dot(gas.rgb, vec3(0.3, 0.55, 0.15)))) * pow(max(gas.a, 0.01), front);
+
     float hl = 1.0 + uHighlight.y * exp(-pow((r - uHighlight.x) / 0.22, 2.0));
     float twinkle = 0.72 + 0.28 * sin(uTime * (0.8 + aSeed * 2.6) + aSeed * 61.0);
     float size = aSize * uPx * uSizeScale * (uCamDist / max(-mv.z, 0.1));
@@ -70,7 +82,7 @@ const vertexShader = /* glsl */ `
     // finer by day: a pen's dots, not a glow's
     size = min(size * 0.75, 2.6 * uPx);
     #endif
-    vAlpha = uOpacity * twinkle * hl * smoothstep(0.0, 0.3, b) * (1.0 + f * 1.4) * clamp(size, 0.0, 1.0);
+    vAlpha = uOpacity * twinkle * hl * cloud * smoothstep(0.0, 0.3, b) * (1.0 + f * 1.4) * clamp(size, 0.0, 1.0);
     vColor = aColor;
     gl_PointSize = max(size, 1.0);
   }
@@ -112,6 +124,8 @@ export interface Disk {
     uHighlight: { value: THREE.Vector2 };
     uRo: { value: number };
     uInk: { value: THREE.Vector2 };
+    tGas: { value: THREE.Texture | null };
+    uGasRange: { value: THREE.Vector2 };
   };
   setDay(day: boolean): void;
 }
@@ -131,7 +145,7 @@ function sampleRadius(random: () => number, a: number, b: number, density: (r: n
   return a + random() * (b - a);
 }
 
-export function createDisk(count: number, camDist: number): Disk {
+export function createDisk(count: number, camDist: number, gas: Pick<Gas, 'texture' | 'range'>): Disk {
   const random = seeded(0x51a7e);
   const aRadius = new Float32Array(count);
   const aAngle = new Float32Array(count);
@@ -141,7 +155,7 @@ export function createDisk(count: number, camDist: number): Disk {
   const aColor = new Float32Array(count * 3);
   const position = new Float32Array(count * 3); // unused, but three.js wants it for bounds
 
-  const warm = new THREE.Color('#ffe2b8');
+  const warm = new THREE.Color('#fff0dd');
   const white = new THREE.Color('#eceaf4');
   const ion = new THREE.Color('#9adfff');
   const deep = new THREE.Color('#6d7fc4');
@@ -150,6 +164,9 @@ export function createDisk(count: number, camDist: number): Disk {
   const gap1 = PHI; // 1.618
   const gap2 = PHI * PHI; // 2.618
   const ringlets = (r: number) => 0.3 + 0.7 * Math.pow(Math.sin(r * 38.0) * 0.5 + 0.5, 3.0);
+  // the gas's scale height (gas.ts): beyond the inner band the stars lie
+  // through its depth, some in front of its clouds and some behind
+  const depth = (r: number) => 0.06 * Math.pow(r, 1.2);
 
   for (let i = 0; i < count; i++) {
     const u = random();
@@ -165,19 +182,19 @@ export function createDisk(count: number, camDist: number): Disk {
     } else if (u < 0.76) {
       // main band with ringlets, between the φ and φ² divisions
       r = sampleRadius(random, gap1 + 0.045, gap2 - 0.07, ringlets);
-      h = gauss(random) * 0.014;
+      h = gauss(random) * 0.4 * depth(r);
       c.copy(white).lerp(ion, random() * 0.55);
       bright = 0.32 + random() * 0.4;
     } else if (u < 0.95) {
       // outer band, sparse and cool
       r = gap2 + 0.07 + Math.pow(random(), 1.6) * 2.0;
-      h = gauss(random) * 0.03;
+      h = gauss(random) * 0.6 * depth(r);
       c.copy(ion).lerp(deep, random() * 0.7);
       bright = 0.2 + random() * 0.32;
     } else {
       // a faint halo for depth
       r = 1.3 + Math.pow(random(), 0.9) * 4.2;
-      h = gauss(random) * 0.22;
+      h = gauss(random) * 1.6 * depth(r);
       c.copy(deep).lerp(white, random() * 0.3);
       bright = 0.12 + random() * 0.2;
     }
@@ -222,6 +239,8 @@ export function createDisk(count: number, camDist: number): Disk {
     uHighlight: { value: new THREE.Vector2(1.5, 0) },
     uRo: { value: RING.Ro },
     uInk: { value: new THREE.Vector2(1.1, 1.15) },
+    tGas: { value: gas.texture },
+    uGasRange: { value: gas.range },
   };
 
   const material = new THREE.ShaderMaterial({

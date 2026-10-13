@@ -8,6 +8,8 @@ export interface QualityProfile {
   stars: number;
   samples: number;
   ringSegments: number;
+  /** the orbit field's gas textures: this many texels round, a quarter of it across */
+  gas: number;
 }
 
 function gpuName(): string {
@@ -41,10 +43,10 @@ export function detectQuality(): QualityProfile {
 
   switch (tier) {
     case 'high':
-      return { tier, dpr: Math.min(deviceDpr, 2), minDpr: 1, particles: 46000, stars: 2600, samples: 4, ringSegments: 320 };
+      return { tier, dpr: Math.min(deviceDpr, 2), minDpr: 1, particles: 46000, stars: 2600, samples: 4, ringSegments: 320, gas: 2048 };
     case 'medium':
-      return { tier, dpr: Math.min(deviceDpr, 1.6), minDpr: 0.9, particles: 24000, stars: 1700, samples: 0, ringSegments: 220 };
+      return { tier, dpr: Math.min(deviceDpr, 1.6), minDpr: 0.9, particles: 24000, stars: 1700, samples: 0, ringSegments: 220, gas: 1536 };
     default:
-      return { tier, dpr: Math.min(deviceDpr, 1), minDpr: 0.75, particles: 10000, stars: 900, samples: 0, ringSegments: 160 };
+      return { tier, dpr: Math.min(deviceDpr, 1), minDpr: 0.75, particles: 10000, stars: 900, samples: 0, ringSegments: 160, gas: 1024 };
   }
 }

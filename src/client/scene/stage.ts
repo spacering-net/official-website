@@ -4,6 +4,7 @@ import { clamp, damp, DEG, easeInOutCubic, lerp, smootherstep } from '../math';
 import { createEnvironment } from './environment';
 import { createRing, RING } from './ring';
 import { createDisk } from './disk';
+import { createGas } from './gas';
 import { createStars } from './stars';
 import { createNebula } from './nebula';
 import { createCorona } from './corona';
@@ -105,6 +106,7 @@ export class Stage {
   private spin = new THREE.Group();
   private ring: ReturnType<typeof createRing>;
   private disk: ReturnType<typeof createDisk>;
+  private gas: ReturnType<typeof createGas>;
   private stars: ReturnType<typeof createStars>;
   private nebula: ReturnType<typeof createNebula>;
   private corona: ReturnType<typeof createCorona>;
@@ -133,6 +135,8 @@ export class Stage {
   private pointer = new THREE.Vector2();
   private mouseAmt = 0;
   private beadBoost = 0;
+  /** frames since the gas's fields were last drawn (from the start, as if it were long ago) */
+  private gasSkipped = 1;
   private lastScan = 0;
   /** the last second of frame times, for adapt() */
   private frameTimes = new Float32Array(60);
@@ -185,7 +189,15 @@ export class Stage {
     this.envs[day ? 'day' : 'night'] = env;
     this.ring = createRing(env, quality.ringSegments, quality.tier !== 'low');
     this.ring.bake(renderer);
-    this.disk = createDisk(quality.particles, CAM_DIST);
+    this.gas = createGas(quality.gas);
+    void this.gas.prepare(renderer);
+    // the band draws what of the gas lies in front of it, and mirrors it
+    const ru = this.ring.uniforms;
+    ru.uGas.value = this.gas.texture;
+    ru.uGasRange.value = this.gas.range;
+    ru.uGasVeil.value = this.gas.veil;
+    ru.uGasInk.value = this.gas.ink;
+    this.disk = createDisk(quality.particles, CAM_DIST, this.gas);
     this.stars = createStars(quality.stars);
     this.nebula = createNebula();
     this.corona = createCorona();
@@ -194,7 +206,7 @@ export class Stage {
     this.construction = createConstruction();
 
     this.scene.add(this.nebula.mesh, this.stars.points, this.pose);
-    this.pose.add(this.corona.mesh, this.spin, this.disk.points, this.construction.lines);
+    this.pose.add(this.corona.mesh, this.spin, this.gas.mesh, this.disk.points, this.construction.lines);
     this.spin.add(this.ring.mesh);
     this.scene.add(this.beam.mesh, this.beam.dust, this.glow.mesh);
 
@@ -209,6 +221,7 @@ export class Stage {
     if (off.includes('nebula')) this.nebula.mesh.visible = false;
     if (off.includes('corona')) this.corona.mesh.visible = false;
     if (off.includes('disk')) this.disk.points.visible = false;
+    if (off.includes('gas')) this.gas.mesh.visible = false;
     if (off.includes('glow')) this.glow.mesh.visible = false;
     if (off.includes('stars')) this.stars.points.visible = false;
     if (off.includes('iri')) this.ring.mesh.material.iridescence = 0;
@@ -242,7 +255,7 @@ export class Stage {
     const fin = this.post.final.uniforms;
     fin.uVignette.value = day ? 0 : 0.32;
     fin.uGrain.value = day ? 0.012 : 0.03;
-    for (const layer of [this.nebula, this.stars, this.disk, this.corona, this.beam, this.glow, this.construction]) layer.setDay(day);
+    for (const layer of [this.nebula, this.stars, this.gas, this.disk, this.corona, this.beam, this.glow, this.construction]) layer.setDay(day);
     this.resetFrameStats();
   }
 
@@ -260,7 +273,7 @@ export class Stage {
     const final = this.post.final.material;
     const variants = [
       this.ring.mesh.material,
-      ...[this.nebula.mesh, this.stars.points, this.disk.points, this.corona.mesh, this.beam.mesh, this.beam.dust, this.glow.mesh, this.construction.lines].map((o) => o.material),
+      ...[this.nebula.mesh, this.stars.points, this.gas.mesh, this.disk.points, this.corona.mesh, this.beam.mesh, this.beam.dust, this.glow.mesh, this.construction.lines].map((o) => o.material),
       final,
     ];
     variants.forEach((m) => setVariant(m, !this.day));
@@ -626,6 +639,37 @@ export class Stage {
     this.mouseAmt = damp(this.mouseAmt, mouseTarget, 4, dt);
     d.uMouseAmt.value = this.mouseAmt;
 
+    // The field's gas, lit by the node, whose angle round the field is the
+    // spin's. Its fields are drawn whenever the cursor has moved them since,
+    // and otherwise every other frame: the view turns them on by the orbit
+    // since (gas.ts, uLag). The view is drawn every frame, for this camera,
+    // and the band reads it in the gas's space (ring.ts).
+    // wanted from the flash on, or at once if the intro was skipped: drawn now if not yet
+    if (!this.gas.ready && (intro.birth > 0 || intro.done)) this.gas.bake(this.renderer);
+    if (this.gas.ready && this.gas.mesh.visible) {
+      const gf = this.gas.flow;
+      const steady = Math.abs(gf.uMouseAmt.value - this.mouseAmt) < 0.002 && gf.uMouse.value.distanceToSquared(d.uMouse.value) < 1e-6;
+      if (!steady || this.gasSkipped > 0) {
+        gf.uPhase.value = this.phase;
+        gf.uMouse.value.copy(d.uMouse.value);
+        gf.uMouseAmt.value = this.mouseAmt;
+        this.gas.update(this.renderer);
+        this.gasSkipped = 0;
+      } else this.gasSkipped++;
+      const gv = this.gas.view;
+      gv.uCam.value.copy(this.camera.position);
+      this.pose.worldToLocal(gv.uCam.value);
+      gv.uLag.value = this.phase - gf.uPhase.value;
+      gv.uBirth.value = intro.birth;
+      gv.uNode.value = spinAngle;
+      gv.uNodeI.value = Math.pow(Math.min(beadI / 1.15, 3), 0.75) * (this.day ? 0.6 : 1);
+      gv.uHighlight.value.copy(d.uHighlight.value);
+      gv.uMouse.value.copy(d.uMouse.value);
+      gv.uMouseAmt.value = this.mouseAmt;
+      this.gas.look(this.renderer);
+      this.ring.uniforms.uGasFromView.value.copy(this.gas.mesh.matrixWorld).invert().multiply(this.camera.matrixWorld);
+    }
+
     // ----------------------------------------------------------- atmosphere
     this.stars.uniforms.uTime.value = time;
     this.stars.uniforms.uOpacity.value = intro.stars;
@@ -636,7 +680,10 @@ export class Stage {
     nb.uShift.value.set(-this.mouse.x * 0.006, -this.mouse.y * 0.004);
 
     const restCorona = intro.done ? 0.13 - activity * 0.05 : 0;
-    this.corona.uniforms.uI.value = Math.max(intro.corona, restCorona);
+    // by night, once the gas is born, it carries the band's glow (gas.ts)
+    // and the corona settles fainter
+    const settle = this.day ? 1 : lerp(1, 0.3, intro.birth);
+    this.corona.uniforms.uI.value = Math.max(intro.corona, restCorona) * settle;
     this.corona.uniforms.uTime.value = time;
 
     this.construction.uniforms.uDraw.value = intro.construct;

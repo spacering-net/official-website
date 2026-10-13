@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { INK, inkLetters } from '../../lib/inscription';
 import { lerp } from '../math';
 import { SIMPLEX } from './glsl';
+import { INK as INK_WASH } from './ink';
 
 /**
  * Ring dimensions in ring-local units, derived from the logo's construction
@@ -74,6 +75,19 @@ export interface Ring {
     uInscriptionI: { value: number };
     /** how far the inscription has burned in, left to right, 0–1; beyond 1.2 it is simply there */
     uInscriptionReveal: { value: number };
+    /**
+     * The orbit field's gas as the camera sees it (gas.ts), laid out as
+     * uGasRange says. The band draws what of it lies in front of the outer
+     * wall above the field's plane, as much as uGasVeil says (below the
+     * plane the gas's own annulus lies in front of the wall), in its ink by
+     * day (uGasInk), and by night mirrors it.
+     */
+    uGas: { value: THREE.Texture | null };
+    uGasRange: { value: THREE.Vector2 };
+    uGasVeil: { value: number };
+    uGasInk: { value: THREE.Vector2 };
+    /** from the camera's space to the gas's, each frame */
+    uGasFromView: { value: THREE.Matrix4 };
   };
   /** Draw the vein pattern into its texture, once, before the first frame. */
   bake(renderer: THREE.WebGLRenderer): void;
@@ -163,6 +177,11 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
     uVeinFlow: { value: 1 },
     uInscriptionI: { value: 0 },
     uInscriptionReveal: { value: 2 },
+    uGas: { value: null as THREE.Texture | null },
+    uGasRange: { value: new THREE.Vector2(0, 1) },
+    uGasVeil: { value: 1 },
+    uGasInk: { value: new THREE.Vector2(1, 1) },
+    uGasFromView: { value: new THREE.Matrix4() },
   };
 
   material.onBeforeCompile = (shader) => {
@@ -211,6 +230,61 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         uniform vec4 uInscriptionRect;
         uniform float uInscriptionI;
         uniform float uInscriptionReveal;
+        uniform sampler2D uGas;
+        uniform vec2 uGasRange;
+        uniform float uGasVeil;
+        uniform vec2 uGasInk;
+        uniform mat4 uGasFromView;
+        // Where a point of the field's plane (gas-local) lies in the gas's
+        // texture, and the gas there: the light along the line of sight
+        // through it, up to the band, and in A what of the light behind
+        // passes. None off the texture's edges.
+        vec2 gasUv(vec3 p) {
+          return vec2(atan(p.x, p.z) * 0.15915494, (log(length(p.xz)) - uGasRange.x) / (uGasRange.y - uGasRange.x));
+        }
+        vec4 gasAt(vec2 uv) {
+          vec4 gas = textureLod(uGas, uv, 0.0);
+          float k = smoothstep(0.0, 0.03, uv.y) * (1.0 - smoothstep(0.97, 1.0, uv.y));
+          return vec4(gas.rgb * k, mix(1.0, gas.a, k));
+        }
+        // What of the gas lies in front of this point, if it is on the outer
+        // wall (wall: how much), above the plane but not on the round of the
+        // band's edge (no gas comes so high), facing the camera: the line of
+        // sight crosses the plane inside the band, and there the gas's texture
+        // holds only what lies outside the band, in front of the wall.
+        vec4 gasInFront(float wall) {
+          vec3 w = (uGasFromView * vec4(-vViewPosition, 1.0)).xyz;
+          vec3 c = uGasFromView[3].xyz;
+          if (w.y <= 0.0 || w.y > ${(RING.H - RING.corner).toFixed(4)} || wall <= 0.0 || dot(w.xz - c.xz, w.xz) >= 0.0) return vec4(0.0, 0.0, 0.0, 1.0);
+          vec4 gas = gasAt(gasUv(c + (w - c) * (c.y / (c.y - w.y))));
+          wall *= uGasVeil;
+          return vec4(gas.rgb * wall, mix(1.0, gas.a, wall));
+        }
+        // The gas in the band's mirror (on the outer wall, as much as wall
+        // says): as much of the gas's depth as the reflected ray passes
+        // through on its way down (about ±0.13 by the band), all of it from
+        // high on the wall and none from low down, read where the ray has
+        // just passed the plane or its own start. Blurred over a disc 0.05
+        // round that point (to first order in the texture's layout), as the
+        // band is polished, not a perfect mirror.
+        vec3 gasMirror(vec3 n, vec3 v, float wall) {
+          if (wall <= 0.0) return vec3(0.0);
+          vec3 w = (uGasFromView * vec4(-vViewPosition, 1.0)).xyz;
+          vec3 d = mat3(uGasFromView) * reflect(-v, n);
+          float through = smoothstep(-0.13, 0.13, w.y) * wall;
+          if (d.y >= 0.0 || through <= 0.0) return vec3(0.0);
+          vec3 p = w + d * ((min(w.y, 0.0) - 0.04 - w.y) / d.y);
+          vec2 uv = gasUv(p);
+          float r = length(p.xz);
+          vec2 disc = vec2(0.15915494 / r, 1.0 / (r * (uGasRange.y - uGasRange.x))) * 0.05;
+          vec3 sum = vec3(0.0);
+          for (int i = 0; i < 6; i++) {
+            float a = float(i) * 2.39996 + 0.4;
+            sum += gasAt(uv + vec2(cos(a), sin(a)) * disc * sqrt((float(i) + 0.5) / 6.0)).rgb;
+          }
+          return sum * (through / 6.0);
+        }
+        ${INK_WASH}
         #ifdef DAY
         // three.js's ACES fit (the chunk that has it is left out of shaders
         // that draw into a render target)
@@ -372,6 +446,12 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         '#include <lights_physical_fragment>\nmaterial.clearcoat = mix(material.clearcoat, 1.0, nodeMask);\nmaterial.clearcoatRoughness = mix(material.clearcoatRoughness, 0.06, nodeMask);',
       )
       .replace(
+        '#include <lights_fragment_maps>',
+        // the gas round the band in its mirror, a little under its full light
+        // (not in the node's glass)
+        '#include <lights_fragment_maps>\n#ifndef DAY\nradiance += 0.8 * gasMirror(geometryNormal, geometryViewDir, wallMask) * (1.0 - nodeMask);\n#endif',
+      )
+      .replace(
         '#include <emissivemap_fragment>',
         /* glsl */ `#include <emissivemap_fragment>
         // The light in the stone: a point at its heart, a little of its glow
@@ -395,8 +475,14 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
       .replace(
         '#include <opaque_fragment>',
         // By day the frame is paper and ink, finished as it is drawn (post.ts):
-        // the ring brings its own tone mapping.
-        '#include <opaque_fragment>\n#ifdef DAY\ngl_FragColor.rgb = dayTone(gl_FragColor.rgb);\n#endif',
+        // the ring brings its own tone mapping. Over it, the gas in front.
+        /* glsl */ `#include <opaque_fragment>
+        vec4 gasFront = gasInFront(wallMask);
+        #ifdef DAY
+        gl_FragColor.rgb = dayTone(gl_FragColor.rgb) * ink(gasFront.rgb, uGasInk);
+        #else
+        gl_FragColor.rgb = gl_FragColor.rgb * gasFront.a + gasFront.rgb;
+        #endif`,
       );
   };
   material.customProgramCacheKey = () => (veins ? 'spacering-ring-v3-veins' : 'spacering-ring-v3');
