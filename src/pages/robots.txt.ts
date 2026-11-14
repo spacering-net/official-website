@@ -9,6 +9,8 @@ export const GET: APIRoute = () =>
       'User-agent: *',
       'Allow: /',
       'Disallow: /api/',
+      'Disallow: /authorize',
+      'Disallow: /zh/authorize',
       'Disallow: /harness/*q=',
       'Disallow: /zh/harness/*q=',
       'Disallow: /harness/*cursor=',

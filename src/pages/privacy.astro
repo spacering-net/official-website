@@ -2,7 +2,7 @@
 import Doc from '../layouts/Doc.astro';
 const paths = { en: '/privacy/', zh: '/zh/privacy/' };
 ---
-<Doc lang="en" title="Privacy Policy" description="What SpaceRing collects when you sign in, why, where it is kept, and how to have it deleted." paths={paths} updated="October 8, 2026">
+<Doc lang="en" title="Privacy Policy" description="What SpaceRing collects when you sign in, why, where it is kept, and how to have it deleted." paths={paths} updated="November 14, 2026">
   <p>This policy explains what SpaceRing (spacering.net, “we”) collects when you sign in, why, where it is kept, and what you can ask of us. Browsing the site without signing in sends us nothing about you: there are no analytics or advertising cookies.</p>
 
   <h2>What we collect</h2>
@@ -11,7 +11,8 @@ const paths = { en: '/privacy/', zh: '/zh/privacy/' };
     <li>your ring number (SRN), an internal ID, the time your account was created and the language you signed up in;</li>
     <li>whether you share your ring card, and what you chose it to show;</li>
     <li>for each browser you are signed in on, a session with its IP address and browser identification (user agent);</li>
-    <li>a security log of sign-ins and account changes, in which IP addresses are kept only as a keyed hash.</li>
+    <li>for each app you connect to your account (Codeg, see below), a connection record: which app, the device name and platform it reports, a random installation ID, and when the connection was made and last used;</li>
+    <li>a security log of sign-ins, account changes and app connections, in which IP addresses are kept only as a keyed hash.</li>
   </ul>
   <p>We do not keep the access tokens GitHub or Google issue at sign-in, and we read nothing else from those accounts.</p>
 
@@ -20,11 +21,15 @@ const paths = { en: '/privacy/', zh: '/zh/privacy/' };
     <li>To sign you in and keep you signed in.</li>
     <li>To show you your ring number and profile.</li>
     <li>To show the ring card you choose to share.</li>
+    <li>To let apps you connect, such as Codeg, show who you are.</li>
     <li>To keep accounts safe: spotting misuse and looking into problems.</li>
   </ul>
 
   <h2>Ring cards</h2>
   <p>Your ring card is private until you share it. Once shared, its page (spacering.net/ring/ followed by your ring number) and its picture are public: anyone with the link can see your ring number and the date your ring was forged, and your name and profile picture if you chose to show them. Anyone who knows or guesses your ring number can open the page as well. Card pages ask search engines not to list them. You can change what your card shows or stop sharing it at any time, and the page and picture change or stop working at once; copies that people saved, or that other sites keep for their link previews, may remain for a while.</p>
+
+  <h2>Connected apps</h2>
+  <p>You can sign in to Codeg, the open-source desktop app, or to a Codeg web service with your SRN. Codeg asks first, and you confirm on spacering.net. A connection gives the app your name, profile picture and ring number, and nothing else: not your email address, and nothing from your GitHub or Google account. The desktop app keeps them on your computer. A Codeg web service is run by whoever operates it, not by us: when you connect one, its operator receives the same information and handles it under their own practices. The authorization page shows the service’s address before you confirm, so connect only a service you trust. You can see and revoke your connections in your account at any time; revoking stops the app from reading your information again, but cannot recall what it already received.</p>
 
   <h2>Where it is kept</h2>
   <p>The site and your data are hosted by Cloudflare: account data in a database in Cloudflare’s Asia-Pacific region, profile pictures in Cloudflare storage, and requests handled across Cloudflare’s global network. Your information is therefore stored and processed outside mainland China; by signing in you agree to this transfer. GitHub and Google handle the sign-in itself under their own privacy policies.</p>
@@ -33,13 +38,14 @@ const paths = { en: '/privacy/', zh: '/zh/privacy/' };
   <ul>
     <li>A session ends 30 days after you last use it and is then deleted; signing out ends it at once.</li>
     <li>Records of a sign-in in progress last a few minutes.</li>
+    <li>An app connection ends 30 days after it was last used, or when you or the app disconnect it; its record is deleted 30 days after that. Records of an app’s connection request are deleted within two days.</li>
     <li>The security log is kept for 12 months.</li>
     <li>A shared ring card stays shared until you stop sharing it or your account is deleted.</li>
     <li>Your account is kept until you ask us to delete it. Deleting removes your name, email address, picture, sign-in methods and sessions; your ring number is retired and never given to anyone else.</li>
   </ul>
 
   <h2>Cookies and local storage</h2>
-  <p>Signing in uses cookies it cannot work without: session cookies, and a short-lived cookie during sign-in. Your browser also keeps your ring number, name and picture in local storage, so the ring can be engraved as soon as the page opens; signing out clears them. The site remembers your language choice the same way.</p>
+  <p>Signing in uses cookies it cannot work without: session cookies, and a short-lived cookie during sign-in. Your browser also keeps your ring number, name and picture in local storage, so the ring can be engraved as soon as the page opens; signing out clears them. While you authorize an app, that page keeps a reference to the request in the tab’s session storage for up to ten minutes, and removes it once the request is decided or expires. The site remembers your language choice the same way.</p>
 
   <h2>Your rights</h2>
   <p>You can ask to see, correct, export or delete your information, or withdraw your consent, by writing to <a href="mailto:privacy@spacering.net">privacy@spacering.net</a>. We reply within 15 working days. You can also stop at any time and revoke SpaceRing’s access in your GitHub or Google settings.</p>

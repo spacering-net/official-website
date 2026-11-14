@@ -21,7 +21,10 @@
     // Everything else is a file, served without running the script. Pages
     // rendered on demand must be listed here, or they get the 404 page (and
     // in ON_DEMAND in api/index.ts, for `astro dev`).
-    "run_worker_first": ["/api/*", "/harness", "/harness/*", "/zh/harness", "/zh/harness/*", "/ring/*", "/zh/ring/*", "/sitemap.xml", "/sitemap-harness-*"]
+    // Authorization HTML is rendered by the Worker only (no-store, no
+    // framing), never placed in assets, so a path alias that misses these
+    // rules finds no copy of it there.
+    "run_worker_first": ["/api/*", "/authorize*", "/zh/authorize*", "/harness", "/harness/*", "/zh/harness", "/zh/harness/*", "/ring/*", "/zh/ring/*", "/sitemap.xml", "/sitemap-harness-*"]
   },
   "d1_databases": [
     {
@@ -89,6 +92,21 @@
       "name": "RING_LIMIT",
       "namespace_id": "1003",
       "simple": { "limit": 20, "period": 60 }
+    },
+    // Codeg's client API and the connection list, per address. Generous: a
+    // Codeg Web instance calls for all its users from one address. Anonymous
+    // traffic is counted here, never with writes to the accounts database.
+    {
+      "name": "CLIENT_LIMIT",
+      "namespace_id": "1004",
+      "simple": { "limit": 300, "period": 60 }
+    },
+    // Anonymous Codeg sign-in steps (new request, page lookup, code
+    // exchange), per address and step; Web clients are counted per client.
+    {
+      "name": "CLIENT_FLOW_LIMIT",
+      "namespace_id": "1005",
+      "simple": { "limit": 20, "period": 60 }
     }
   ],
   // which deployment this is: pages kept at the edge are kept per deployment,
@@ -105,6 +123,8 @@
     // repos and recount facets; hourly: Harness registry sync (api/index.ts)
     "crons": ["23 3 * * *", "17 * * * *"]
   },
+  // Codeg sign-in keeps request IDs, codes and tokens out of every URL SRN
+  // receives (fragment, request bodies), so request logs need no exception.
   "observability": {
     "enabled": true
   }

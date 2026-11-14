@@ -1,4 +1,6 @@
 import { initCardView } from './card';
+import { socialSignIn } from './social-sign-in';
+import { initConnections } from './connections';
 import type { ScrollLock } from './menu';
 
 /** What the page knows about the signed-in user (GET /api/me). */
@@ -100,6 +102,12 @@ export function initAccount({ scroll, menu, scrollable, onRing }: AccountOptions
   const signOutButton = dialog.querySelector<HTMLButtonElement>('[data-account-signout]');
   const signOutError = dialog.querySelector<HTMLElement>('[data-account-signout-error]');
   let me: Me | null = null;
+  const connections = initConnections(views.in, () => me?.number ?? null, async () => {
+    await refreshAccount();
+    // A changed cookie requires checking the displayed account and opening
+    // the connection list again; no stale list remains actionable.
+    connections.reset();
+  });
   // bumped when this page signs out: an /api/me answer asked for before then is stale
   let epoch = 0;
   // which view the dialog shows once signed in
@@ -146,10 +154,17 @@ export function initAccount({ scroll, menu, scrollable, onRing }: AccountOptions
 
   const setMe = (next: Me | null, fresh: boolean) => {
     const changed = (next?.number ?? null) !== (me?.number ?? null);
+    if (changed) connections.reset();
     me = next;
     writeHint(next);
     render();
     if (changed || fresh) onRing?.(next?.number ?? null, fresh);
+  };
+
+  const refreshAccount = async () => {
+    const asked = ++epoch;
+    const next = await fetchMe();
+    if (next !== undefined && asked === epoch) setMe(next, false);
   };
 
   const cardView = initCardView({
@@ -187,6 +202,9 @@ export function initAccount({ scroll, menu, scrollable, onRing }: AccountOptions
     const show = () => {
       render();
       dialog.showModal();
+      // A valid website cookie can exist without the optional localStorage
+      // hint, for example after authorizing from the dedicated Codeg page.
+      void refreshAccount();
       syncCard();
       scroll.stop();
     };
@@ -226,22 +244,7 @@ export function initAccount({ scroll, menu, scrollable, onRing }: AccountOptions
       const label = button.querySelector('span');
       const text = label?.textContent ?? '';
       if (label) label.textContent = button.dataset.busy ?? text;
-      try {
-        const res = await fetch('/api/auth/sign-in/social', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'content-type': 'application/json' },
-          // back to this very page, with its query (a search, a filter) and fragment
-          body: JSON.stringify({ provider: button.dataset.provider, callbackURL: backTo('signed-in'), errorCallbackURL: backTo('sign-in-error') }),
-        });
-        const data = (await res.json().catch(() => null)) as { url?: string } | null;
-        if (res.ok && data?.url) {
-          location.assign(data.url);
-          return;
-        }
-      } catch {
-        /* falls through to the error below */
-      }
+      if (await socialSignIn(button.dataset.provider ?? '', backTo('signed-in'), backTo('sign-in-error'))) return;
       if (error) error.hidden = false;
       if (label) label.textContent = text;
       providers.forEach((b) => (b.disabled = false));

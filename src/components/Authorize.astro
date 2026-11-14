@@ -1,0 +1,81 @@
+---
+import '@fontsource-variable/jost';
+import '../styles/site.css';
+import Logo from './Logo.astro';
+import Icon from './Icon.astro';
+import type { Lang } from '../i18n';
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const zh = lang === 'zh';
+---
+<!doctype html>
+<html lang={zh ? 'zh-CN' : 'en'}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="color-scheme" content="dark light" />
+    <title>{zh ? '登录并授权 Codeg · SpaceRing' : 'Connect Codeg · SpaceRing'}</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <main class="authorize" data-authorize data-lang={lang}>
+      <a class="authorize__brand" href={zh ? '/zh/' : '/'} aria-label="SpaceRing"><Logo /></a>
+      <p class="authorize__eyebrow">SPACERING → CODEG</p>
+      <h1>{zh ? '登录并授权 Codeg' : 'Connect Codeg to SpaceRing'}</h1>
+      <p class="authorize__lede">{zh ? '确认你的 SRN 账号，连接你刚才打开的 Codeg。' : 'Confirm your SRN account to connect the Codeg you just opened.'}</p>
+      <p class="authorize__status" role="status" aria-live="polite" data-status>{zh ? '正在读取授权请求…' : 'Loading request…'}</p>
+      <p class="authorize__error" role="alert" data-error hidden></p>
+      <section data-request hidden>
+        <p data-client></p>
+        <p class="authorize__permission">{zh ? '允许读取：昵称、头像、SRN。' : 'Allow access to your name, avatar and SRN.'}</p>
+        <p class="authorize__note">{zh ? '仅确认本人发起的连接。' : 'Confirm only a connection you initiated.'}</p>
+        <p class="authorize__note" data-web-note hidden>{zh ? '此 Web 服务的运营者将能读取以上资料，请只连接你信任的服务。' : 'This Web service operator can read the profile above. Connect only a service you trust.'}</p>
+        <p class="authorize__note" data-expiry></p>
+        <div data-signed-out hidden>
+          <div class="authorize__actions">
+            <button class="btn btn--primary" type="button" data-provider="github"><Icon name="github" /><span>{zh ? '使用 GitHub 登录' : 'Continue with GitHub'}</span></button>
+            <button class="btn btn--ghost" type="button" data-provider="google"><Icon name="google" /><span>{zh ? '使用 Google 登录' : 'Continue with Google'}</span></button>
+          </div>
+          <p class="authorize__note">{zh ? '登录后仍需你明确确认授权。' : 'Signing in still requires your explicit approval.'}</p>
+        </div>
+        <div data-signed-in hidden>
+          <div class="authorize__account"><img width="48" height="48" alt="" data-avatar hidden /><div><strong data-name></strong><p data-srn></p></div></div>
+          <div class="authorize__actions">
+            <button class="btn btn--primary" type="button" data-approve>{zh ? '授权并连接 Codeg' : 'Authorize and connect Codeg'}</button>
+            <button class="btn btn--ghost" type="button" data-deny>{zh ? '取消连接' : 'Cancel connection'}</button>
+          </div>
+          <button class="authorize__switch" type="button" data-switch>{zh ? '切换 SRN 账号' : 'Switch SRN account'}</button>
+        </div>
+      </section>
+      <a class="btn btn--primary" data-open hidden>{zh ? '返回 Codeg' : 'Return to Codeg'}</a>
+      <button class="btn btn--ghost" type="button" data-reload hidden>{zh ? '刷新状态' : 'Refresh status'}</button>
+      <p class="authorize__note">{zh ? '此授权不赋予 Codeg 工作区访问权。' : 'This authorization does not grant access to a Codeg workspace.'}</p>
+      <footer><a href={zh ? '/zh/privacy/' : '/privacy/'}>{zh ? '隐私政策' : 'Privacy'}</a><a href={zh ? '/zh/terms/' : '/terms/'}>{zh ? '服务条款' : 'Terms'}</a><a href={zh ? '/authorize/' : '/zh/authorize/'} data-language>{zh ? 'English' : '简体中文'}</a></footer>
+      <noscript>{zh ? '请启用 JavaScript 完成登录授权。' : 'Enable JavaScript to connect Codeg.'}</noscript>
+    </main>
+    <script>import '../client/authorize';</script>
+  </body>
+</html>
+<style>
+  body { display: grid; min-height: 100svh; place-items: center; background: var(--bg, #08090d); color: var(--fg, #f3f3f6); }
+  .authorize { width: min(100% - 40px, 520px); padding: 52px 0; }
+  .authorize__brand { display: block; width: 64px; margin-bottom: 30px; }
+  .authorize__brand :global(svg) { fill: currentColor; width: 64px; height: 64px; }
+  .authorize__eyebrow { color: #a5b4fc; font-size: 12px; letter-spacing: .16em; margin-bottom: 12px; }
+  h1 { font-size: clamp(25px, 6vw, 34px); line-height: 1.25; margin-bottom: 14px; font-weight: 500; }
+  .authorize__lede, [data-client] { line-height: 1.6; opacity: .85; overflow-wrap: anywhere; }
+  .authorize__status { margin: 24px 0 16px; }
+  .authorize__error { color: #fca5a5; margin: 16px 0; line-height: 1.6; }
+  .authorize__permission { padding-top: 12px; font-weight: 500; }
+  .authorize__note { font-size: 13px; line-height: 1.7; opacity: .65; margin: 14px 0; }
+  .authorize__actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 16px; }
+  .authorize__actions .btn { gap: 9px; }
+  .authorize__account { display: flex; align-items: center; gap: 14px; margin-top: 24px; padding: 18px; border: 1px solid #ffffff24; border-radius: 12px; }
+  .authorize__account img { border-radius: 50%; }
+  .authorize__account p { font-size: 13px; opacity: .7; margin-top: 4px; }
+  .authorize__switch { color: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 4px; }
+  footer { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 36px; font-size: 12px; opacity: .7; }
+  [hidden] { display: none !important; }
+</style>

@@ -1,6 +1,8 @@
 import { handle } from '@astrojs/cloudflare/handler';
 import { Hono, type Context } from 'hono';
 import { getAuth } from './auth';
+import { clientRoutes } from './clients/routes';
+import { authorizationPage } from './clients/pages';
 import { serveAvatar } from './avatars';
 import { withRequest } from './context';
 import { cacheKey, edgeCache, forCache, fromCache } from './harness/cache';
@@ -48,6 +50,7 @@ api.get('/me', async (c) => {
 api.get('/avatars/*', (c) => serveAvatar(c.env, c.req.path.slice('/api/avatars/'.length)));
 
 api.route('/', ringRoutes(sessionUser));
+api.route('/', clientRoutes(sessionUser));
 
 api.route('/harness/v1', harnessApi);
 
@@ -121,6 +124,21 @@ export default {
     // the API, or a page rendered on demand; and a request that is not a
     // navigation, for an address with nothing behind it.
     if (pathname === '/api' || pathname.startsWith('/api/')) return withRequest(ctx, () => api.fetch(request, env, ctx));
+    const authorization = authorizationPage(pathname);
+    if (authorization) return (async () => {
+      const url = new URL(request.url);
+      url.pathname = authorization.zh ? '/zh/authorize/' : '/authorize/';
+      // Render only through this branch: there is deliberately no static
+      // authorization HTML for ASSETS to serve through a normalized alias.
+      const response = authorization.accepted
+        ? await render(new Request(url, request), env, ctx)
+        : new Response('Not found', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+      const res = new Response(response.body, response);
+      for (const [key, value] of Object.entries(PAGE_HEADERS)) res.headers.set(key, value);
+      res.headers.set('Cache-Control', 'no-store');
+      res.headers.set('Referrer-Policy', 'no-referrer');
+      return res;
+    })();
     if (import.meta.env?.DEV && !ON_DEMAND.test(pathname)) return render(request, env, ctx);
     return page(request, env, ctx);
   },
@@ -138,6 +156,9 @@ export default {
       env.DB.prepare('DELETE FROM verifications WHERE expires_at < ?1').bind(now.toISOString()),
       env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?1').bind(now.toISOString()),
       env.DB.prepare('DELETE FROM audit_events WHERE created_at < ?1').bind(yearAgo),
+      env.DB.prepare("DELETE FROM client_login_requests WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day')"),
+      env.DB.prepare("DELETE FROM client_sessions WHERE expires_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days') OR revoked_at < strftime('%Y-%m-%dT%H:%M:%fZ','now','-30 days')"),
+      env.DB.prepare("DELETE FROM client_rate_limits WHERE window_start < CAST(unixepoch('now') / 60 AS INTEGER) - 60"),
     ]);
     console.info(
       `[api] cleanup: ${states.meta.changes} expired states, ${sessions.meta.changes} expired sessions, ${events.meta.changes} old audit entries`,
