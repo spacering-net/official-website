@@ -97,6 +97,13 @@ const CAM_DIST = 11;
 const DAY = { node: 0.1, nodeColor: new THREE.Color('#ffa64d'), roughness: 0.08, ca: 0 };
 const FOV = 28;
 const TILT = 60 * DEG; // ring plane at 30° to the picture plane → ellipses with b/a = cos30°
+/**
+ * The inscription's burn-in, in seconds: a surge leaves the node and runs
+ * round both sides of the band to the ends of the lettering (surge), writes
+ * the letters in from both ends to the middle (write), and where the two
+ * meet it flashes and sends a ring of light over the wall (settle).
+ */
+const BURN = { surge: 1.0, write: 1.4, settle: 1.6 };
 
 export class Stage {
   readonly renderer: THREE.WebGLRenderer;
@@ -142,8 +149,12 @@ export class Stage {
   private frameTimes = new Float32Array(60);
   private frameCount = 0;
   private posed: RingPose = { x: 0, y: 0, r: 100, roll: -30, band: 0, bandAmt: 0, turns: 0 };
-  /** The inscription inside the band: shown 0–1, burn-in progress, and whether its lettering is drawn. */
-  private ink = { target: 0, amount: 0, reveal: 2, burning: false, ready: false };
+  /**
+   * The inscription inside the band: shown 0–1, the burn-in's clock while it
+   * plays, the lettering's half-width round the band (radians), whether the
+   * lettering is drawn, and which setInscription() call last asked for it.
+   */
+  private ink = { target: 0, amount: 0, burning: false, clock: 0, span: 0, ready: false, asked: 0 };
 
   // scratch objects, reused every frame
   private v1 = new THREE.Vector3();
@@ -358,22 +369,24 @@ export class Stage {
 
   /**
    * Engrave `text` inside the band (null takes it away, fading). With `burn`,
-   * a line of light writes it in once the band is lit; without, it is simply
-   * there, as it was on the last visit.
+   * light from the node writes it in once the band is lit (BURN); without,
+   * it is simply there, as it was on the last visit.
    */
   setInscription(text: string | null, burn: boolean) {
     const ink = this.ink;
+    const asked = ++ink.asked;
     ink.target = text ? 1 : 0;
-    if (!text) {
-      ink.burning = false;
-      return;
-    }
-    this.ring.inscribe(text).then(() => {
-      if (!ink.target) return;
+    // taken away, a burn-in under way fades with the letters
+    if (!text) return;
+    // each call waits for the font; only the last one's lettering counts
+    this.ring.inkReady().then(() => {
+      if (!ink.target || asked !== ink.asked) return;
+      this.ring.paintInk(text);
       ink.ready = true;
       ink.amount = 1;
       ink.burning = burn;
-      ink.reveal = burn ? -0.1 : 2;
+      ink.clock = 0;
+      ink.span = this.ring.letterSpan(text);
     });
   }
 
@@ -384,7 +397,8 @@ export class Stage {
    */
   captureInk(content: string | boolean) {
     this.ring.paintInk(content);
-    Object.assign(this.ink, { target: 1, amount: 1, reveal: 2, burning: false, ready: true });
+    // and no lettering still waiting for its font paints over it
+    Object.assign(this.ink, { target: 1, amount: 1, burning: false, ready: true, asked: this.ink.asked + 1 });
   }
 
   /** Where a point of the ink canvas (its pixels) was on screen in the last frame, in CSS pixels. */
@@ -548,15 +562,37 @@ export class Stage {
     ru.uVeinFlow.value = f.reduceMotion ? 0 : 1;
     const ink = this.ink;
     ink.amount = damp(ink.amount, ink.ready ? ink.target : 0, 4, dt);
-    if (ink.burning && intro.done) {
-      ink.reveal += dt / 1.8;
-      if (ink.reveal > 1.25) {
-        ink.burning = false;
-        ink.reveal = 2;
+    // The burn-in (BURN), once the band is lit. Its light leaves the node
+    // with a flare, and the veins carry it round to the inscription.
+    let reveal = 2;
+    let flash = 0;
+    let surge = 0;
+    let surgeI = 0;
+    const ripple = ru.uInscriptionRipple.value.set(0, 0);
+    if (ink.burning) {
+      if (intro.done) {
+        if (ink.clock === 0) this.beadBoost = Math.max(this.beadBoost, 0.6);
+        ink.clock += dt;
       }
+      const t = ink.clock;
+      // the ends of the lettering, in half-turns from the node
+      const ends = 1 - ink.span / Math.PI;
+      const written = BURN.surge + BURN.write;
+      reveal =
+        t < BURN.surge ? ends * easeInOutCubic(t / BURN.surge) : lerp(ends, 1.04, Math.min(1, (t - BURN.surge) / BURN.write));
+      surge = reveal;
+      surgeI = clamp(t / 0.15) * (1 - clamp((t - written) / 0.3)) * ink.amount;
+      if (t > written) {
+        const k = clamp((t - written) / BURN.settle);
+        flash = Math.exp(-(t - written) * 3);
+        ripple.set(0.06 + 0.9 * (1 - Math.pow(1 - k, 3)), Math.pow(1 - k, 2) * ink.amount);
+      }
+      if (t > written + BURN.settle) ink.burning = false;
     }
     ru.uInscriptionI.value = ink.amount * intro.env;
-    ru.uInscriptionReveal.value = ink.reveal;
+    ru.uInscriptionReveal.value = reveal;
+    ru.uInscriptionFlash.value = flash;
+    ru.uSurge.value.set(surge, surgeI);
 
     const ndc = this.posB.copy(bead).project(this.camera);
     const aspect = this.vw / this.vh;

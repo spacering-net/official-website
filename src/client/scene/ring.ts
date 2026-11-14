@@ -73,8 +73,18 @@ export interface Ring {
     uVeinFlow: { value: number };
     /** how much of the inscription shows: 0–1 */
     uInscriptionI: { value: number };
-    /** how far the inscription has burned in, left to right, 0–1; beyond 1.2 it is simply there */
+    /**
+     * How far round the band from the node the light that burns the
+     * inscription in has come, in half-turns: it lights the letters from
+     * both ends in, meeting in the middle at 1. Beyond 1 they are simply lit.
+     */
     uInscriptionReveal: { value: number };
+    /** the flash as the two ends of the burn meet in the middle, 0–1 */
+    uInscriptionFlash: { value: number };
+    /** the ring of light the flash sends over the inner wall: its radius (band units) and strength */
+    uInscriptionRipple: { value: THREE.Vector2 };
+    /** a surge of light along the veins, from the node round both sides: its front in half-turns, and strength */
+    uSurge: { value: THREE.Vector2 };
     /**
      * The orbit field's gas as the camera sees it (gas.ts), laid out as
      * uGasRange says. The band draws what of it lies in front of the outer
@@ -91,12 +101,14 @@ export interface Ring {
   };
   /** Draw the vein pattern into its texture, once, before the first frame. */
   bake(renderer: THREE.WebGLRenderer): void;
-  /** Set the text engraved inside the band (e.g. "SRN 10000"); resolves once it can be shown. */
-  inscribe(text: string): Promise<void>;
+  /** Resolves once the inscription's font is loaded, so that letters can be inked. */
+  inkReady(): Promise<void>;
+  /** Half the width of `text` as the band is lettered with it: how far round the band it reaches either side of the back, in radians. */
+  letterSpan(text: string): number;
   /**
-   * For the ring card's art (scripts/ring-card-art.mjs): ink the band at
-   * once with letters, all over (true) or not at all (false). Letters need
-   * their font loaded.
+   * Ink the band with the text engraved inside it (e.g. "SRN 10000"), its
+   * font loaded; or, for the ring card's art (scripts/ring-card-art.mjs),
+   * all over (true) or not at all (false).
    */
   paintInk(content: string | boolean): void;
   /** The point on the inner wall under a point of the ink canvas (its pixels), in the ring's own space. */
@@ -106,24 +118,64 @@ export interface Ring {
 /** The inscription's lettering, in the HUD's mono face (laid out by src/lib/inscription.ts). */
 const INK_FONT = `${INK.weight} ${INK.size}px "IBM Plex Mono", ui-monospace, monospace`;
 
+/** Vein lines per unit along the band's cross-section. */
+const VEIN_LINES = 8;
+/** How far the veins keep from the node's middle, and from the inscription's (half-sizes round and across), in band units. */
+const VEIN_NODE = 0.14;
+const VEIN_SEAL = [0.5, 0.075] as const;
+
 // The vein pattern never changes, so it is drawn once into a texture laid over
 // the unrolled band (u: round, from the back through the node; v: across, along
 // the cross-section) rather than worked out for every pixel of every frame.
-// R: how far the lines meander, in line spacings; G: whether a line shows here.
+// The lines are contours of a gently warped field. They part round the node
+// as a stream parts round a stone, and round the inscription when there is
+// one. R: how far the lines are moved from their places, in line spacings;
+// B: the same with the inscription; G: whether a line shows here.
 const VEIN_BAKE = /* glsl */ `
   ${SIMPLEX}
   varying vec2 vUv;
   uniform float uProfileLen;
+  /** along the cross-section: where the node's middle is (round the band, at 0), and where the inscription's is (at the back) */
+  uniform vec2 uAt;
+  const float LINES = ${VEIN_LINES.toFixed(1)};
+  float warpAt(vec2 around, float prof) {
+    float meander = snoise(vec3(around * 0.55, prof * 0.9) + vec3(4.1, 1.7, 9.3));
+    return 1.1 * snoise(vec3(around * 0.8, prof * 1.4) + 0.5 * meander);
+  }
+  // across the band, the short way round its cross-section
+  float across(float d) {
+    return d - uProfileLen * floor(d / uProfileLen + 0.5);
+  }
+  // How far p is from an obstacle's middle, in its half-sizes: 1 on its edge,
+  // a superellipse of power n.
+  float reach(vec2 p, float n) {
+    return pow(pow(abs(p.x), n) + pow(abs(p.y), n), 1.0 / n);
+  }
+  // The field f with its contours parted round an obstacle r away, as
+  // streamlines part round a cylinder in a steady flow (ψ = y (1 − 1/r²)).
+  // fc, the field in the middle, is a half-integer, so no line runs through
+  // it. Further out than three of its sizes, the lines let go of it.
+  float part(float f, float fc, float r) {
+    return f - (f - fc) / max(r * r, 1.0) * (1.0 - smoothstep(2.5, 4.0, r));
+  }
   void main() {
     float th = (vUv.x - 0.5) * 6.28318530718;
     vec2 around = vec2(sin(th), cos(th));
     float prof = vUv.y * uProfileLen;
-    float meander = snoise(vec3(around * 0.8, prof * 1.3) + vec3(4.1, 1.7, 9.3));
-    float warp = 0.9 * snoise(vec3(around * 1.25, prof * 2.2) + 0.6 * meander);
-    // each line surfaces and sinks along its length, so they read as veins
-    float id = floor(prof * 10.0 + warp + 0.5);
-    float seg = smoothstep(-0.25, 0.3, snoise(vec3(around * 1.4, id * 0.41 + 3.0)));
-    gl_FragColor = vec4(warp, seg, 0.0, 1.0);
+    float f = prof * LINES + warpAt(around, prof);
+    // the node: round the band at 0, on the outer wall
+    float rn = reach(vec2(th * ${RING.Ro.toFixed(3)}, across(prof - uAt.x)) / ${VEIN_NODE.toFixed(3)}, 2.0);
+    float fNode = part(f, floor(uAt.x * LINES + warpAt(vec2(0.0, 1.0), uAt.x)) + 0.5, rn);
+    // the inscription: at the back, on the inner wall
+    float back = atan(-around.x, -around.y);
+    float rs = reach(vec2(back * ${RING.Ri.toFixed(3)}, across(prof - uAt.y)) / vec2(${VEIN_SEAL[0].toFixed(3)}, ${VEIN_SEAL[1].toFixed(3)}), 4.0);
+    float fSeal = part(fNode, floor(uAt.y * LINES + warpAt(vec2(0.0, -1.0), uAt.y)) + 0.5, rs);
+    // each line surfaces and sinks along its length, so they read as veins,
+    // but runs on unbroken round the node and the inscription
+    float id = floor(fNode + 0.5);
+    float seg = smoothstep(-0.55, 0.1, snoise(vec3(around * 1.1, id * 0.41 + 3.0)));
+    seg = max(seg, 1.0 - smoothstep(1.5, 2.5, min(rn, rs)));
+    gl_FragColor = vec4(fNode - prof * LINES, seg, fSeal - prof * LINES, 1.0);
   }`;
 
 export function createRing(envMap: THREE.Texture, segments = 320, veins = true): Ring {
@@ -137,10 +189,13 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
   for (let i = 0; i <= segments; i++) aProfile.set(arc, i * points.length);
   geometry.setAttribute('aProfile', new THREE.BufferAttribute(aProfile, 1));
   const profileLen = arc[arc.length - 1];
-  // the middle of the inner wall, along the cross-section: the inscription's line
+  // the middle of the inner wall, along the cross-section: the inscription's
+  // line; and of the outer wall, the node's
   let mid = 0;
+  let outerMid = -1;
   points.forEach((p, j) => {
     if (p.x < (RING.Ri + RING.Ro) / 2 && Math.abs(p.y) < Math.abs(points[mid].y)) mid = j;
+    if (p.x > (RING.Ri + RING.Ro) / 2 && (outerMid < 0 || Math.abs(p.y) < Math.abs(points[outerMid].y))) outerMid = j;
   });
   // 8:1, like the band: the letters stand about a fifth of the wall high
   const ink = document.createElement('canvas');
@@ -177,6 +232,9 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
     uVeinFlow: { value: 1 },
     uInscriptionI: { value: 0 },
     uInscriptionReveal: { value: 2 },
+    uInscriptionFlash: { value: 0 },
+    uInscriptionRipple: { value: new THREE.Vector2() },
+    uSurge: { value: new THREE.Vector2() },
     uGas: { value: null as THREE.Texture | null },
     uGasRange: { value: new THREE.Vector2(0, 1) },
     uGasVeil: { value: 1 },
@@ -230,6 +288,9 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         uniform vec4 uInscriptionRect;
         uniform float uInscriptionI;
         uniform float uInscriptionReveal;
+        uniform float uInscriptionFlash;
+        uniform vec2 uInscriptionRipple;
+        uniform vec2 uSurge;
         uniform sampler2D uGas;
         uniform vec2 uGasRange;
         uniform float uGasVeil;
@@ -332,26 +393,79 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         diffuseColor.rgb *= 1.0 - 0.6 * bezel;
 
         // The inscription: the ring number engraved on the inner wall, at the
-        // back of the band, where it faces the camera through the ring. x runs
-        // left to right as seen from the front, y from the top of the band down.
+        // back of the band, where it faces the camera through the ring. The
+        // light the veins carry round from the node gathers there and lights
+        // it from within. x runs left to right as seen from the front, y from
+        // the top of the band down.
         float letters = 0.0;
-        float letterLight = 0.0;
-        float underLetters = 0.0;
+        float sealKeep = 0.0;
+        float sealNear = 0.0;
+        vec3 sealLight = vec3(0.0);
+        float sealRipple = 0.0;
+        vec3 sealHot = vec3(1.0, 0.93, 0.82);
         if (uInscriptionI > 0.0) {
           float back = atan(-vObjPos.x, -vObjPos.z);
           vec2 iuv = vec2(0.5 - back / (2.0 * uInscriptionRect.x), 0.5 - (vProfile - uInscriptionRect.y) / (2.0 * uInscriptionRect.z));
           float inRect = step(0.0, iuv.x) * step(iuv.x, 1.0) * step(0.0, iuv.y) * step(iuv.y, 1.0);
           vec3 radialDir = normalize(vec3(vObjPos.x, 0.0, vObjPos.z) + 1e-6);
           float innerWall = 1.0 - smoothstep(-0.85, -0.55, dot(normalize(vObjNormal), radialDir));
-          float ink = texture2D(uInscription, iuv).r * inRect * innerWall;
-          letters = ink * (1.0 - smoothstep(uInscriptionReveal - 0.04, uInscriptionReveal, iuv.x)) * uInscriptionI;
-          letterLight = ink * exp(-pow((iuv.x - uInscriptionReveal) / 0.05, 2.0)) * uInscriptionI;
-          underLetters = inRect * innerWall * uInscriptionI;
+          // The letters, and their glow and aura: the same ink read from its
+          // mipmaps, two and four levels coarser than the letters are drawn,
+          // so blurs that grow and shrink with them. (Gradients taken here,
+          // where every pixel still runs: the reads below are only where the
+          // ink is.)
+          vec2 iuvDx = dFdx(iuv);
+          vec2 iuvDy = dFdy(iuv);
+          float inside = inRect * innerWall * uInscriptionI;
+          vec3 ink = vec3(0.0);
+          if (inside > 0.0) {
+            ink = vec3(textureGrad(uInscription, iuv, iuvDx, iuvDy).r,
+                       textureGrad(uInscription, iuv, iuvDx * 4.0, iuvDy * 4.0).r,
+                       textureGrad(uInscription, iuv, iuvDx * 16.0, iuvDy * 16.0).r);
+            ink = clamp(ink * vec3(1.0, 1.3, 2.5), 0.0, 1.0) * inside;
+          }
+          // Round the band from the node: the burn's light comes in at both
+          // ends of the lettering and meets in its middle, at the back (π).
+          float a = PI - abs(back);
+          float front = uInscriptionReveal * PI;
+          float lit = smoothstep(a - 0.015, a + 0.015, front);
+          float e = (a - front) / 0.03;
+          float edge = exp(-e * e);
+          letters = ink.r * lit;
+          // the veins keep clear of the letters' light, and the light they
+          // bring turns gold again as it nears them (by the reach VEIN_BAKE
+          // parts them by)
+          sealKeep = smoothstep(0.03, 0.45, ink.b);
+          vec2 q = vec2(back / ${VEIN_SEAL[0].toFixed(3)}, (vProfile - uInscriptionRect.y) / ${VEIN_SEAL[1].toFixed(3)});
+          q *= q;
+          sealNear = (1.0 - smoothstep(1.2, 3.0, sqrt(sqrt(dot(q, q))))) * uInscriptionI;
+          // At rest the light keeps coming in from both ends and gathering
+          // in the middle, and the whole of it breathes.
+          float x = fract(abs(back) * 2.4 + uTime * 0.16);
+          float flow = pow(1.0 - x, 4.0) * uVeinFlow;
+          float breath = 0.9 + 0.1 * sin(uTime * 1.25) * uVeinFlow;
+          // Molten gold, deeper at the strokes' edges, white-hot only where
+          // the light passes; round them the metal catches it, and further
+          // out the veins' blue.
+          vec3 amber = vec3(1.0, 0.42, 0.08);
+          vec3 gold = vec3(1.0, 0.68, 0.3);
+          float depth = smoothstep(0.35, 0.85, ink.g);
+          vec3 core = mix(mix(amber, gold, depth), sealHot, 0.6 * flow);
+          sealLight = lit * (core * ink.r * (0.6 + 0.4 * depth) * (0.75 * breath + 1.3 * flow)
+                             + amber * ink.g * (0.1 * breath + 0.18 * flow)
+                             + uVeinCool * max(ink.b - ink.g, 0.0) * 0.06 * breath)
+                      + sealHot * (ink.r * 4.0 + ink.g * 0.6) * edge
+                      + mix(gold, sealHot, 0.5) * uInscriptionFlash * (ink.r * 1.8 + ink.g * 0.45 + ink.b * 0.1);
+          // the ring of light the flash sends out over the wall
+          float rr = (length(vec2(back, vProfile - uInscriptionRect.y)) - uInscriptionRipple.x) / 0.018;
+          sealRipple = exp(-rr * rr) * uInscriptionRipple.y * innerWall;
         }
 
         float vein = 0.0;
+        float veinGroove = 0.0;
         float veinHalo = 0.0;
         float veinPulse = 0.0;
+        float veinStream = 0.0;
         float veinWave = 0.0;
         float veinLit = 0.0;
         float veinInlay = 0.0;
@@ -359,10 +473,11 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         #ifdef RING_VEINS
         {
           // Flow lines that wind round the band, as if engraved: contours of a
-          // gently warped field over the unrolled band (see VEIN_BAKE).
+          // gently warped field over the unrolled band (see VEIN_BAKE), parted
+          // round the node, and round the inscription while it is there.
           float ang = atan(vObjPos.x, vObjPos.z);
-          vec2 field = textureLod(uVeinField, vec2(ang * 0.15915494 + 0.5, vProfile / uProfileLen), 0.0).rg;
-          float f = vProfile * 10.0 + field.r;
+          vec3 field = textureLod(uVeinField, vec2(ang * 0.15915494 + 0.5, vProfile / uProfileLen), 0.0).rgb;
+          float f = vProfile * ${VEIN_LINES.toFixed(1)} + mix(field.r, field.b, uInscriptionI);
           float id = floor(f + 0.5);
           float d = abs(f - id);
           float fw = fwidth(f);
@@ -381,12 +496,18 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
           float cover = clamp((min(hwPx, d + 0.5 * fw) - max(-hwPx, d - 0.5 * fw)) / max(fw, 1e-5), 0.0, 1.0) * (hw / hwPx);
           float far = smoothstep(0.25, 0.6, fw);
           cover = mix(cover, 2.0 * hw, far);
-          float clear = 1.0 - (1.0 - smoothstep(uDotR + 0.012, uDotR + 0.045, nodeD)) * wallMask;
+          // the channel the light runs in, cut a little wider than it
+          float gw = 2.6 * hw;
+          float gwPx = max(gw, 0.75 * fw);
+          float groove = clamp((min(gwPx, d + 0.5 * fw) - max(-gwPx, d - 0.5 * fw)) / max(fw, 1e-5), 0.0, 1.0) * (gw / gwPx);
+          groove = mix(groove, 2.0 * gw, far);
+          float clear = 1.0 - (1.0 - smoothstep(uDotR + 0.016, uDotR + 0.026, nodeD)) * wallMask;
           // a few lines carry most of the light, the rest stay faint
-          float strength = 0.35 + 0.65 * veinHash(id * 3.1 + 0.7);
+          float strength = 0.25 + 0.75 * pow(veinHash(id * 3.1 + 0.7), 1.5);
           // the lettering keeps the veins out from under it
-          float plain = 1.0 - 0.85 * underLetters;
+          float plain = 1.0 - sealKeep;
           vein = cover * seg * clear * strength * plain;
+          veinGroove = groove * seg * clear * plain * (0.5 + 0.5 * strength);
           #ifdef DAY
           veinInlay = clamp(cover * seg * clear * plain * (0.75 + 0.5 * strength), 0.0, 1.0);
           #endif
@@ -398,21 +519,32 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
           // out before the back, where the two sides meet.
           float a = abs(ang);
           float h = veinHash(id * 1.7 + step(0.0, ang) * 0.53);
-          float x = fract((a - uTime * 0.7) / 4.7 + h);
-          veinPulse = pow(x, 9.0) * (1.0 - smoothstep(0.99, 1.0, x)) * exp(-a * 0.25)
+          float x = fract((a - uTime * 0.7) / 3.6 + h);
+          veinPulse = pow(x, 7.0) * (1.0 - smoothstep(0.985, 1.0, x)) * exp(-a * 0.2)
                     * smoothstep(0.0, 0.2, a) * (1.0 - smoothstep(PI - 0.6, PI, a)) * uVeinFlow;
+          // and between them the light streams on, slowly, in the same way
+          float t = uTime * uVeinFlow;
+          veinStream = 0.5 + 0.25 * (sin(a * 4.0 - t * 0.9 + h * 6.2832) + sin(a * 2.3 - t * 0.55 + h * 11.0));
+          veinStream *= veinStream * veinStream;
           // the first light after the flash, as one wave from the node
           float front = uVeinFront * PI;
           veinLit = 1.0 - smoothstep(front - 0.35, front + 0.05, a);
           veinWave = exp(-pow((a - front) / 0.3, 2.0)) * (1.0 - smoothstep(0.9, 1.15, uVeinFront));
-          veinCol = mix(uVeinWarm, uVeinCool, smoothstep(0.3, 2.6, a));
+          // and the surge that burns the inscription in
+          float surge = (a - uSurge.x * PI) / 0.3;
+          veinWave = max(veinWave, exp(-surge * surge) * uSurge.y * 1.6);
+          veinCol = mix(mix(uVeinWarm, uVeinCool, smoothstep(0.3, 2.6, a)), uVeinWarm, sealNear);
         }
-        diffuseColor.rgb *= 1.0 - 0.15 * vein;
         #ifdef DAY
         // by day the lines are enamel inlaid in the silver, in deeper shades
         // of their colours: lit by the room rather than mirroring it, they
         // show on the bright metal and on its dark mirrors alike
+        diffuseColor.rgb *= 1.0 - 0.15 * vein;
         diffuseColor.rgb = mix(diffuseColor.rgb, pow(veinCol, vec3(3.0)) * 0.35, veinInlay);
+        #else
+        // by night each is a dark, matte channel with a thread of light down
+        // its middle: it reads on the bright mirrors as well as the dark
+        diffuseColor.rgb *= 1.0 - 0.5 * veinGroove;
         #endif
         #endif
         // engraved: the groove is darker and matte
@@ -420,7 +552,7 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
       )
       .replace(
         '#include <roughnessmap_fragment>',
-        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.06, nodeMask);\nroughnessFactor = mix(roughnessFactor, 0.3, vein);\n#ifdef DAY\nroughnessFactor = mix(roughnessFactor, 0.22, veinInlay);\n#endif\nroughnessFactor = mix(roughnessFactor, 0.5, letters);',
+        '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.06, nodeMask);\n#ifdef DAY\nroughnessFactor = mix(roughnessFactor, 0.3, vein);\nroughnessFactor = mix(roughnessFactor, 0.22, veinInlay);\n#else\nroughnessFactor = mix(roughnessFactor, 0.32, veinGroove);\n#endif\nroughnessFactor = mix(roughnessFactor, 0.5, letters);',
       )
       .replace(
         '#include <metalnessmap_fragment>',
@@ -467,10 +599,13 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
         #else
         totalEmissiveRadiance += uDotIntensity * nodeMask * (uDotColor * uDotColor * (0.16 * nodeFill + 0.05 * nodeEdge) + mix(uDotColor, vec3(1.0), 0.5) * 1.3 * nodePoint);
         #endif
-        totalEmissiveRadiance += veinCol * uVeins * (veinLit * (vein * (0.18 + 1.1 * veinPulse) + veinHalo * (0.03 + 0.45 * veinPulse))
-                                                   + veinWave * (vein * 1.4 + veinHalo * 0.4));
-        // a little light stays in the letters; more where the burn-in is passing
-        totalEmissiveRadiance += uVeinWarm * (letters * 0.1 + letterLight * 2.4);`,
+        // the veins' light, white-hot at the heads of the pulses
+        vec3 veinHot = mix(veinCol, vec3(1.0), 0.6 * veinPulse * veinPulse);
+        totalEmissiveRadiance += veinHot * uVeins * (veinLit * (vein * (0.12 + 0.5 * veinStream + 1.6 * veinPulse) + veinHalo * (0.03 + 0.08 * veinStream + 0.6 * veinPulse))
+                                                    + veinWave * (vein * 1.4 + veinHalo * 0.4));
+        // the inscription's light, and the ring of light its burn-in ends
+        // with, which the veins it crosses catch
+        totalEmissiveRadiance += sealLight + mix(uVeinWarm, sealHot, 0.5) * sealRipple * (0.9 + 4.0 * vein);`,
       )
       .replace(
         '#include <opaque_fragment>',
@@ -520,7 +655,7 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
     bake(renderer) {
       if (!field) return;
       const bakeMaterial = new THREE.ShaderMaterial({
-        uniforms: { uProfileLen: { value: profileLen } },
+        uniforms: { uProfileLen: { value: profileLen }, uAt: { value: new THREE.Vector2(arc[outerMid], arc[mid]) } },
         depthTest: false,
         depthWrite: false,
         vertexShader: /* glsl */ `
@@ -540,9 +675,14 @@ export function createRing(envMap: THREE.Texture, segments = 320, veins = true):
       bakeMaterial.dispose();
       quad.geometry.dispose();
     },
-    async inscribe(text) {
+    async inkReady() {
       await document.fonts?.load(INK_FONT).catch(() => {});
-      paintInk(text);
+    },
+    letterSpan(text) {
+      const letters = inkLetters(text);
+      if (!letters.length) return 0;
+      const width = letters[letters.length - 1].x + INK.size * INK.advance - letters[0].x;
+      return (width / ink.width) * inkRect.x;
     },
   };
 }

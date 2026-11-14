@@ -44,7 +44,7 @@ Harness 的导入按计划任务运行。本地手动触发（队列在开发服
 | 发布者头像（GitHub 头像、网站图标；存在 R2，每日任务每 30 天重新查找一次） | `api/harness/importers/avatars.ts`、`src/components/harness/Avatar.astro` |
 | HUD 链接的页面（空间、助手、Harness、开源；「戒指」回到首页），空间、助手和 Harness 的首页章节末尾也有按钮通往各自的页面。菜单里没有页面的产品仍是首页的章节 | `src/i18n/index.ts` 里的 `PAGES` |
 | 404 页，分语言（`404.html`、`zh/404.html`；Harness 里不存在的地址也用它） | `src/components/NotFound.astro`、`src/pages/404.astro`、`src/pages/zh/404.astro` |
-| 戒身内壁的刻字 | `src/client/scene/ring.ts` 的 `inscribe()`，`src/client/account.ts` |
+| 戒身内壁的刻字，以及登录后把它烧进去的那道光 | `src/client/scene/ring.ts` 的 `paintInk()`，`src/client/scene/stage.ts` 的 `setInscription()`，`src/client/account.ts` |
 | 戒指卡片的画面：账号对话框的预览、卡片页面和卡片图片共用同一份 SVG | `src/lib/ring-card.ts` |
 | 戒指卡片的分享、图片和页面，以及对话框里的卡片视图 | `api/rings/`、`src/pages/[...lang]/ring/`、`src/client/card.ts` |
 | 戒指卡片的背景图、刻字与字体（改动后把 `src/lib/ring-card.ts` 里的 `CARD_REVISION` 加一） | `public/ring-card/` 和 `src/lib/ring-card-still.ts`：`node scripts/ring-card-art.mjs` 从首页的 3D 场景截取（需先运行 `pnpm dev`），字体由 `node --import ./tests/harness/register.mjs scripts/ring-card-fonts.mjs` 下载 |

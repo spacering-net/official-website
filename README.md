@@ -44,7 +44,7 @@ Harness imports run on a schedule. Locally, start them by hand (the queue runs i
 | Publishers' pictures (GitHub avatars, sites' icons; kept in R2, looked for again every 30 days by the daily jobs) | `api/harness/importers/avatars.ts`, `src/components/harness/Avatar.astro` |
 | The HUD's pages (Space, the assistant, Harness, open source; Ring opens the homepage); the homepage chapters of Space, the assistant and Harness end with a button to theirs. The menu's products without a page are homepage chapters | `PAGES` in `src/i18n/index.ts` |
 | The not-found page, per language (`404.html`, `zh/404.html`; also for Harness addresses with nothing behind them) | `src/components/NotFound.astro`, `src/pages/404.astro`, `src/pages/zh/404.astro` |
-| The engraving inside the band | `inscribe()` in `src/client/scene/ring.ts`, `src/client/account.ts` |
+| The engraving inside the band, and the light that burns it in after signing in | `paintInk()` in `src/client/scene/ring.ts`, `setInscription()` in `src/client/scene/stage.ts`, `src/client/account.ts` |
 | The ring card's drawing: one SVG for the account dialog's preview, the card's page and its picture | `src/lib/ring-card.ts` |
 | Ring cards: sharing, the pictures and the page, the dialog's card view | `api/rings/`, `src/pages/[...lang]/ring/`, `src/client/card.ts` |
 | The ring card's art, its engraving and fonts (bump `CARD_REVISION` in `src/lib/ring-card.ts` after changing them) | `public/ring-card/` and `src/lib/ring-card-still.ts`, made from the homepage's scene by `node scripts/ring-card-art.mjs` (with `pnpm dev` running), and `node --import ./tests/harness/register.mjs scripts/ring-card-fonts.mjs` |
