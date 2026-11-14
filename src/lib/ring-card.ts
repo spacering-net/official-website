@@ -35,7 +35,7 @@ export const CARD_H = 630;
  * The drawing's revision. Rendered cards are cached under addresses that
  * include it: bump it whenever the drawing, its art or its fonts change.
  */
-export const CARD_REVISION = 2;
+export const CARD_REVISION = 3;
 
 /**
  * The background: the homepage's ring, posed for the card, its band not yet
