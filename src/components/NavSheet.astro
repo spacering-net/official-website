@@ -1,0 +1,32 @@
+---
+/**
+ * The narrow screens' menu, where the HUD's links do not fit (1100px and
+ * under): those links, the way in (signing in, or the console), and the
+ * languages and the theme. It opens under the HUD, whose button closes it
+ * again (client/nav-sheet.ts). Solid, with no live blur over the scene.
+ */
+import FootLine from './FootLine.astro';
+import { hudLinks } from './hud-links';
+import type { Dict, PAGES } from '../i18n';
+
+interface Props {
+  t: Dict;
+  /** Any page but the homepage: the page it is or belongs to, and its twin in the other language. */
+  page?: { current?: keyof typeof PAGES; alternate: string };
+}
+const { t, page } = Astro.props;
+const links = hudLinks(t, page);
+---
+{/* data-lenis-prevent: on the homepage it scrolls itself, not the chapters behind it */}
+<div class="nav-sheet" id="nav-sheet" role="dialog" aria-modal="true" aria-label={t.menu.label} data-nav-sheet data-lenis-prevent hidden>
+  <nav class="nav-sheet__links" aria-label={t.nav.label}>
+    {links.map((n, i) => (
+      <a class="nav-sheet__link" href={n.href} data-goto={n.goto} aria-current={n.current} style={`--i:${i}`}>{n.label}</a>
+    ))}
+  </nav>
+  <div class="nav-sheet__account" style={`--i:${links.length}`}>
+    <button class="btn btn--ghost nav-sheet__in" type="button" aria-haspopup="dialog" aria-controls="account-dialog" data-account-open>{t.account.signIn}</button>
+    <a class="btn btn--ghost nav-sheet__console" href={`${t.path}console/`}>{t.account.console}</a>
+  </div>
+  <FootLine t={t} alternate={page?.alternate} class="nav-sheet__foot" />
+</div>

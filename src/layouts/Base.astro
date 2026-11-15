@@ -29,6 +29,8 @@ const canonical = new URL(t.path, SITE.url).href;
     <meta name="theme-color" content="#050507" />
     <meta name="color-scheme" content="dark" />
     <script is:inline set:html={themeScript}></script>
+    {/* nothing is drawn before the HUD shows who is signed in (Hud.astro) */}
+    <link rel="expect" href="#hud-end" blocking="render" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />

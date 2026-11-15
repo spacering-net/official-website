@@ -91,7 +91,9 @@ html.lenis body {
 /* The stars and the orbit field drift behind the HUD's words here: a little
    night around each letter keeps them from cutting through it. */
 .hud .nav__link,
+.hud .nav-toggle,
 .hud .account-btn,
+.hud .ring-btn__name,
 .dial__label {
   text-shadow:
     0 0 2px var(--void),
@@ -308,7 +310,8 @@ html[data-chapter]:not([data-chapter='0']) .scroll-cue {
 html:not(.js) .loader,
 html:not(.js) .skip-intro,
 html:not(.js) .telemetry,
-html:not(.js) [data-menu-open] {
+html:not(.js) [data-nav-toggle],
+html:not(.js) [data-account-open] {
   display: none;
 }
 
@@ -1615,7 +1618,7 @@ html:lang(zh-CN) .projection__title {
 }
 
 @media (max-width: 760px) {
-  /* the languages are in the menu (which needs scripts) */
+  /* the languages are in the menu (NavSheet.astro, which needs scripts) */
   .js .hud-foot,
   .scroll-cue > span:first-child {
     display: none;

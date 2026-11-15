@@ -1,5 +1,5 @@
 // The pages beside the homepage (Harness, the policies; Space, the assistant
-// and open source): the shared HUD, menu and account dialog, what stays in
+// and open source): the shared HUD, narrow screens' menu and account dialog, what stays in
 // view while scrolling, Harness's in-place browsing, the edges they share, the
 // light theme, the prompts' gallery, the assistants' shelf and pages, and the
 // product pages' drawings and previews, all without a page error or a refused
@@ -25,7 +25,9 @@ async function open(path, { phone = false } = {}) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  // signed out, the account dialog's check of who is signed in is answered 401, as it should be
+  const signedOut = (m) => /status of 401/.test(m.text()) && new URL(m.location().url || 'about:blank', base).pathname === '/api/me';
+  page.on('console', (m) => m.type() === 'error' && !signedOut(m) && errors.push(m.text()));
   await page.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error(`CSP: ${e.violatedDirective} ${e.blockedURI}`)));
   await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
   return { ctx, page, errors };
@@ -36,7 +38,8 @@ const mark = (page) => page.evaluate(() => (window.__same = true));
 const same = (page) => page.evaluate(() => window.__same === true);
 const top = (page, selector) => page.evaluate((s) => Math.round(document.querySelector(s)?.getBoundingClientRect().top ?? -1), selector);
 
-// 1. the frame: HUD, rail, language twin, menu (ending as the page does), account dialog
+// 1. the frame: HUD, rail, language twin, the ring to the console, the narrow
+// screens' menu (ending as the page does), account dialog
 {
   const { ctx, page, errors } = await open('/zh/harness/?q=pdf');
   const hud = await page.evaluate(() => ({
@@ -45,35 +48,42 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
     dot: document.querySelector('.nav__dot')?.classList.contains('is-on'),
     lang: document.querySelector('.page-foot [data-lang-switch]')?.getAttribute('href'),
     topLang: !!document.querySelector('.hud [data-lang-switch]'),
-    menuLinks: [...document.querySelectorAll('.menu-link')].map((a) => `${a.getAttribute('href')}${a.hasAttribute('data-goto') ? '+goto' : ''}`).join(' '),
+    ring: document.querySelector('.hud .ring-btn')?.getAttribute('href'),
+    toggle: getComputedStyle(document.querySelector('.hud [data-nav-toggle]')).display,
+    sheetLinks: [...document.querySelectorAll('.nav-sheet__link')].map((a) => `${a.getAttribute('href')}${a.getAttribute('aria-current') ? '*' : ''}`).join(' '),
   }));
   report(hud.page && hud.current === '/zh/harness/' && hud.dot, 'HUD on the page, Harness current, rail resting on it', JSON.stringify(hud.current));
   report(hud.lang === '/harness/?q=pdf' && !hud.topLang, 'language switch (in the foot) leads to the twin page with its query', `${hud.lang} top:${hud.topLang}`);
-  report(hud.menuLinks === '/zh/space/ /zh/assistant/ /zh/harness/ /zh/#relay /zh/#signet /zh/#codeg', 'menu leads to pages and the homepage chapters', hud.menuLinks);
-  await page.click('.hud [data-menu-open]');
+  report(hud.ring === '/zh/console/' && hud.toggle === 'none', 'the ring leads to the console; wide, the HUD’s links need no menu', `${hud.ring} toggle:${hud.toggle}`);
+  report(hud.sheetLinks === '/zh/ /zh/space/ /zh/assistant/ /zh/harness/* /zh/open-source/', 'the narrow menu has the HUD’s links, this page marked', hud.sheetLinks);
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.waitForTimeout(300);
+  await page.click('.hud [data-nav-toggle]');
   await page.waitForTimeout(900);
-  const opened = await page.evaluate(() => [document.querySelector('.orbit-menu')?.classList.contains('is-open'), document.documentElement.classList.contains('is-locked')]);
-  // the menu ends with the footer's last line, at its places; the account sits in its top bar
+  const opened = await page.evaluate(() => [!document.querySelector('[data-nav-sheet]').hidden, document.documentElement.classList.contains('is-locked')]);
+  // the menu ends with the footer's last line, at its places
   const foot = await page.evaluate(() => {
     const r = (s) => document.querySelector(s)?.getBoundingClientRect();
     const x = (v) => (v === undefined ? null : Math.round(v));
     return {
-      lang: document.querySelector('.orbit-menu .foot-line [data-lang-switch]')?.getAttribute('href'),
-      theme: document.querySelector('.orbit-menu .foot-line [data-theme-switch]')?.hidden === false,
-      account: !!document.querySelector('.orbit-menu__top [data-account-open]') && !document.querySelector('.orbit-menu__foot [data-account-open]'),
-      left: [x(r('.orbit-menu .foot-line .langs')?.left), x(r('.page-foot .foot-line .langs')?.left)],
-      right: [x(r('.orbit-menu .foot-line__legal')?.right), x(r('.page-foot .foot-line__legal')?.right)],
+      lang: document.querySelector('.nav-sheet .foot-line [data-lang-switch]')?.getAttribute('href'),
+      theme: document.querySelector('.nav-sheet .foot-line [data-theme-switch]')?.hidden === false,
+      account: document.querySelector('.nav-sheet [data-account-open]')?.checkVisibility() === true,
+      left: [x(r('.nav-sheet .foot-line .langs')?.left), x(r('.page-foot .foot-line .langs')?.left)],
+      right: [x(r('.nav-sheet .foot-line__legal')?.right), x(r('.page-foot .foot-line__legal')?.right)],
     };
   });
   report(
     foot.lang === '/harness/?q=pdf' && foot.theme && foot.account && foot.left[0] !== null && foot.left[0] === foot.left[1] && foot.right[0] !== null && foot.right[0] === foot.right[1],
-    'the menu ends as the page does: languages and theme, the small print, at the footer’s places',
+    'the menu ends as the page does: signing in, languages and theme, the small print, at the footer’s places',
     JSON.stringify(foot),
   );
   await page.keyboard.press('Escape');
   await page.waitForTimeout(700);
-  const closed = await page.evaluate(() => [document.querySelector('.orbit-menu')?.classList.contains('is-open'), document.documentElement.classList.contains('is-locked')]);
+  const closed = await page.evaluate(() => [!document.querySelector('[data-nav-sheet]').hidden, document.documentElement.classList.contains('is-locked')]);
   report(opened.join() === 'true,true' && closed.join() === 'false,false', 'menu opens over a still page and closes with Escape', `${opened} → ${closed}`);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(300);
   await page.click('.hud [data-account-open]');
   await page.waitForTimeout(400);
   const dialog = await page.evaluate(() => document.querySelector('[data-account-dialog]')?.open);
@@ -414,8 +424,8 @@ for (const [path, lang] of [
 // 8. one column and its lines, at a 5K-wide window: the bar, the sidebar, the
 // grid and the footer keep to the same edges, and the sidebar's runtime list
 // to the search's; the HUD is the homepage's at the page's top, gathers onto
-// the column's edges once the page scrolls and parts again back at the top,
-// the menu opening over its span each time; an item's side starts level with
+// the column's edges once the page scrolls and parts again back at the top;
+// an item's side starts level with
 // its head, its publisher first, its text and code as wide as the column.
 // Then the theme: switched, kept for the next page from its first paint, the
 // homepage's included, whose scene turns to day with it, and switched back
@@ -455,38 +465,23 @@ for (const [path, lang] of [
     JSON.stringify(lines),
   );
 
-  // the HUD's ends and the open menu's, as it is at the page's top, scrolled, and back at the top
+  // the HUD's ends, as it is at the page's top, scrolled, and back at the top
   const hudEnds = () =>
     page.evaluate(() => {
       const r = (s) => document.querySelector(s).getBoundingClientRect();
-      return { left: Math.round(r('.hud .brand').left), right: Math.round(r('.hud .menu-btn').right), nav: +r('.hud .nav').top.toFixed(1), veil: document.querySelector('.hud').classList.contains('is-scrolled') };
+      return { left: Math.round(r('.hud .brand').left), right: Math.round(r('.hud .ring-btn').right), nav: +r('.hud .nav').top.toFixed(1), veil: document.querySelector('.hud').classList.contains('is-scrolled') };
     });
-  const menuEnds = async () => {
-    await page.click('.hud [data-menu-open]');
-    await page.waitForTimeout(900);
-    const ends = await page.evaluate(() => {
-      const r = (s) => document.querySelector(s).getBoundingClientRect();
-      return { left: Math.round(r('.orbit-menu__top .brand').left), right: Math.round(r('.orbit-menu .menu-close').right) };
-    });
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(700);
-    return ends;
-  };
   const hud = { top: await hudEnds() };
-  hud.topMenu = await menuEnds();
   await page.mouse.wheel(0, 700);
   await page.waitForTimeout(1000);
   hud.scrolled = await hudEnds();
-  hud.scrolledMenu = await menuEnds();
   await page.mouse.wheel(0, -2000);
   await page.waitForTimeout(1000);
   hud.back = await hudEnds();
   report(
     level([hud.scrolled.left, ...lines.left]) && level([hud.scrolled.right, ...lines.right]) && hud.scrolled.veil &&
-      hud.scrolledMenu.left === hud.scrolled.left && hud.scrolledMenu.right === hud.scrolled.right &&
-      hud.topMenu.left === hud.top.left && hud.topMenu.right === hud.top.right &&
       JSON.stringify(hud.back) === JSON.stringify(hud.top) && !hud.top.veil,
-    'scrolled, the HUD keeps to the column’s edges over its veil, and parts again at the top; the menu opens over its span',
+    'scrolled, the HUD keeps to the column’s edges over its veil, and parts again at the top',
     JSON.stringify(hud),
   );
   report(

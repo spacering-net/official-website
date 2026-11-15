@@ -29,6 +29,8 @@ class Statement {
     return this.runSync();
   }
   runSync() {
+    // as D1's batch does, a read answers with its rows
+    if (/^\s*(?:SELECT|WITH)\b/i.test(this.sql)) return { results: this.#stmt().all(...this.params), meta: { changes: 0 } };
     const info = this.#stmt().run(...this.params);
     return { results: [], meta: { changes: Number(info.changes) } };
   }

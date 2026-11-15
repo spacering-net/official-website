@@ -32,6 +32,10 @@ export function authOptions(env: Env) {
     database: env.DB,
     trustedOrigins: [env.SITE_URL],
     telemetry: { enabled: false },
+    // The name and the picture change through the console's PATCH
+    // /api/me/profile, which checks both and logs the change; Better Auth's
+    // own endpoint would take any name and any address as a picture.
+    disabledPaths: ['/update-user'],
     socialProviders: {
       // read:user and user:email by default; the primary address counts only if GitHub verified it
       github: { clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET },
@@ -101,7 +105,10 @@ export function authOptions(env: Env) {
           after: async (session, ctx) => {
             // the provider's picture, copied to R2 (avatars.ts); after a failed copy the next sign-in tries again
             later(keepAvatar(env, session.userId));
-            later(audit(env, 'session.created', session.userId, undefined, ctx?.request));
+            // which provider it was, from the callback's address (/callback/:id), for the console's log
+            const provider = (ctx?.params as { id?: unknown } | undefined)?.id;
+            const via = provider === 'github' || provider === 'google' ? { provider } : undefined;
+            later(audit(env, 'session.created', session.userId, via, ctx?.request));
           },
         },
       },

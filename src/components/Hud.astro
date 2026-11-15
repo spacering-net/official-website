@@ -1,7 +1,11 @@
 ---
 import Logo from './Logo.astro';
-import AccountButton from './AccountButton.astro';
-import { CHAPTER_IDS, PAGES, type Dict } from '../i18n';
+import HudAccount from './HudAccount.astro';
+import { hudLinks } from './hud-links';
+import type { Dict, PAGES } from '../i18n';
+// before the first frame: the last signed-in user in the HUD's end
+import hintRaw from '../client/account-hint.js?raw';
+import hintUrl from '../client/account-hint.js?url&no-inline';
 
 interface Props {
   t: Dict;
@@ -15,23 +19,7 @@ interface Props {
   page?: { current?: keyof typeof PAGES };
 }
 const { t, page } = Astro.props;
-// Space, the assistant, Harness and open source open their pages (PAGES); the
-// ring opens the homepage, at its top. The current page's link is marked, and
-// the rail's node rests under it: on the homepage the ring's, whichever
-// chapter is projected (the dial follows the chapters).
-const last = CHAPTER_IDS.length - 1;
-/** where a link goes: a page of its own, or the homepage's top (scrolled to, on the homepage) */
-const link = (key: string, at: number) => {
-  const own = PAGES[key as keyof typeof PAGES];
-  if (own) return { href: `${t.path}${own}`, current: page?.current === key ? 'page' : undefined };
-  if (page) return { href: at === 0 ? t.path : `${t.path}#${key}` };
-  return { href: `#${key}`, goto: at, current: at === 0 ? 'page' : undefined };
-};
-const nav = [
-  { label: t.nav.ring, ...link(CHAPTER_IDS[0], 0) },
-  ...(['space', 'assistant', 'harness'] as const).map((key) => ({ label: t.nav[key], ...link(key, CHAPTER_IDS.indexOf(key)) })),
-  { label: t.nav.openSource, ...link(CHAPTER_IDS[last], last) },
-];
+const nav = hudLinks(t, page);
 ---
 <header class:list={['hud', page && 'hud--page']}>
   <a class="brand" href={t.path} aria-label={t.nav.home} data-goto={page ? undefined : '0'}>
@@ -46,14 +34,15 @@ const nav = [
       <svg class="nav__rail" aria-hidden="true"><path d=""></path></svg>
       <span class="nav__dot" aria-hidden="true"></span>
     </nav>
-    <AccountButton t={t} />
-    <button class="menu-btn" type="button" aria-expanded="false" aria-controls="orbit-menu" aria-label={t.nav.openMenu} data-menu-open>
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <g class="menu-btn__node">
-          <ellipse class="menu-btn__orbit" cx="10" cy="10" rx="8.4" ry="7.27" transform="rotate(30 10 10)"></ellipse>
-          <circle fill="var(--bead)" cx="6.37" cy="16.3" r="1.9"></circle>
-        </g>
-      </svg>
-    </button>
+    {/* where the links do not fit: they open in a menu of their own (NavSheet.astro) */}
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-sheet" data-nav-toggle data-open={t.nav.menu} data-close={t.nav.close}>{t.nav.menu}</button>
+    <HudAccount t={t} />
   </div>
 </header>
+{/*
+  Parsed before anything else is drawn: the head waits for #hud-end
+  (rel=expect), which comes after this script. The homepage allows an
+  inline script; the other pages allow only files from this site.
+*/}
+{page ? <script is:inline src={hintUrl}></script> : <script is:inline set:html={hintRaw}></script>}
+<span id="hud-end" hidden></span>

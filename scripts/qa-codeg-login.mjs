@@ -69,6 +69,10 @@ try {
     return route.fulfill({ json: { status: requestStatus, scope: 'profile:read', expires_at: new Date(Date.now() + 590000).toISOString(), client: { name: 'Codeg', type: 'desktop', origin: null } } });
   });
   await page.route('**/api/me', route => route.fulfill({ status: signedIn ? 200 : 401, json: { user: signedIn ? { number: srn, name: srn === 10000 ? 'Ada' : 'Grace', image: null } : null } }));
+  // the console asks who is signed in for itself (client/console.ts)
+  await page.route('**/api/me/account', route => route.fulfill(signedIn
+    ? { json: { account_srn: srn, user: { number: srn, name: srn === 10000 ? 'Ada' : 'Grace', image: null, email: `${srn}@example.com`, since: '2026-10-07T00:00:00.000Z' }, providers: [], sessions: 1, clients: 1, last_sign_in: null } }
+    : { status: 401, json: { error: 'signed_out' } }));
   await page.route('**/api/auth/sign-in/social', route => { providerBody = route.request().postDataJSON(); return route.fulfill({ status: 503, json: { error: 'unavailable' } }); });
   await page.route('**/api/me/clients**', route => {
     if (route.request().method() === 'DELETE') {
@@ -77,7 +81,7 @@ try {
       revoked = true;
       return route.fulfill({ json: { ok: true } });
     }
-    return route.fulfill({ json: { account_srn: srn, next_cursor: null, clients: [{ id: '01900000-0000-7000-8000-000000000001', client_name: 'Codeg', platform: 'web', device_name: `${srn} device`, last_used_at: new Date().toISOString(), expires_at: new Date(Date.now() + 100000).toISOString(), revoked_at: revoked ? new Date().toISOString() : null, status: revoked ? 'revoked' : 'disabled', client_origin: null }] } });
+    return route.fulfill({ json: { account_srn: srn, next_cursor: null, clients: [{ id: '01900000-0000-7000-8000-000000000001', client_name: 'Codeg', client_type: 'desktop', platform: 'web', device_name: `${srn} device`, created_at: new Date(Date.now() - 86400000).toISOString(), last_used_at: new Date().toISOString(), expires_at: new Date(Date.now() + 100000).toISOString(), revoked_at: revoked ? new Date().toISOString() : null, status: revoked ? 'revoked' : 'disabled', client_origin: null }] } });
   });
   // Codeg opens a new page; a fragment-only change to an open page would not
   // reload it, so each fresh entry starts from a blank page.
@@ -150,26 +154,30 @@ try {
   await page.locator('[data-account-open]').first().click();
   await page.locator('[data-account-view="in"]').waitFor({ state: 'visible' });
   assert.equal(await page.locator('[data-account-number]').textContent(), '10000');
+  // Connections are managed in the console. Each answer names its account;
+  // the console starts again with the account signed in now.
   srn = 10001; // Another tab changed the browser's authoritative cookie.
-  await page.locator('[data-connections] summary').click();
-  await page.locator('[data-connections-changed]').waitFor({ state: 'visible' });
-  assert.equal(await page.locator('[data-account-number]').textContent(), '10001');
-  assert.equal(await page.locator('[data-connections]').getAttribute('open'), null);
-  assert.equal(revokeAttempts, 0, 'A changed account list must not offer stale revoke actions');
-  await page.locator('[data-connections] summary').click();
-  const revoke = page.getByRole('button', { name: 'Revoke connection', exact: true });
+  await page.goto(`${origin}/console/clients/`);
+  const side = page.locator('.console__side [data-account-number]');
+  await page.locator('[data-list="clients"] .row').first().waitFor({ state: 'visible' });
+  assert.equal(await side.textContent(), '10001');
+  assert.equal(await page.locator('[data-console-changed]').isVisible(), true, 'The console says the account changed since this browser last showed it');
+  assert.equal(revokeAttempts, 0);
+  const revoke = page.getByRole('button', { name: 'Disconnect', exact: true });
   await revoke.waitFor({ state: 'visible' });
   assert.equal(await revoke.isEnabled(), true, 'Registration disabling must not prevent explicit revocation');
   srn = 10000; // The cookie changes after the list was displayed.
   await revoke.click();
-  await page.locator('[data-connections-changed]').waitFor({ state: 'visible' });
-  assert.equal(await page.locator('[data-account-number]').textContent(), '10000');
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('.console__side [data-account-number]')?.textContent === '10000');
   assert.equal(revoked, false, 'Mismatched expected_srn must not revoke the current cookie account');
-  await page.locator('[data-connections] summary').click();
+  assert.equal(revokeAttempts, 1);
   await revoke.waitFor({ state: 'visible' });
   await revoke.click();
-  await page.getByRole('button', { name: 'Disconnected', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+  await page.locator('[data-list="clients"] .status', { hasText: 'Disconnected' }).waitFor();
   assert.equal(revoked, true);
+  assert.equal(await revoke.count(), 0, 'A disconnected connection offers nothing more to do');
   // Cloud expiry belongs to the server. A browser clock on either side of
   // it must not invalidate the tab reference or extend its local retention.
   for (const clockOffset of [-120000, 120000, 1200000]) {

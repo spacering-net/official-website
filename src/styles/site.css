@@ -3,8 +3,9 @@
    Palette: Void / Corona / Bead / Ion / Prominence / Graphite
    Type: Jost (display + text), IBM Plex Mono (telemetry)
    Spacing: Fibonacci. Type scale: √φ. Ellipses: b/a = cos30°, tilt 30°.
-   Tokens and base styles, the HUD (brand, nav, account, menu button), the
-   account dialog, buttons, status marks and the orbit menu.
+   Tokens and base styles, the HUD (brand, nav, its end: the account and the
+   ring), the account dialog, buttons, status marks and the narrow screens'
+   menu.
    The homepage adds its scene and chapters in home.css.
    ========================================================================== */
 
@@ -221,9 +222,8 @@ ul {
   margin-right: -0.42em;
 }
 
-/* the menu's top bar ends as the HUD does: the account, then its button */
-.hud__right,
-.orbit-menu__actions {
+/* the links, then the account and the ring */
+.hud__right {
   display: flex;
   align-items: center;
   gap: var(--s-6);
@@ -313,9 +313,194 @@ ul {
   color: var(--corona);
 }
 
-.account-btn__srn {
-  margin-right: 0.4em;
-  color: var(--bead);
+/* The HUD's end (HudAccount.astro). Signed out: "Sign in", then the ring,
+   which opens the console. Signed in (html.has-account, set before the first
+   frame by account-hint.js): one link to the console, the ring drawn out into
+   a band that holds the name, the picture set in its end, and the node on
+   the band there. */
+.hud-account {
+  display: flex;
+  align-items: center;
+  gap: var(--s-6);
+}
+
+.has-account .hud-account .account-btn {
+  display: none;
+}
+
+.ring-btn {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+
+.has-account .ring-btn {
+  gap: 11px;
+  padding-left: 17px;
+  border: 1px solid var(--hairline-strong);
+}
+
+.has-account .ring-btn:hover {
+  border-color: rgb(var(--bead-rgb) / 0.55);
+  box-shadow: 0 0 22px rgb(var(--bead-rgb) / 0.18);
+}
+
+.ring-btn__name {
+  display: none;
+  max-width: 15em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  font-weight: var(--hud-weight);
+  letter-spacing: 0.08em;
+  color: var(--hud-fg);
+  transition: color 0.3s;
+}
+
+.has-account .ring-btn__name {
+  display: block;
+}
+
+.ring-btn:hover .ring-btn__name {
+  color: var(--corona);
+}
+
+.ring-btn__face {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.3s;
+}
+
+.ring-btn:hover .ring-btn__face {
+  border-color: rgb(var(--bead-rgb) / 0.55);
+  box-shadow: 0 0 22px rgb(var(--bead-rgb) / 0.18);
+}
+
+/* signed in, the band's end is the face's ring */
+.has-account .ring-btn__face,
+.has-account .ring-btn:hover .ring-btn__face {
+  width: 42px;
+  height: 42px;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.ring-btn__orbit {
+  width: 20px;
+  height: 20px;
+  overflow: visible;
+  fill: none;
+  stroke: var(--corona);
+  stroke-width: 1.2;
+}
+
+/* the picture, or the name's first letter, set inside the band with a hair of night round it */
+.ring-btn__avatar,
+.ring-btn__initial {
+  position: absolute;
+  inset: 3px;
+  width: calc(100% - 6px);
+  height: calc(100% - 6px);
+  border-radius: 50%;
+}
+
+.ring-btn__avatar {
+  object-fit: cover;
+  background: var(--raised);
+}
+
+.ring-btn__avatar[hidden] {
+  display: none;
+}
+
+.ring-btn__initial {
+  display: none;
+  place-items: center;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--corona);
+  background: rgb(var(--corona-rgb) / 0.08);
+}
+
+.has-account .ring-btn__orbit {
+  display: none;
+}
+
+.has-account .ring-btn__initial {
+  display: grid;
+}
+
+/* The node: on the small orbit, then on the band's end once a face is set
+   in it. On hover it goes a third of the way round, as it always has. */
+.ring-btn__node {
+  --r: 7.27px;
+  --d: 3.8px;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: rotate 0.8s var(--ease-out);
+}
+
+.ring-btn__node::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--d);
+  height: var(--d);
+  margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
+  border-radius: 50%;
+  background: var(--bead);
+  /* below and left of the centre, at the end of the orbit's short axis */
+  translate: calc(var(--r) * -0.5) calc(var(--r) * 0.866);
+}
+
+.has-account .ring-btn__node {
+  --r: 21.5px;
+  --d: 5px;
+}
+
+/* cut into the band, as the logo's node is: below and right of the face, where the band curves */
+.has-account .ring-btn__node::before {
+  box-shadow: 0 0 0 2px var(--void);
+  translate: calc(var(--r) * 0.5) calc(var(--r) * 0.866);
+}
+
+.ring-btn:hover .ring-btn__node {
+  rotate: -120deg;
+}
+
+/* where the HUD's links do not fit: the button to them (NavSheet.astro) */
+.nav-toggle {
+  display: none;
+  padding: var(--s-3) 0;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  font-weight: var(--hud-weight);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--hud-fg);
+  transition: color 0.3s;
+}
+
+.nav-toggle:hover,
+.nav-toggle[aria-expanded='true'] {
+  color: var(--corona);
 }
 
 .account {
@@ -671,47 +856,6 @@ ul {
   display: none;
 }
 
-.menu-btn {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid var(--hairline-strong);
-  display: grid;
-  place-items: center;
-  transition:
-    border-color 0.3s,
-    box-shadow 0.3s;
-}
-
-.menu-btn:hover {
-  border-color: rgb(var(--bead-rgb) / 0.55);
-  box-shadow: 0 0 22px rgb(var(--bead-rgb) / 0.18);
-}
-
-.menu-btn svg {
-  width: 20px;
-  height: 20px;
-  overflow: visible;
-}
-
-.menu-btn__orbit {
-  fill: none;
-  stroke: var(--corona);
-  stroke-width: 1.2;
-}
-
-.menu-btn__node {
-  fill: var(--bead);
-  transform-box: view-box;
-  transform-origin: 10px 10px;
-  transition: transform 0.8s var(--ease-out);
-}
-
-.menu-btn:hover .menu-btn__node {
-  transform: rotate(-120deg);
-}
-
 /* --------------------------------------------------------------- buttons */
 
 .btn {
@@ -799,251 +943,111 @@ ul {
   }
 }
 
-/* ------------------------------------------------------------ orbit menu */
+/* ------------------------------------------------------------- nav sheet */
 
-.orbit-menu {
+/* The narrow screens' menu (NavSheet.astro, client/nav-sheet.ts): solid,
+   under the HUD, which stays on top as the way out. */
+.nav-sheet {
   position: fixed;
   inset: 0;
-  z-index: 40;
-  display: grid;
-  grid-template-rows: var(--hud-h) 1fr auto;
-  padding: 0 var(--edge) var(--s-5);
-  background: var(--void);
-  visibility: hidden;
-  clip-path: circle(0 at var(--cx, 100%) var(--cy, 0));
-}
-
-/* A blurred still of the scene, taken as the menu opens (menu.ts), shows
-   faintly through the menu. A live backdrop-filter looked the same but, on a
-   5K screen, kept the GPU so busy that the page stalled and the scene dropped
-   its resolution each time the menu opened or closed. */
-.orbit-menu__backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  width: 100%;
-  height: 100%;
-  opacity: 0.12;
-  pointer-events: none;
-}
-
-.orbit-menu.is-open,
-.orbit-menu.is-animating {
-  visibility: visible;
-}
-
-.orbit-menu__top {
+  z-index: 29;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.menu-close svg {
-  width: 18px;
-  height: 18px;
-  stroke: var(--corona);
-  stroke-width: 1.2;
-}
-
-.orbit-menu__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: center;
-  /* centred when it fits, top-aligned (and scrollable) when it does not */
-  align-content: start;
-  align-content: safe center;
-  gap: var(--s-7);
-  min-height: 0;
+  flex-direction: column;
+  padding: calc(var(--hud-h) + var(--s-3)) var(--edge) var(--s-5);
   overflow-y: auto;
   overscroll-behavior: contain;
-}
-
-.orbit-menu__heading {
-  color: var(--graphite);
-  margin-bottom: var(--s-4);
-}
-
-.orbit-menu__list li + li {
-  border-top: 1px solid var(--hairline);
-}
-
-.menu-link {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  gap: 2px var(--s-5);
-  padding: var(--s-4) 0;
-}
-
-.menu-link__name {
-  font-weight: 300;
-  font-size: clamp(28px, 3.3vw, 50px);
-  line-height: 1.02;
-  letter-spacing: -0.02em;
-  transition:
-    color 0.3s,
-    translate 0.5s var(--ease-out);
-}
-
-.menu-link__desc {
-  grid-column: 1;
-  font-family: var(--f-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--graphite);
-}
-
-.menu-link .status {
-  grid-row: 1;
-  grid-column: 2;
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.menu-link:hover .menu-link__name,
-.menu-link:focus-visible .menu-link__name {
-  color: var(--bead-hot);
-  translate: 8px 0;
-}
-
-.orbit-menu__elsewhere {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-3) var(--s-6);
-  margin-top: var(--s-6);
-}
-
-.ext-link {
-  display: inline-flex;
-  align-items: baseline;
-  gap: var(--s-3);
-  padding: var(--s-2) 0;
-  color: var(--corona-80);
-  transition: color 0.3s;
-}
-
-.ext-link:hover {
-  color: var(--bead-hot);
-}
-
-.ext-link small {
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--graphite);
-}
-
-.orrery {
-  display: block;
-  width: 100%;
-  max-height: calc(100svh - var(--hud-h) - 120px);
-  overflow: visible;
-}
-
-.orrery__axis {
-  stroke: rgb(var(--corona-rgb) / 0.16);
-  stroke-width: 0.75;
-  stroke-dasharray: 14 3 2 3;
-}
-
-.orrery__orbit {
-  fill: none;
-  stroke: rgb(var(--corona-rgb) / 0.16);
-  stroke-width: 1;
-  transition:
-    stroke 0.4s,
-    stroke-width 0.4s;
-}
-
-.orrery__orbit[data-status='live'] {
-  stroke: rgb(var(--bead-rgb) / 0.35);
-}
-
-.orrery__node {
-  fill: var(--void);
-  stroke: var(--corona-64);
-  stroke-width: 1.2;
-  transition:
-    r 0.4s var(--ease-out),
-    fill 0.3s;
-}
-
-.orrery__node[data-status='live'] {
-  fill: var(--bead-hot);
-  stroke: none;
-}
-
-.orrery__halo {
-  fill: rgb(var(--bead-rgb) / 0.16);
+  background: var(--void);
   opacity: 0;
-  transition: opacity 0.4s;
+  transition: opacity 0.26s ease;
 }
 
-.orrery__halo[data-status='live'] {
+.nav-sheet[hidden] {
+  display: none;
+}
+
+.nav-sheet.is-open {
   opacity: 1;
+  transition: opacity 0.45s var(--ease-out);
 }
 
-.orrery__label {
-  font-family: var(--f-mono);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  fill: var(--graphite);
-  transition: fill 0.3s;
+.nav-sheet__links {
+  display: grid;
 }
 
-.orrery__mark {
-  fill: var(--corona);
+.nav-sheet__link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4) 0;
+  border-bottom: 1px solid var(--hairline);
+  font-size: clamp(26px, 6.4vw, 40px);
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--corona-80);
 }
 
-.orrery__tick {
-  stroke: rgb(var(--corona-rgb) / 0.24);
+.nav-sheet__link:hover,
+.nav-sheet__link:focus-visible,
+.nav-sheet__link[aria-current='page'] {
+  color: var(--corona);
 }
 
-.orrery[data-active] .orrery__orbit {
-  stroke: rgb(var(--corona-rgb) / 0.09);
+/* the page this is: the rail's node rests by it, as under the HUD's link */
+.nav-sheet__link[aria-current='page']::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--bead-hot);
+  box-shadow: 0 0 8px 2px var(--bead-glow);
 }
 
-.orrery .orrery__orbit.is-active {
-  stroke: var(--bead);
-  stroke-width: 1.4;
+.nav-sheet__account {
+  display: flex;
+  margin: var(--s-6) 0;
 }
 
-.orrery .orrery__label.is-active {
-  fill: var(--bead-hot);
+.nav-sheet__account .btn {
+  justify-content: center;
+  min-width: 11em;
 }
 
-.orrery .orrery__halo.is-active {
-  opacity: 1;
+.nav-sheet__console,
+.has-account .nav-sheet__in {
+  display: none;
+}
+
+.has-account .nav-sheet__console {
+  display: inline-flex;
 }
 
 /* the line that ends every page's foot (FootLine.astro), over a hairline as there */
-.orbit-menu__foot {
+.nav-sheet__foot {
+  margin-top: auto;
   padding-top: var(--s-5);
   border-top: 1px solid var(--hairline);
 }
 
-.menu-item-in {
+/* the links and the way in arrive one after another */
+.nav-sheet__link,
+.nav-sheet__account {
   opacity: 0;
-  translate: 0 14px;
-  /* on close: fade with the shrinking aperture, then drop back into place */
+  translate: 0 12px;
   transition:
-    opacity 0.24s ease,
-    translate 0s 0.24s;
+    color 0.3s,
+    opacity 0.2s ease,
+    translate 0s 0.26s;
 }
 
-.orbit-menu.is-open .menu-item-in {
+.nav-sheet.is-open .nav-sheet__link,
+.nav-sheet.is-open .nav-sheet__account {
   opacity: 1;
   translate: 0 0;
   transition:
-    opacity 0.7s var(--ease-out) calc(0.12s + var(--i, 0) * 0.05s),
-    translate 0.9s var(--ease-out) calc(0.12s + var(--i, 0) * 0.05s);
-}
-
-html.menu-open {
-  overflow: hidden;
+    color 0.3s,
+    opacity 0.6s var(--ease-out) calc(0.06s + var(--i, 0) * 0.04s),
+    translate 0.8s var(--ease-out) calc(0.06s + var(--i, 0) * 0.04s);
 }
 
 /* ----------------------------------------------------------------- pages */
@@ -1107,9 +1111,9 @@ html.menu-open {
 /* A page change: the ends glide as they do here, while their words cross-fade
    with the page (Page.astro), kept at their own size (the two languages'
    differ in width). The veil the old page had holds until that page has
-   faded, so none of it shows through the bar. While the menu or a dialog
-   covers the page, the HUD stays in the page's own picture, under it; from
-   the open menu, its top bar's ends are the ones that glide. */
+   faded, so none of it shows through the bar. While a dialog covers the
+   page, the HUD stays in the page's own picture, under it; over the narrow
+   screens' menu it is on top, so its ends glide as ever. */
 ::view-transition-group(site-brand),
 ::view-transition-group(site-hud-end) {
   animation-duration: 0.5s;
@@ -1131,22 +1135,9 @@ html.menu-open {
   animation-delay: 0.25s;
 }
 
-html.is-locked .hud--page,
-html.is-locked .hud--page > * {
+html.is-locked:not(.nav-open) .hud--page,
+html.is-locked:not(.nav-open) .hud--page > * {
   view-transition-name: none;
-}
-
-html.menu-open .orbit-menu--page .orbit-menu__top > .brand {
-  view-transition-name: site-brand;
-}
-
-html.menu-open .orbit-menu--page .orbit-menu__actions {
-  view-transition-name: site-hud-end;
-}
-
-/* the menu opens over the HUD's span, the window's or the column's, its close button on the menu button */
-.hud--page.is-scrolled ~ .orbit-menu--page {
-  padding-inline: var(--page-pad);
 }
 
 /* the column of a page, inside the frame */
@@ -1228,6 +1219,10 @@ html.is-locked {
   .nav {
     display: none;
   }
+
+  .nav-toggle {
+    display: inline-flex;
+  }
 }
 
 @media (max-width: 760px) {
@@ -1235,8 +1230,14 @@ html.is-locked {
     --hud-h: 64px;
   }
 
-  .hud .account-btn {
+  /* signing in is in the menu, and the face alone stands for the account */
+  .hud .account-btn,
+  .has-account .ring-btn__name {
     display: none;
+  }
+
+  .has-account .ring-btn {
+    padding-left: 0;
   }
 
   .brand__word {
@@ -1245,7 +1246,7 @@ html.is-locked {
   }
 
   .hud__right,
-  .orbit-menu__actions {
+  .hud-account {
     gap: var(--s-5);
   }
 
@@ -1253,36 +1254,6 @@ html.is-locked {
     height: 40px;
     padding: 0 var(--s-4);
     font-size: 13.5px;
-  }
-
-  .orbit-menu__grid {
-    grid-template-columns: 1fr;
-    align-content: start;
-    padding-top: var(--s-4);
-    overflow-y: auto;
-  }
-
-  .orbit-menu__chart {
-    display: none;
-  }
-}
-
-@media (max-height: 560px) {
-  .orbit-menu__grid {
-    grid-template-columns: 1fr;
-    padding-block: var(--s-3);
-  }
-
-  .orbit-menu__chart {
-    display: none;
-  }
-
-  .menu-link {
-    padding: var(--s-3) 0;
-  }
-
-  .menu-link__name {
-    font-size: 28px;
   }
 }
 

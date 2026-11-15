@@ -1,0 +1,29 @@
+---
+/**
+ * The HUD's end: who is signed in, and the way to the console. Signed out,
+ * "Sign in" opens the account dialog (Account.astro) and the ring opens the
+ * console, which asks to sign in first. Signed in, the two are one link to
+ * the console: the name, then the picture set in the ring's band, with the
+ * node still on it. The last signed-in user is painted before the first frame
+ * (client/account-hint.js, run right after the HUD); client/account.ts keeps
+ * it true to /api/me.
+ */
+import type { Dict } from '../i18n';
+
+interface Props {
+  t: Dict;
+}
+const { t } = Astro.props;
+---
+<div class="hud-account">
+  <button class="account-btn" type="button" aria-haspopup="dialog" aria-controls="account-dialog" data-account-open>{t.account.signIn}</button>
+  <a class="ring-btn" href={`${t.path}console/`} aria-label={t.nav.console} data-console-link data-label={t.nav.console}>
+    <span class="ring-btn__name" data-account-name></span>
+    <span class="ring-btn__face" aria-hidden="true">
+      <svg class="ring-btn__orbit" viewBox="0 0 20 20"><ellipse cx="10" cy="10" rx="8.4" ry="7.27" transform="rotate(30 10 10)"></ellipse></svg>
+      <span class="ring-btn__initial" data-account-initial></span>
+      <img class="ring-btn__avatar" alt="" width="34" height="34" decoding="async" data-account-avatar hidden />
+      <span class="ring-btn__node"></span>
+    </span>
+  </a>
+</div>

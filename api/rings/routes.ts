@@ -26,6 +26,8 @@ export interface SessionUser {
   image: string | null;
   /** when the account was made, ISO */
   createdAt: string;
+  /** the browser session the request came with (the console marks it, and never signs it out but by signing out) */
+  sessionId?: string;
 }
 
 type C = Context<{ Bindings: Env }>;

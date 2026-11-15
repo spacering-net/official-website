@@ -2,7 +2,8 @@ import type { APIRoute } from 'astro';
 import { SITE } from '../config';
 
 // Harness search results and later pages of a list are for people, not
-// crawlers: every item is in the sitemap already. The API is not for crawling.
+// crawlers: every item is in the sitemap already. The API is not for crawling,
+// nor are the pages that only show something to whoever is signed in.
 export const GET: APIRoute = () =>
   new Response(
     [
@@ -11,6 +12,8 @@ export const GET: APIRoute = () =>
       'Disallow: /api/',
       'Disallow: /authorize',
       'Disallow: /zh/authorize',
+      'Disallow: /console/',
+      'Disallow: /zh/console/',
       'Disallow: /harness/*q=',
       'Disallow: /zh/harness/*q=',
       'Disallow: /harness/*cursor=',

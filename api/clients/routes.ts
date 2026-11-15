@@ -31,7 +31,7 @@ const profile = (row: ProfileRow, origin: string) => ({
   image: row.image && /^\/api\/avatars\/[a-z0-9-]+\/[a-z0-9.]+$/.test(row.image) ? new URL(row.image, origin).href : null,
 });
 // Enabled, and for Web still with a maintainer (deleting that account leaves it inactive).
-const registrationActive = `r.enabled = 1 AND (r.client_type = 'desktop' OR r.owner_user_id IS NOT NULL)`;
+export const registrationActive = `r.enabled = 1 AND (r.client_type = 'desktop' OR r.owner_user_id IS NOT NULL)`;
 const registrationValid = `${registrationActive} AND r.revision = q.registration_revision AND r.secret_version = q.secret_version
   AND r.redirect_uri = q.registration_redirect_uri AND q.scope = 'profile:read'
   AND ((r.client_type = 'desktop' AND q.grant_kind = 'srn-desktop-code-v1') OR (r.client_type = 'web' AND q.grant_kind = 'srn-web-code-v1'))`;
@@ -79,8 +79,8 @@ export function clientRoutes(session: (c: C) => Promise<SessionUser | null>) {
     if (!(await allowed(c.env.CLIENT_LIMIT, address(c)))) return rateError(c);
     await next();
   };
+  // a pattern ending in /* covers the address without it too, so the list counts once
   app.use('/client/v1/*', protect);
-  app.use('/me/clients', protect);
   app.use('/me/clients/*', protect);
 
   /**

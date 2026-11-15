@@ -17,10 +17,9 @@ for (const i of rest.filter((x) => /^\d$/.test(x)).map(Number)) {
   await page.screenshot({ path: `shots/${prefix}-ch${i}.png` });
 }
 if (rest.includes('menu')) {
-  await page.click('[data-menu-open]');
-  await page.waitForTimeout(1400);
-  await page.hover('.menu-link[data-node="harness"]');
-  await page.waitForTimeout(500);
+  // the narrow screens' menu (1100px and under)
+  await page.click('[data-nav-toggle]');
+  await page.waitForTimeout(900);
   await page.screenshot({ path: `shots/${prefix}-menu.png` });
 }
 await browser.close();

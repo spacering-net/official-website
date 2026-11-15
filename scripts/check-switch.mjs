@@ -1,7 +1,8 @@
 // Language switch: the other page takes over the running scene instead of
-// replaying the intro, cross-fades in, and keeps the chapter, the menu and the
-// focus where they were. With ffmpeg installed it also films the switch and
-// checks that the screen never goes dark or flashes.
+// replaying the intro, cross-fades in, and keeps the chapter and the focus
+// where they were (on a phone, from the narrow screens' menu, which closes).
+// With ffmpeg installed it also films the switch and checks that the screen
+// never goes dark or flashes.
 // Usage: node scripts/check-switch.mjs [baseUrl]
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
@@ -22,8 +23,9 @@ const ARRIVAL = () => ({
   intro: document.documentElement.classList.contains('is-intro'),
   shown: [...document.querySelectorAll('.chapter.is-shown')].map((c) => c.id).join(),
   chapter: document.documentElement.dataset.chapter,
-  menu: document.querySelector('[data-menu-open]')?.getAttribute('aria-expanded'),
-  focus: document.activeElement?.matches('[data-lang-switch]') ? `switch${document.activeElement.closest('[data-menu]') ? ' (menu)' : ''}` : document.activeElement?.tagName,
+  sheet: document.querySelector('[data-nav-toggle]')?.getAttribute('aria-expanded'),
+  inert: document.querySelector('main')?.inert,
+  focus: document.activeElement?.matches('[data-lang-switch]') ? 'switch' : document.activeElement?.tagName,
   clock: document.querySelector('[data-tel="clock"]')?.textContent,
 });
 
@@ -75,34 +77,17 @@ async function open(url, viewport = { width: 1440, height: 900 }, theme = 'dark'
   await ctx.close();
 }
 
-// 3. from inside the menu: the menu is still open on the other side
-{
-  const { ctx, page } = await open('/zh/#signet');
-  await page.click('.hud .menu-btn');
-  await page.waitForTimeout(900);
-  await page.click('.orbit-menu [data-lang-switch]');
-  await page.waitForLoadState('load');
-  await page.waitForTimeout(400);
-  const a = await page.evaluate(ARRIVAL);
-  const inMenu = await page.evaluate(() => !!document.activeElement?.closest('[data-menu]'));
-  report(a.url === '/#signet' && a.menu === 'true' && a.shown === 'signet' && inMenu, 'menu switch keeps the menu', JSON.stringify({ ...a, inMenu }));
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(800);
-  const closed = await page.evaluate(() => ({ menu: document.querySelector('[data-menu-open]').getAttribute('aria-expanded'), inert: document.querySelector('main').inert }));
-  report(closed.menu === 'false' && !closed.inert, 'menu closes after the switch', JSON.stringify(closed));
-  await ctx.close();
-}
-
-// 4. on a phone the switch lives in the menu
+// 3. on a phone the switch lives in the narrow screens' menu: the chapter
+// carries over, and the other side opens with the menu closed and the page live
 {
   const { ctx, page } = await open('/zh/#relay', { width: 390, height: 844 });
-  await page.tap('.hud .menu-btn');
+  await page.tap('.hud [data-nav-toggle]');
   await page.waitForTimeout(900);
-  await page.tap('.orbit-menu [data-lang-switch]');
+  await page.tap('.nav-sheet [data-lang-switch]');
   await page.waitForLoadState('load');
   await page.waitForTimeout(400);
   const a = await page.evaluate(ARRIVAL);
-  report(a.url === '/#relay' && a.shown === 'relay' && !a.intro && a.menu === 'true', 'phone switch keeps the chapter', JSON.stringify(a));
+  report(a.url === '/#relay' && a.shown === 'relay' && !a.intro && a.sheet === 'false' && !a.inert, 'phone switch keeps the chapter', JSON.stringify(a));
   await ctx.close();
 }
 

@@ -1,0 +1,41 @@
+---
+/**
+ * The ring card's view: a preview of the card as it will be seen, what it
+ * shows, sharing it and stopping, and the ways to pass it on (client/card.ts).
+ * In the account dialog, under its own title; in the console, as its section.
+ */
+import type { Dict } from '../i18n';
+
+interface Props {
+  t: Dict;
+  /** the dialog titles it; the console's section already has its heading */
+  title?: boolean;
+  /** the preview's SVG ids, kept apart from another preview on the same page */
+  id?: string;
+  class?: string;
+}
+const { t, title = true, id = 'account-card', class: className } = Astro.props;
+const c = t.account.card;
+---
+<div class:list={['card-view', className]} data-card-view data-card-path={`${t.path}ring/`} data-card-lang={t.lang} data-card-id={id}>
+  {title && <h2 class="account__title">{c.title}</h2>}
+  <div class="account__card" data-card-preview></div>
+  <fieldset class="account__options">
+    <legend class="sr-only">{c.show}</legend>
+    <label class="account__option"><input type="checkbox" data-card-show="name" /><span>{c.showName}</span></label>
+    <label class="account__option" data-card-image-option><input type="checkbox" data-card-show="image" /><span>{c.showImage}</span></label>
+  </fieldset>
+  <p class="account__status" role="status" data-card-status data-loading={c.loading} data-private={c.private} data-shared={c.shared} data-stopped={c.stopped}></p>
+  <p class="account__error" role="alert" data-card-error hidden>{c.failed}</p>
+  <div class="account__link" data-card-link hidden>
+    <input class="account__url" type="text" readonly aria-label={c.link} data-card-url />
+    <button class="btn btn--ghost" type="button" data-card-copy data-copied={c.copied}>{c.copy}</button>
+  </div>
+  <div class="account__actions">
+    <button class="btn btn--primary" type="button" data-card-share>{c.share}</button>
+    <button class="btn btn--primary" type="button" data-card-native hidden>{c.native}</button>
+    <a class="btn btn--ghost" target="_blank" rel="noopener" data-card-post data-text={c.postText} hidden>{c.post}</a>
+    <a class="btn btn--ghost" data-card-save>{c.save}</a>
+  </div>
+  <button class="account__stop" type="button" data-card-stop hidden>{c.stop}</button>
+</div>

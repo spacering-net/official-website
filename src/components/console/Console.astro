@@ -1,0 +1,287 @@
+---
+/**
+ * The console (/console/ and its sections, in both languages): the sections
+ * on the left with the account at their foot, and the section on the right.
+ * Built ahead of time as an empty frame; the browser fills it in for whoever
+ * is signed in (client/console.ts), or asks them to sign in. The side holds
+ * still from one section to the next while the section cross-fades.
+ */
+import Page from '../../layouts/Page.astro';
+import Logo from '../Logo.astro';
+import Icon from '../Icon.astro';
+import FootLine from '../FootLine.astro';
+import RingCardView from '../RingCardView.astro';
+import ConsoleIcon from './ConsoleIcon.astro';
+import { dicts, type Lang } from '../../i18n';
+import { consoleDicts, CONSOLE_SECTIONS, PLANNED_SECTIONS, sectionPath, type ConsoleSection } from '../../i18n/console';
+import '../../styles/console.css';
+// the side's account, painted before the first frame as the HUD's is (account-hint.js)
+import hintUrl from '../../client/account-hint.js?url&no-inline';
+
+interface Props {
+  lang: Lang;
+  section: ConsoleSection;
+}
+const { lang, section } = Astro.props;
+const t = dicts[lang];
+const c = consoleDicts[lang];
+const a = t.account;
+const p = c.profile;
+const here = c.sections[section];
+const other = lang === 'en' ? 'zh' : 'en';
+const paths = { en: `/${sectionPath(section)}`, zh: `/zh/${sectionPath(section)}` };
+const title = section === 'overview' ? `${c.title} · SpaceRing` : `${here.title} · ${c.title} · SpaceRing`;
+const item = (key: ConsoleSection) => ({ key, href: `${t.path}${sectionPath(key)}`, name: c.sections[key].name, current: key === section });
+const own = CONSOLE_SECTIONS.filter((key) => !PLANNED_SECTIONS.includes(key)).map(item);
+const planned = PLANNED_SECTIONS.map(item);
+const isPlanned = PLANNED_SECTIONS.includes(section);
+---
+<Page lang={lang} title={title} description={c.description} paths={paths} noindex bare>
+  <link slot="head" rel="expect" href="#console-ready" blocking="render" />
+  <div class="console" data-console data-section={section} data-state="loading">
+    <aside class="console__side">
+      <nav class="console__nav" aria-label={c.nav}>
+        <ul class="console__list">
+          {own.map((i) => (
+            <li><a class="console__link" href={i.href} aria-current={i.current ? 'page' : undefined}><ConsoleIcon name={i.key} /><span>{i.name}</span></a></li>
+          ))}
+        </ul>
+        <p class="console__group mono">{c.planned}</p>
+        <ul class="console__list">
+          {planned.map((i) => (
+            <li><a class="console__link console__link--planned" href={i.href} aria-current={i.current ? 'page' : undefined}><ConsoleIcon name={i.key} /><span>{i.name}</span></a></li>
+          ))}
+        </ul>
+      </nav>
+      {/* who is signed in, at the side's foot (on narrow screens, the page's): the card opens the profile, the button beside it signs out */}
+      <div class="console__me">
+        <p class="console__error" role="alert" data-console-signout-error hidden>{c.signOutFailed}</p>
+        <div class="console__account">
+          <button class="console__id" type="button" title={p.edit} aria-haspopup="dialog" data-profile-open="name">
+            <span class="face face--small" aria-hidden="true">
+              <span class="face__initial" data-account-initial></span>
+              <img class="face__avatar" alt="" width="34" height="34" decoding="async" data-account-avatar hidden />
+              <span class="face__node"></span>
+            </span>
+            <span class="console__who">
+              <span class="console__name" data-account-name></span>
+              <span class="console__srn mono"><span>SRN</span> <b data-account-number></b></span>
+            </span>
+            <span class="sr-only">{p.edit}</span>
+          </button>
+          <button class="console__signout" type="button" title={c.signOut} data-console-signout>
+            <ConsoleIcon name="signout" />
+            <span class="console__signout-label">{c.signOut}</span>
+          </button>
+        </div>
+        {section !== 'overview' && <span class="sr-only" role="status" data-profile-saved></span>}
+      </div>
+    </aside>
+
+    <div class="console__main">
+      {section === 'overview' ? (
+        // The holder's face and name; the face and the button open the profile
+        // (the dialog below). The side already shows the ring number.
+        <header class="console__head profile">
+          <button class="face face--large face--button" type="button" title={p.change} aria-label={p.change} aria-haspopup="dialog" data-profile-open="picture">
+            <span class="face__initial" data-account-initial></span>
+            <img class="face__avatar" alt="" width="89" height="89" decoding="async" data-account-avatar hidden />
+            <span class="face__veil" aria-hidden="true"><ConsoleIcon name="camera" /></span>
+            <span class="face__node"></span>
+          </button>
+          <div class="profile__main">
+            <h1 class="console__title profile__name" data-account-name></h1>
+            <p class="profile__email" data-email></p>
+            <p class="profile__methods">
+              <span class="profile__label mono">{c.overview.methods}</span>
+              <span class="profile__list" data-methods></span>
+            </p>
+          </div>
+          <div class="profile__end">
+            <span class="profile__saved" role="status" data-profile-saved></span>
+            <button class="btn btn--ghost btn--small profile__edit" type="button" aria-haspopup="dialog" data-profile-open="name"><ConsoleIcon name="edit" /><span>{p.edit}</span></button>
+          </div>
+        </header>
+      ) : (
+        <header class="console__head">
+          <p class="console__eyebrow mono">
+            <span>{c.title}</span>
+            {isPlanned && <span class="status">{c.planned}</span>}
+          </p>
+          <h1 class="console__title">{here.title}</h1>
+          <p class="console__lede">{here.lede}</p>
+        </header>
+      )}
+      {/* the side and this heading show the account before the first frame, as the HUD does */}
+      <script is:inline src={hintUrl}></script>
+      <span id="console-ready" hidden></span>
+
+      <p class="console__notice" role="status" data-console-changed hidden>{c.changed}</p>
+      <p class="console__loading mono" data-console-loading>{c.loading}</p>
+      <div class="console__failed" role="alert" data-console-failed hidden>
+        <p>{c.failed}</p>
+        <button class="btn btn--ghost" type="button" data-console-retry>{c.retry}</button>
+      </div>
+
+      <div class="console__body" data-console-body>
+        {section === 'overview' && (
+          <>
+            <div class="tiles">
+              <a class="tile" href={`${t.path}${sectionPath('clients')}`}>
+                <span class="tile__label mono">{c.overview.clients.label}</span>
+                <span class="tile__value" data-tile="clients"></span>
+                <span class="tile__hint">{c.overview.clients.hint}</span>
+              </a>
+              <a class="tile" href={`${t.path}${sectionPath('security')}`}>
+                <span class="tile__label mono">{c.overview.sessions.label}</span>
+                <span class="tile__value" data-tile="sessions"></span>
+                <span class="tile__hint">{c.overview.sessions.hint}</span>
+              </a>
+              <a class="tile" href={`${t.path}${sectionPath('activity')}`}>
+                <span class="tile__label mono">{c.overview.lastSignIn.label}</span>
+                <span class="tile__value" data-tile="last"></span>
+                <span class="tile__hint" data-tile="last-device"></span>
+              </a>
+            </div>
+            <section class="panel" aria-labelledby="console-planned">
+              <h2 class="panel__title" id="console-planned">{c.overview.planned}</h2>
+              <ul class="rows">
+                {planned.map((i) => (
+                  <li>
+                    <a class="row row--link" href={i.href}>
+                      <ConsoleIcon name={i.key} class="row__icon" />
+                      <span class="row__main">
+                        <span class="row__title">{i.name}</span>
+                        <span class="row__meta">{c.sections[i.key].lede}</span>
+                      </span>
+                      <span class="status">{c.planned}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          </>
+        )}
+
+        {section === 'clients' && (
+          <>
+            <section class="panel" aria-label={here.title}>
+              <ul class="rows" data-list="clients"></ul>
+            </section>
+            <p class="console__note">{c.clients.scope} {c.clients.web}</p>
+          </>
+        )}
+
+        {section === 'security' && (
+          <>
+            <section class="panel" aria-labelledby="console-methods">
+              <h2 class="panel__title" id="console-methods">{c.security.methods}</h2>
+              <ul class="rows" data-list="methods"></ul>
+              <p class="panel__note">{c.security.methodsNote}</p>
+            </section>
+            <section class="panel" aria-labelledby="console-sessions">
+              <div class="panel__head">
+                <h2 class="panel__title" id="console-sessions">{c.security.sessions}</h2>
+                <button class="btn btn--ghost btn--small" type="button" data-revoke-others hidden>{c.security.signOutOthers}</button>
+              </div>
+              <ul class="rows" data-list="sessions"></ul>
+              <p class="panel__note">{c.security.sessionsNote}</p>
+            </section>
+          </>
+        )}
+
+        {section === 'activity' && (
+          <>
+            <section class="panel" aria-label={here.title}>
+              <ol class="rows rows--log" data-list="activity"></ol>
+            </section>
+            <p class="console__note">{c.activity.note}</p>
+          </>
+        )}
+
+        {section === 'card' && (
+          <section class="panel panel--card" aria-label={here.title}>
+            <RingCardView t={t} title={false} id="console-card" class="card-view--console" />
+          </section>
+        )}
+
+        {isPlanned && (
+          <section class="panel" aria-label={here.title}>
+            <ul class="points">
+              {c.points[section as 'backups' | 'relay'].map((point) => <li>{point}</li>)}
+            </ul>
+          </section>
+        )}
+      </div>
+    </div>
+
+    <FootLine t={t} alternate={paths[other]} class="console__foot" />
+
+    {/*
+      The profile: the picture and the name, changed together (client/console.ts).
+      A new picture is made in the browser and shown in the face until saved;
+      nothing is sent until Save. On every section, opened from the side.
+    */}
+    <dialog class="editor" aria-labelledby="editor-title" data-profile-dialog>
+      <form class="editor__form" novalidate data-profile-form>
+        <h2 class="editor__title" id="editor-title">{p.edit}</h2>
+        <button class="editor__close" type="button" aria-label={p.close} data-profile-close>
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+        </button>
+        <div class="editor__picture">
+          <button class="face face--large face--button" type="button" title={p.change} aria-label={p.change} data-face data-avatar-pick>
+            <span class="face__initial" data-account-initial></span>
+            <img class="face__avatar" alt="" width="89" height="89" decoding="async" data-account-avatar hidden />
+            <img class="face__avatar face__preview" alt="" width="89" height="89" data-avatar-preview hidden />
+            <span class="face__veil" aria-hidden="true"><ConsoleIcon name="camera" /></span>
+            <span class="face__node"></span>
+          </button>
+          <div class="editor__tools">
+            <button class="editor__tool" type="button" data-avatar-pick><ConsoleIcon name="camera" /><span>{p.change}</span></button>
+            <button class="editor__tool editor__tool--remove" type="button" data-avatar-remove><ConsoleIcon name="trash" /><span>{p.remove}</span></button>
+          </div>
+          <p class="editor__error" role="alert" data-profile-error="picture" hidden></p>
+          <input type="file" accept="image/*" tabindex="-1" aria-hidden="true" hidden data-avatar-file />
+        </div>
+        <div class="editor__field">
+          <div class="editor__row">
+            <label class="editor__label mono" for="editor-name">{p.name}</label>
+            <span class="editor__count mono" aria-hidden="true" data-profile-count></span>
+          </div>
+          <input class="editor__input" id="editor-name" name="name" type="text" autocomplete="nickname" spellcheck="false" enterkeyhint="done" aria-describedby="editor-hint editor-error" data-profile-name />
+          <p class="editor__hint" id="editor-hint">{p.nameHint}</p>
+          <p class="editor__error editor__error--name" id="editor-error" role="alert" data-profile-error="name" hidden></p>
+        </div>
+        <p class="editor__error editor__error--form" role="alert" data-profile-error="form" hidden></p>
+        <div class="editor__actions">
+          <button class="btn btn--ghost" type="button" data-profile-cancel>{p.cancel}</button>
+          <button class="btn btn--primary" type="submit" data-busy={p.saving} data-profile-save>{p.save}</button>
+        </div>
+      </form>
+    </dialog>
+
+    <section class="gate" data-console-gate hidden aria-labelledby="console-gate">
+      <Logo class="gate__mark" />
+      <h1 class="gate__title" id="console-gate">{c.gate.title}</h1>
+      <p class="gate__lede">{c.gate.lede}</p>
+      <p class="gate__error" role="alert" data-gate-error hidden>{a.failed}</p>
+      <div class="gate__providers">
+        <button class="btn btn--primary" type="button" data-gate-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>
+        <button class="btn btn--ghost" type="button" data-gate-provider="google" data-busy={a.redirecting}><Icon name="google" /><span>{a.google}</span></button>
+      </div>
+      {a.note && <p class="gate__note">{a.note}</p>}
+      <p class="gate__note">{a.consent[0]}<a href={`${t.path}terms/`}>{a.consent[1]}</a>{a.consent[2]}<a href={`${t.path}privacy/`}>{a.consent[3]}</a>{a.consent[4]}</p>
+      <FootLine t={t} alternate={paths[other]} class="gate__foot" />
+    </section>
+  </div>
+  {/* what the rows the page draws begin with (client/console.ts) */}
+  <template data-icon="github"><Icon name="github" /></template>
+  <template data-icon="google"><Icon name="google" /></template>
+  <template data-icon="desktop"><ConsoleIcon name="desktop" class="row__icon" /></template>
+  <template data-icon="web"><ConsoleIcon name="web" class="row__icon" /></template>
+  <template data-icon="browser"><ConsoleIcon name="browser" class="row__icon" /></template>
+  <noscript><p class="console__noscript">{lang === 'zh' ? '控制台需要启用 JavaScript。' : 'The console needs JavaScript.'}</p></noscript>
+  <script>
+    import '../../client/console';
+  </script>
+</Page>

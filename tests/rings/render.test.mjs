@@ -28,3 +28,10 @@ test('renders asked for at once take their turns, and all finish', async () => {
   assert.equal(missing.complete, false);
   assert.ok(isJpeg(missing.jpeg));
 });
+
+test('a JPEG picture, as the console makes from a photo, is drawn too', async () => {
+  const photo = new Uint8Array(readFileSync(new URL('og.jpg', PUBLIC)));
+  const { jpeg, complete } = await renderCard(card({ image: '/api/avatars/x/y.jpg' }), sources({ avatar: async () => photo }));
+  assert.ok(isJpeg(jpeg));
+  assert.equal(complete, true);
+});

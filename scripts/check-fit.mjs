@@ -29,7 +29,7 @@ for (const lang of ['/', '/zh/']) {
         const el = document.getElementById(id).querySelector('[data-projection]');
         const b = el.getBoundingClientRect();
         // the HUD bar is taller than what it draws; panels may pass under its empty margin
-        const hud = Math.max(...[...document.querySelectorAll('.hud .brand, .hud .menu-btn')].map((e) => e.getBoundingClientRect().bottom)) + 6;
+        const hud = Math.max(...[...document.querySelectorAll('.hud .brand, .hud .ring-btn')].map((e) => e.getBoundingClientRect().bottom)) + 6;
         const holo = el.querySelector('.holo');
         const shown = holo ? getComputedStyle(holo).display !== 'none' : null;
         return { top: Math.round(b.top), bottom: Math.round(b.bottom), hud, vh: innerHeight, holo: shown, cramped: shown ? cramped(holo) : 0 };

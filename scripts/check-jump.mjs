@@ -30,9 +30,10 @@ const read = (page) => page.evaluate(() => ({
   chapter: document.documentElement.dataset.chapter,
 }));
 
-async function scenario(name, { url = '/#space', seen = true, webgl = true, wait = 2400 }, act, expect) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-US' });
+async function scenario(name, { url = '/#space', seen = true, webgl = true, wait = 2400, viewport = { width: 1440, height: 900 } }, act, expect) {
+  const ctx = await browser.newContext({ viewport, locale: 'en-US' });
   const page = await ctx.newPage();
+  page.on('crash', () => console.log(`   (${name}: the page crashed)`));
   if (seen) await page.addInitScript(() => sessionStorage.setItem('sr-intro', '1'));
   if (!webgl) await page.addInitScript(() => (HTMLCanvasElement.prototype.getContext = () => null));
   await page.goto(`${base}${url}`, { waitUntil: 'load' });
@@ -67,11 +68,11 @@ await scenario('wheel mid-jump is held off', {}, async (p) => {
   await p.mouse.move(700, 450);
   for (let i = 0; i < 6; i++) await p.mouse.wheel(0, 400);
 }, (r) => r.now.join() === 'signet' && only(r, 'space', 'signet'));
-await scenario('menu: space → codeg', {}, async (p) => {
-  await p.click('.hud .menu-btn');
+await scenario('narrow menu: codeg → the ring', { url: '/#codeg', viewport: { width: 1000, height: 800 } }, async (p) => {
+  await p.click('.hud [data-nav-toggle]');
   await p.waitForTimeout(900);
-  await p.click('.menu-link[data-node="codeg"]');
-}, (r) => only(r, 'space', 'codeg') && r.now.join() === 'codeg');
+  await p.click('.nav-sheet__link[data-goto="0"]');
+}, (r) => only(r, 'codeg', 'top') && r.now.join() === 'top');
 await scenario('during the intro', { url: '/', seen: false, wait: 900 }, (p) => p.click('.dial__item[data-goto="4"]', { force: true }),
   (r) => r.now.join() === 'relay' && r.chapter === '4' && !r.shown.some((id) => ['space', 'assistant', 'harness'].includes(id)));
 await scenario('without WebGL', { webgl: false }, (p) => p.click('.dial__item[data-goto="5"]', { force: true }),

@@ -1,0 +1,1563 @@
+/* ==========================================================================
+   The console (components/console/Console.astro, client/console.ts): the
+   account and its sections on the left, the section on the right, in the
+   page's column. Panels are hairline frames over the night, as the rest of
+   the site's; the bead marks what is current and what is in use.
+   ========================================================================== */
+
+.console {
+  --side: 248px;
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr);
+  /* the section, then the page's last line at the window's foot however short the section */
+  grid-template-rows: minmax(0, 1fr) auto;
+  column-gap: var(--s-7);
+  width: 100%;
+  max-width: var(--page-max);
+  min-height: calc(100svh - var(--hud-h));
+  margin-inline: auto;
+  padding-inline: var(--edge);
+}
+
+/* the page's own way of hiding things wins over the display set below */
+.console [hidden] {
+  display: none !important;
+}
+
+/* Signed out, only the way in; before the account is known, with a hint of
+   who it was the frame shows them at once, without one only a quiet wait. */
+.console[data-state='out'] .console__side,
+.console[data-state='out'] .console__main,
+.console[data-state='out'] .console__foot {
+  display: none;
+}
+
+html:not(.has-account) .console[data-state='loading'] .console__side,
+html:not(.has-account) .console[data-state='loading'] .console__foot,
+html:not(.has-account) .console[data-state='loading'] .console__main > :not(.console__loading) {
+  visibility: hidden;
+}
+
+/* nothing to change until the account is known */
+.console:not([data-state='in']) [data-profile-open] {
+  pointer-events: none;
+}
+
+.has-account .console__loading,
+.console[data-state='error'] .console__body {
+  display: none;
+}
+
+/* running text: no word left alone on its last line */
+.console__lede,
+.console__note,
+.gate__note,
+.panel__note,
+.tile__hint,
+.row__meta,
+.editor__hint,
+.points li {
+  text-wrap: pretty;
+}
+
+/* ------------------------------------------------------------------ side */
+
+.console__side {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  position: sticky;
+  top: var(--hud-h);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  height: calc(100svh - var(--hud-h));
+  padding: var(--s-5) var(--s-5) 0 0;
+  border-right: 1px solid var(--hairline);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* it holds still from one section to the next (Page.astro cross-fades the rest) */
+  view-transition-name: console-side;
+}
+
+.console__nav {
+  display: grid;
+  align-content: start;
+}
+
+.console__list {
+  display: grid;
+  gap: 2px;
+}
+
+.console__link {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: 9px var(--s-4);
+  border-radius: 10px;
+  font-size: 14.5px;
+  color: var(--corona-64);
+  transition:
+    color 0.3s,
+    background-color 0.3s;
+}
+
+.console__link:hover {
+  color: var(--corona);
+  background: rgb(var(--corona-rgb) / 0.04);
+}
+
+.console__link[aria-current='page'] {
+  color: var(--corona);
+  background: rgb(var(--corona-rgb) / 0.065);
+}
+
+/* the section this is: the HUD rail's node, resting by it */
+.console__link[aria-current='page']::after {
+  content: '';
+  flex: none;
+  width: 5px;
+  height: 5px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--bead-hot);
+  box-shadow: 0 0 8px 2px var(--bead-glow);
+}
+
+.console__link--planned {
+  color: var(--corona-40);
+}
+
+.console-icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.console__group {
+  margin: var(--s-5) var(--s-4) var(--s-3);
+  color: var(--graphite);
+}
+
+/* Who is signed in, at the side's foot over a hairline, level with the
+   page's last line once that reaches the window's foot: the card opens the
+   profile, the button beside it signs out. */
+.console__me {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* the page's last line: a 34px row between two s-5s, over its hairline */
+  min-height: calc(var(--s-6) + 2 * var(--s-5) + 1px);
+  margin-top: auto;
+  padding: var(--s-2) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.console__account {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.console__id {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--s-4);
+  min-width: 0;
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+  border-radius: 13px;
+  text-align: left;
+  transition: background-color 0.3s;
+}
+
+.console__id:hover {
+  background: rgb(var(--corona-rgb) / 0.04);
+}
+
+.console__who {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.console__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--corona);
+}
+
+.console__srn {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--corona-64);
+}
+
+.console__srn span {
+  color: var(--bead);
+}
+
+.console__srn b {
+  font-weight: 500;
+  color: var(--corona-80);
+}
+
+/* signing out: a mark here, its words on narrow screens (and for screen readers) */
+.console__signout {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--graphite);
+  transition:
+    color 0.3s,
+    background-color 0.3s,
+    border-color 0.3s;
+}
+
+.console__signout:hover {
+  color: var(--prominence);
+  background: rgb(var(--prominence-rgb) / 0.08);
+}
+
+.console__signout:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.console__signout .console-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.console__signout-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.console__error {
+  margin: var(--s-2) var(--s-4) var(--s-3);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--prominence);
+}
+
+/* ---------------------------------------------------------- the face */
+
+/* A picture set in the ring's band, the node on the band (as the HUD's end) */
+.face {
+  --size: 55px;
+  --gap: 4px;
+  --d: 6px;
+  position: relative;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+}
+
+.face--large {
+  --size: 89px;
+  --gap: 6px;
+  --d: 8px;
+}
+
+.face--small {
+  --size: 36px;
+  --gap: 3px;
+  --d: 5px;
+}
+
+.face__avatar,
+.face__initial,
+.face__veil {
+  position: absolute;
+  inset: var(--gap);
+  width: calc(100% - 2 * var(--gap));
+  height: calc(100% - 2 * var(--gap));
+  border-radius: 50%;
+}
+
+.face__avatar {
+  object-fit: cover;
+  background: var(--raised);
+}
+
+.face__initial {
+  display: grid;
+  place-items: center;
+  font-size: calc(var(--size) * 0.36);
+  line-height: 1;
+  color: var(--corona);
+  background: rgb(var(--corona-rgb) / 0.08);
+}
+
+.face__node {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: rotate 0.8s var(--ease-out);
+}
+
+.face__node::before {
+  --r: calc(var(--size) / 2 - 1.5px);
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--d);
+  height: var(--d);
+  margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
+  border-radius: 50%;
+  background: var(--bead);
+  box-shadow: 0 0 0 2px var(--void);
+  translate: calc(var(--r) * -0.5) calc(var(--r) * 0.866);
+}
+
+.console__id:hover .face__node {
+  rotate: -120deg;
+}
+
+/* A face that takes a new picture: it lights as a tile does, and a veil
+   with a camera says what clicking does. */
+.face--button {
+  cursor: pointer;
+  transition:
+    border-color 0.3s,
+    box-shadow 0.4s;
+}
+
+.face--button:hover,
+.face--button:focus-visible {
+  border-color: rgb(var(--bead-rgb) / 0.55);
+  box-shadow: 0 0 24px rgb(var(--bead-rgb) / 0.12);
+}
+
+.face--button:hover .face__node,
+.face--button:focus-visible .face__node {
+  rotate: -120deg;
+}
+
+/* across the picture's foot only, so the face stays in view */
+.face__veil {
+  background: linear-gradient(to bottom, transparent 60%, rgb(5 5 9 / 0.62) 60%);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.face__veil .console-icon {
+  position: absolute;
+  left: 50%;
+  top: 80%;
+  width: calc(var(--size) * 0.2);
+  height: calc(var(--size) * 0.2);
+  translate: -50% -50%;
+}
+
+.face--button:hover .face__veil,
+.face--button:focus-visible .face__veil,
+.face--button[aria-busy] .face__veil {
+  opacity: 1;
+}
+
+/* a picture just chosen is seen whole, until the pointer moves off it */
+.face--button[data-fresh] .face__veil {
+  opacity: 0;
+}
+
+.face--button[aria-busy] {
+  cursor: progress;
+}
+
+/* until saved: the picture chosen over the one kept, or none (the initial) */
+.face[data-pending='none'] .face__avatar {
+  visibility: hidden;
+}
+
+/* ------------------------------------------------------------------ main */
+
+.console__main {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  padding-top: var(--s-6);
+}
+
+.console__head {
+  max-width: 46rem;
+  margin-bottom: var(--s-6);
+}
+
+.console__eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  color: var(--graphite);
+}
+
+.console__eyebrow .status {
+  color: var(--corona-64);
+}
+
+.console__title {
+  margin-top: var(--s-3);
+  font-size: clamp(30px, 3.2vw, 42px);
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.console__lede {
+  margin-top: var(--s-3);
+  max-width: 42rem;
+  font-size: 15.5px;
+  color: var(--corona-64);
+}
+
+.console__lede:empty {
+  display: none;
+}
+
+.console__loading {
+  color: var(--graphite);
+}
+
+.console__failed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4);
+  color: var(--corona-64);
+}
+
+.console__notice {
+  margin-bottom: var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid rgb(var(--bead-rgb) / 0.35);
+  border-radius: 13px;
+  font-size: 13.5px;
+  color: var(--bead);
+}
+
+.console__note {
+  max-width: 46rem;
+  margin-top: var(--s-4);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--graphite);
+}
+
+/* the last line of a page's foot, at the section's foot, over a hairline as there */
+.console__body {
+  margin-bottom: var(--s-7);
+}
+
+.console__foot {
+  grid-column: 2;
+  grid-row: 2;
+  padding: var(--s-5) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+/* ------------------------------------------------------- panels and rows */
+
+.panel {
+  padding: 0 var(--s-5);
+  border: 1px solid var(--hairline);
+  border-radius: 21px;
+  background: rgb(var(--corona-rgb) / 0.015);
+}
+
+.panel + .panel {
+  margin-top: var(--s-5);
+}
+
+.panel__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3) var(--s-4);
+}
+
+.panel__title {
+  padding: var(--s-5) 0 var(--s-3);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.panel__head .panel__title {
+  padding-bottom: var(--s-5);
+}
+
+.panel__note {
+  padding: var(--s-4) 0;
+  border-top: 1px solid var(--hairline);
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--graphite);
+}
+
+/* until the rows arrive, the panel keeps a row's room */
+.rows:empty {
+  min-height: 72px;
+}
+
+.rows > li + li {
+  border-top: 1px solid var(--hairline);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  min-height: 72px;
+  padding: var(--s-4) 0;
+}
+
+.row--link {
+  margin-inline: calc(-1 * var(--s-5));
+  padding-inline: var(--s-5);
+  transition: background-color 0.3s;
+}
+
+.row--link:hover {
+  background: rgb(var(--corona-rgb) / 0.03);
+}
+
+.rows > li:last-child .row--link {
+  border-radius: 0 0 20px 20px;
+}
+
+.row__icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: var(--corona-64);
+}
+
+.row__icon--brand {
+  display: grid;
+  place-items: center;
+}
+
+.row__icon--brand .btn__icon {
+  width: 17px;
+  height: 17px;
+}
+
+.row__main {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.row__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  font-size: 15px;
+  color: var(--corona);
+  overflow-wrap: anywhere;
+}
+
+.row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0.45em;
+  font-size: 13px;
+  color: var(--graphite);
+  overflow-wrap: anywhere;
+}
+
+/* one detail, kept whole, and the dot after it that leads to the next */
+.row__detail {
+  white-space: nowrap;
+}
+
+.row__detail--long {
+  white-space: normal;
+}
+
+.row__detail:not(:last-child)::after {
+  content: '·';
+  margin-left: 0.45em;
+}
+
+.row .status {
+  flex: none;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* in use: the bead, still (the pulsing mark is for what is live on the site) */
+.status--on::before {
+  border: 0;
+  background: var(--bead);
+  box-shadow: 0 0 6px rgb(var(--bead-rgb) / 0.6);
+}
+
+.row--off .row__title,
+.row--off .row__icon,
+.row--off .row__meta {
+  opacity: 0.55;
+}
+
+.row__action {
+  flex: none;
+  padding: 6px 13px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--corona-80);
+  transition:
+    color 0.3s,
+    border-color 0.3s;
+}
+
+.row__action:hover,
+.row__action.is-armed {
+  border-color: rgb(var(--prominence-rgb) / 0.6);
+  color: var(--prominence);
+}
+
+.row__action:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.row__error {
+  font-size: 12.5px;
+  color: var(--prominence);
+}
+
+.row--empty {
+  min-height: 0;
+  padding: var(--s-5) 0;
+  font-size: 14px;
+  color: var(--graphite);
+}
+
+.row--more {
+  justify-content: center;
+  min-height: 0;
+}
+
+.btn--small {
+  height: 34px;
+  padding: 0 var(--s-4);
+  font-size: 13px;
+}
+
+.btn--small.is-armed {
+  border-color: rgb(var(--prominence-rgb) / 0.6);
+  color: var(--prominence);
+}
+
+.chip {
+  padding: 1px 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--corona-64);
+  white-space: nowrap;
+}
+
+/* this browser: the bead, as what is current is everywhere here */
+.chip--bead {
+  border-color: rgb(var(--bead-rgb) / 0.4);
+  color: var(--bead);
+}
+
+/* the log: a day, then its events by the hour */
+.rows--log .rows__day {
+  padding: var(--s-5) 0 var(--s-2);
+  color: var(--graphite);
+}
+
+.rows--log > .rows__day + li {
+  border-top: 0;
+}
+
+.row--event {
+  min-height: 60px;
+  align-items: baseline;
+}
+
+.row__time {
+  flex: none;
+  width: 4.6em;
+  font-size: 11.5px;
+  color: var(--graphite);
+  font-variant-numeric: tabular-nums;
+}
+
+.row--alert .row__title {
+  color: var(--prominence);
+}
+
+/* --------------------------------------------------------------- overview */
+
+/* The heading: the face, the name with the email and the ways in under it,
+   and the button that opens the profile (as the face does). */
+.profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'face main end';
+  align-items: center;
+  gap: var(--s-4) var(--s-5);
+  max-width: none;
+}
+
+.profile > .face {
+  grid-area: face;
+}
+
+.profile__main {
+  grid-area: main;
+  min-width: 0;
+}
+
+.profile__name {
+  margin-top: 0;
+}
+
+/* (each keeps its line before the account arrives, so nothing below moves) */
+.profile__email {
+  min-height: 1.6em;
+  margin-top: var(--s-2);
+  font-size: 15.5px;
+  color: var(--corona-64);
+  overflow-wrap: anywhere;
+}
+
+.profile__methods {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  min-height: 1.6em;
+  margin-top: var(--s-2);
+  font-size: 14px;
+  color: var(--corona-80);
+}
+
+.profile__label {
+  color: var(--graphite);
+}
+
+.profile__list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+}
+
+.profile__method {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.profile__method .btn__icon {
+  width: 15px;
+  height: 15px;
+}
+
+.profile__end {
+  grid-area: end;
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.console:not([data-state='in']) .profile__end {
+  visibility: hidden;
+}
+
+.profile__edit {
+  padding-left: var(--s-4);
+}
+
+.profile__edit .console-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.profile__saved {
+  font-size: 13px;
+  color: var(--bead);
+}
+
+/* ---------------------------------------------------------- the profile */
+
+/* The dialog the face and Edit profile open: as the site's other dialog,
+   a raised frame over a plain veil; the face over its two tools, the name
+   under them, and the two answers side by side at the foot. */
+.editor {
+  width: min(420px, calc(100vw - 2 * var(--s-4)));
+  max-width: none;
+  max-height: calc(100dvh - 2 * var(--s-4));
+  padding: 0;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 21px;
+  background: var(--raised);
+  color: var(--corona);
+  box-shadow: 0 34px 89px var(--shadow-deep);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.editor::backdrop {
+  background: var(--scrim);
+}
+
+.editor[open] {
+  animation: account-in 0.4s var(--ease-out);
+}
+
+.editor__form {
+  position: relative;
+  display: grid;
+  padding: var(--s-5) var(--s-6) var(--s-6);
+}
+
+.editor__title {
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 34px;
+  text-align: center;
+}
+
+.editor__close {
+  position: absolute;
+  top: var(--s-5);
+  right: var(--s-5);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--corona-64);
+  transition:
+    color 0.3s,
+    background-color 0.3s;
+}
+
+.editor__close:hover {
+  color: var(--corona);
+  background: rgb(var(--corona-rgb) / 0.05);
+}
+
+.editor__close:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.editor__close svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+
+.editor__picture {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-4);
+  margin-top: var(--s-5);
+}
+
+.editor__tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-3);
+}
+
+.editor__tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 var(--s-4) 0 12px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--corona-80);
+  white-space: nowrap;
+  transition:
+    color 0.3s,
+    border-color 0.3s,
+    background-color 0.3s;
+}
+
+.editor__tool:hover {
+  border-color: rgb(var(--corona-rgb) / 0.3);
+  background: rgb(var(--corona-rgb) / 0.04);
+  color: var(--corona);
+}
+
+.editor__tool--remove:hover {
+  border-color: rgb(var(--prominence-rgb) / 0.6);
+  background: none;
+  color: var(--prominence);
+}
+
+.editor__tool:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.editor__tool .console-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.editor__field {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-5);
+  padding-top: var(--s-5);
+  border-top: 1px solid var(--hairline);
+}
+
+.editor__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding-inline: var(--s-5);
+}
+
+.editor__label {
+  color: var(--graphite);
+}
+
+.editor__count {
+  color: var(--graphite);
+  font-variant-numeric: tabular-nums;
+}
+
+.editor__count.is-over {
+  color: var(--prominence);
+}
+
+.editor__input {
+  width: 100%;
+  height: 48px;
+  margin-top: var(--s-1);
+  padding: 0 var(--s-5);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  background: var(--field);
+  color: var(--corona);
+  font: inherit;
+  font-size: 16px;
+  transition:
+    border-color 0.25s,
+    box-shadow 0.25s;
+}
+
+.editor__input:hover {
+  border-color: rgb(var(--corona-rgb) / 0.3);
+}
+
+.editor__input:focus {
+  outline: none;
+  border-color: rgb(var(--bead-rgb) / 0.6);
+  box-shadow: 0 0 0 4px rgb(var(--bead-rgb) / 0.12);
+}
+
+.editor__input[aria-invalid='true'] {
+  border-color: rgb(var(--prominence-rgb) / 0.6);
+}
+
+.editor__input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 4px rgb(var(--prominence-rgb) / 0.12);
+}
+
+.editor__hint,
+.editor__error {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--graphite);
+}
+
+.editor__hint,
+.editor__error--name {
+  padding-inline: var(--s-5);
+}
+
+.editor__error {
+  color: var(--prominence);
+  text-align: center;
+}
+
+.editor__error--name {
+  text-align: left;
+}
+
+.editor__error--form {
+  margin-top: var(--s-5);
+}
+
+.editor__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
+}
+
+.editor__actions .btn {
+  justify-content: center;
+}
+
+.editor__actions .btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-4);
+  margin-bottom: var(--s-5);
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  gap: var(--s-2);
+  padding: var(--s-5);
+  border: 1px solid var(--hairline);
+  border-radius: 21px;
+  background: rgb(var(--corona-rgb) / 0.015);
+  transition:
+    border-color 0.3s,
+    box-shadow 0.4s;
+}
+
+.tile:hover {
+  border-color: rgb(var(--bead-rgb) / 0.45);
+  box-shadow: 0 0 24px rgb(var(--bead-rgb) / 0.08);
+}
+
+.tile__label {
+  color: var(--graphite);
+}
+
+.tile__value {
+  min-height: 1.25em;
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1.25;
+}
+
+.tile__hint {
+  font-size: 13px;
+  color: var(--graphite);
+}
+
+/* -------------------------------------------------- the card, the plans */
+
+.panel--card {
+  padding: var(--s-5);
+}
+
+.card-view--console .account__card {
+  max-width: 760px;
+  margin-top: 0;
+}
+
+.card-view--console .account__options,
+.card-view--console .account__actions {
+  justify-content: flex-start;
+}
+
+.card-view--console .account__link {
+  max-width: 760px;
+}
+
+.points {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-5) 0;
+}
+
+.points li {
+  position: relative;
+  padding-left: var(--s-5);
+  color: var(--corona-80);
+}
+
+.points li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 0.68em;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--bead);
+  border-radius: 50%;
+}
+
+/* ------------------------------------------------------------------ gate */
+
+/* the way in, in the middle of the window; the page's last line at its foot */
+.gate {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: calc(100svh - var(--hud-h));
+  padding-top: var(--s-6);
+  text-align: center;
+}
+
+.gate__mark {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  margin-top: auto;
+  fill: var(--corona);
+}
+
+.gate__title {
+  margin-top: var(--s-5);
+  font-size: clamp(26px, 3vw, 34px);
+  font-weight: 300;
+  line-height: 1.2;
+}
+
+.gate__lede {
+  max-width: 30rem;
+  text-wrap: balance;
+  margin-top: var(--s-3);
+  color: var(--corona-64);
+}
+
+.gate__error {
+  margin-top: var(--s-4);
+  font-size: 13px;
+  color: var(--prominence);
+}
+
+.gate__providers {
+  display: grid;
+  gap: var(--s-3);
+  width: min(340px, 100%);
+  margin-top: var(--s-6);
+}
+
+.gate__providers .btn {
+  justify-content: center;
+}
+
+.gate__providers .btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.gate__note {
+  max-width: 26rem;
+  margin-top: var(--s-4);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--graphite);
+}
+
+.gate__note a {
+  color: var(--corona-64);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 3px;
+}
+
+.gate__foot {
+  align-self: stretch;
+  margin-top: auto;
+  padding: var(--s-5) 0;
+  border-top: 1px solid var(--hairline);
+  text-align: left;
+}
+
+/* room between the way in and the foot, however short the window */
+.gate > .gate__note:last-of-type {
+  margin-bottom: var(--s-7);
+}
+
+.console__noscript {
+  max-width: var(--page-max);
+  margin: var(--s-6) auto;
+  padding-inline: var(--edge);
+  color: var(--corona-64);
+}
+
+/* ------------------------------------------------------------ responsive */
+
+/* two across, the third the width of both (rather than alone in half a row) */
+@media (max-width: 1240px) {
+  .tiles {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .tile:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Narrow: the sections in a row under the HUD, the section under them, and
+   who is signed in at its end, over the page's last line. */
+@media (max-width: 900px) {
+  .console {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+  }
+
+  .console__side {
+    display: contents;
+    view-transition-name: none;
+  }
+
+  /* the row runs to the window's edges, and fades out where it goes on past them */
+  .console__nav {
+    grid-row: 1;
+    display: flex;
+    gap: 2px;
+    margin-inline: calc(-1 * var(--edge));
+    padding: var(--s-3) var(--edge);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: var(--edge);
+    scrollbar-width: none;
+    mask-image: linear-gradient(to right, transparent, #000 var(--edge), #000 calc(100% - var(--edge)), transparent);
+    view-transition-name: console-side;
+  }
+
+  .console__list {
+    display: flex;
+    gap: 2px;
+  }
+
+  .console__group {
+    display: none;
+  }
+
+  .console__link {
+    white-space: nowrap;
+    padding: 8px var(--s-4);
+  }
+
+  /* the section on show is in view from the start, however far along the row
+     (by its end: the row moves only as far as it has to) */
+  .console__link[aria-current='page'] {
+    scroll-initial-target: nearest;
+    scroll-snap-align: none end;
+  }
+
+  .console__link[aria-current='page']::after {
+    display: none;
+  }
+
+  .console__main {
+    grid-column: 1;
+    grid-row: 2;
+    padding-top: var(--s-5);
+    border-top: 1px solid var(--hairline);
+  }
+
+  /* (no line under sections not shown yet) */
+  html:not(.has-account) .console[data-state='loading'] .console__main {
+    border-top-color: transparent;
+  }
+
+  .console__body {
+    margin-bottom: var(--s-6);
+  }
+
+  /* the account: a card of its own, the way out in words beside it */
+  .console__me {
+    grid-row: 3;
+    min-height: 0;
+    margin: 0 0 var(--s-6);
+    padding: var(--s-2);
+    border: 1px solid var(--hairline);
+    border-radius: 21px;
+    background: rgb(var(--corona-rgb) / 0.015);
+  }
+
+  .console__account {
+    gap: var(--s-3);
+  }
+
+  .console__id {
+    padding: var(--s-3);
+    border-radius: 16px;
+  }
+
+  .console__id .face--small {
+    --size: 44px;
+    --gap: 4px;
+    --d: 6px;
+  }
+
+  .console__name {
+    font-size: 15.5px;
+  }
+
+  .console__signout {
+    width: auto;
+    margin-right: var(--s-3);
+    padding: 0 var(--s-4);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--corona-80);
+  }
+
+  .console__signout:hover {
+    border-color: rgb(var(--prominence-rgb) / 0.6);
+    background: none;
+  }
+
+  .console__signout .console-icon {
+    display: none;
+  }
+
+  .console__signout-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .console__error {
+    margin: var(--s-3) var(--s-3) var(--s-2);
+  }
+
+  .console__foot {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+}
+
+/* Phones and narrow tablets: the three figures as the rows of one panel,
+   each a way into its section (the chevron says so). */
+@media (max-width: 640px) {
+  .tiles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    border: 1px solid var(--hairline);
+    border-radius: 21px;
+    background: rgb(var(--corona-rgb) / 0.015);
+    overflow: hidden;
+  }
+
+  .tile {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      'label value go'
+      'hint value go';
+    align-items: center;
+    gap: 2px var(--s-4);
+    padding: var(--s-4) var(--s-4) var(--s-4) var(--s-5);
+    border: 0;
+    border-radius: 0;
+    background: none;
+    transition: background-color 0.3s;
+  }
+
+  .tile + .tile {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .tile:last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+
+  .tile:hover {
+    box-shadow: none;
+    background: rgb(var(--corona-rgb) / 0.03);
+  }
+
+  .tile .tile__label {
+    grid-area: label;
+    font-family: inherit;
+    font-size: 15px;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--corona);
+  }
+
+  .tile__hint {
+    grid-area: hint;
+    font-size: 12.5px;
+    line-height: 1.5;
+  }
+
+  .tile__value {
+    grid-area: value;
+    min-height: 0;
+    font-size: 17px;
+    font-weight: 400;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .tile::after {
+    content: '';
+    grid-area: go;
+    width: 7px;
+    height: 7px;
+    margin: 0 4px 0 -2px;
+    border: solid var(--corona-40);
+    border-width: 1.2px 1.2px 0 0;
+    rotate: 45deg;
+  }
+}
+
+@media (max-width: 560px) {
+  /* the section row in words alone, closer together */
+  .console__link {
+    padding: 7px 12px;
+    font-size: 14px;
+  }
+
+  .console__link .console-icon {
+    display: none;
+  }
+
+  /* The heading, one column down the middle: the face, the name, how to
+     reach and sign in, and the button under them (Saved under that). */
+  .profile {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'face'
+      'main'
+      'end';
+    justify-items: center;
+    gap: var(--s-4);
+    padding-top: var(--s-3);
+    text-align: center;
+  }
+
+  .profile__name {
+    font-size: 28px;
+  }
+
+  .profile__email {
+    margin-top: var(--s-1);
+    font-size: 14.5px;
+  }
+
+  .profile__methods {
+    justify-content: center;
+    margin-top: var(--s-1);
+    font-size: 13.5px;
+  }
+
+  .profile__end {
+    flex-direction: column-reverse;
+    gap: var(--s-2);
+    margin-top: var(--s-1);
+  }
+
+  .profile__saved:empty {
+    display: none;
+  }
+
+  .editor__form {
+    padding: var(--s-4) var(--s-5) var(--s-5);
+  }
+
+  .editor__close {
+    top: var(--s-4);
+    right: var(--s-4);
+  }
+
+  .panel {
+    padding: 0 var(--s-4);
+  }
+
+  .row--link {
+    margin-inline: calc(-1 * var(--s-4));
+    padding-inline: var(--s-4);
+  }
+
+  /* A row with a mark: the mark, then the words, with the row's state under
+     them and its button kept on the right, level with them. */
+  .row:has(> .row__icon) {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--s-2) var(--s-4);
+  }
+
+  .row:has(> .row__icon) > .row__main,
+  .row:has(> .row__icon) > .status {
+    grid-column: 2;
+  }
+
+  .row:has(> .row__icon) > .status {
+    justify-self: start;
+  }
+
+  .row:has(> .row__icon) > .row__action {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  /* with a state as well: the words the full width, the state and its button under them */
+  .row:has(> .row__icon):has(> .status) {
+    grid-template-areas:
+      'icon main main'
+      'icon status action';
+  }
+
+  .row:has(> .status) > .row__icon {
+    grid-area: icon;
+  }
+
+  .row:has(> .status) > .row__main {
+    grid-area: main;
+  }
+
+  .row:has(> .status) > .status {
+    grid-area: status;
+  }
+
+  .row:has(> .status) > .row__action {
+    grid-area: action;
+  }
+}

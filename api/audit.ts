@@ -15,7 +15,8 @@ export async function audit(env: Env, type: string, userId: string | null, data?
     .run();
 }
 
-async function keyedHash(value: string, secret: string) {
+/** The address as the log keeps it: the console compares it with the visitor's own (api/console). */
+export async function keyedHash(value: string, secret: string) {
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey('raw', enc.encode(`audit-ip:${secret}`), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return hex(await crypto.subtle.sign('HMAC', key, enc.encode(value))).slice(0, 32);

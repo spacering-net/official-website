@@ -45,11 +45,14 @@ await run('keyboard', ['--enable-gpu', '--use-angle=metal'], {}, async (page) =>
   console.log(' tab order:', seq.join(' | '));
   await page.screenshot({ path: 'shots/mode-keyboard.png' });
   await page.keyboard.press('Escape');
-  await page.click('[data-menu-open]');
-  await page.waitForTimeout(1200);
-  const inMenu = await page.evaluate(() => document.activeElement?.closest('[data-menu]') !== null);
-  await page.keyboard.press('Escape');
+  // the narrow screens' menu, at a width that has it
+  await page.setViewportSize({ width: 1000, height: 800 });
+  await page.waitForTimeout(300);
+  await page.click('[data-nav-toggle]');
   await page.waitForTimeout(900);
-  const back = await page.evaluate(() => document.activeElement?.matches('[data-menu-open]'));
+  const inMenu = await page.evaluate(() => document.activeElement?.closest('[data-nav-sheet]') !== null);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(700);
+  const back = await page.evaluate(() => document.activeElement?.matches('[data-nav-toggle]'));
   console.log(' menu focus in:', inMenu, '| focus restored:', back);
 });

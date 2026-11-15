@@ -2,10 +2,13 @@
 /**
  * Sign-in, the signed-in card and the ring card's sharing, in one modal
  * dialog (see client/account.ts and client/card.ts). The buttons that open it
- * live in the HUD and the orbit menu (AccountButton), and on ring card pages.
+ * are the HUD's "Sign in" (HudAccount.astro), the narrow screens' menu's, and
+ * those on ring card pages. Once signed in, the HUD leads to the console
+ * instead; this view is for a sign-in the page did not know of yet.
  */
 import Logo from './Logo.astro';
 import Icon from './Icon.astro';
+import RingCardView from './RingCardView.astro';
 import type { Dict } from '../i18n';
 
 interface Props {
@@ -39,46 +42,16 @@ const c = a.card;
     <p class="account__name" data-account-name></p>
     <p class="account__error" role="alert" data-account-signout-error hidden>{a.signOutFailed}</p>
     <div class="account__stack">
-      <button class="btn btn--primary" type="button" data-card-open>{c.open}</button>
-      <button class="btn btn--ghost" type="button" data-account-signout>{a.signOut}</button>
+      <a class="btn btn--primary" href={`${t.path}console/`}>{a.console}</a>
+      <button class="btn btn--ghost" type="button" data-card-open>{c.open}</button>
     </div>
-    <details class="account__connections" data-connections>
-      <summary>{t.lang === 'zh' ? '已连接的客户端' : 'Connected clients'}</summary>
-      <div data-connections-list aria-live="polite"></div>
-    </details>
-    <p class="account__status" role="status" data-connections-changed hidden>{t.lang === 'zh' ? '登录账号已变化。请核对上方 SRN，再重新打开连接列表。' : 'Your signed-in account changed. Check the SRN above, then reopen the connection list.'}</p>
+    <button class="account__stop" type="button" data-account-signout>{a.signOut}</button>
   </div>
 
-  <div class="account__view account__view--card" data-account-view="card" data-card-path={`${t.path}ring/`} data-card-lang={t.lang} hidden>
+  <div class="account__view account__view--card" data-account-view="card" hidden>
     <button class="account__back" type="button" aria-label={c.back} data-card-back>
       <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M12 4.5L6.5 10l5.5 5.5"></path></svg>
     </button>
-    <h2 class="account__title">{c.title}</h2>
-    <div class="account__card" data-card-preview></div>
-    <fieldset class="account__options">
-      <legend class="sr-only">{c.show}</legend>
-      <label class="account__option"><input type="checkbox" data-card-show="name" /><span>{c.showName}</span></label>
-      <label class="account__option" data-card-image-option><input type="checkbox" data-card-show="image" /><span>{c.showImage}</span></label>
-    </fieldset>
-    <p class="account__status" role="status" data-card-status data-loading={c.loading} data-private={c.private} data-shared={c.shared} data-stopped={c.stopped}></p>
-    <p class="account__error" role="alert" data-card-error hidden>{c.failed}</p>
-    <div class="account__link" data-card-link hidden>
-      <input class="account__url" type="text" readonly aria-label={c.link} data-card-url />
-      <button class="btn btn--ghost" type="button" data-card-copy data-copied={c.copied}>{c.copy}</button>
-    </div>
-    <div class="account__actions">
-      <button class="btn btn--primary" type="button" data-card-share>{c.share}</button>
-      <button class="btn btn--primary" type="button" data-card-native hidden>{c.native}</button>
-      <a class="btn btn--ghost" target="_blank" rel="noopener" data-card-post data-text={c.postText} hidden>{c.post}</a>
-      <a class="btn btn--ghost" data-card-save>{c.save}</a>
-    </div>
-    <button class="account__stop" type="button" data-card-stop hidden>{c.stop}</button>
+    <RingCardView t={t} />
   </div>
 </dialog>
-<style>
-  .account__connections { text-align: left; font-size: 13px; margin-top: 22px; max-height: 220px; overflow-y: auto; }
-  .account__connections summary { cursor: pointer; padding: 10px 0; }
-  .account__connections :global(.account__connection) { padding: 12px 0; border-top: 1px solid #8883; }
-  .account__connections :global(small) { display: block; opacity: .65; line-height: 1.6; margin-top: 4px; }
-  .account__connections :global(.account__stop) { display: block; margin: 8px 0 0; font-size: 12px; }
-</style>

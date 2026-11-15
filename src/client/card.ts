@@ -15,19 +15,19 @@ interface HolderCard {
 type Note = 'loading' | 'private' | 'shared' | 'stopped';
 
 interface CardViewOptions {
-  /** the dialog's ring card view (components/Account.astro) */
+  /** the ring card's view (components/RingCardView.astro), in the account dialog or the console */
   root: HTMLElement;
-  /** the session has ended: the dialog goes back to signing in */
+  /** the session has ended: back to signing in */
   signedOut(): void;
 }
 
 const json = { 'content-type': 'application/json', accept: 'application/json' };
 
 /**
- * The account dialog's ring card view: a preview of the card as it will be
- * seen, what it shows (nothing of the holder until they choose), sharing it
- * and stopping, and the ways to pass it on: its link, the system's share
- * sheet, X, and the picture itself.
+ * The ring card's view: a preview of the card as it will be seen, what it
+ * shows (nothing of the holder until they choose), sharing it and stopping,
+ * and the ways to pass it on: its link, the system's share sheet, X, and the
+ * picture itself.
  */
 export function initCardView({ root, signedOut }: CardViewOptions) {
   const $ = <T extends HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
@@ -76,7 +76,7 @@ export function initCardView({ root, signedOut }: CardViewOptions) {
     }
     preview.classList.remove('is-loading');
     // the drawing escapes everything it is given (the name above all)
-    preview.innerHTML = template.ringCardSvg(shown(card), { faces: template.PAGE_FACES, art: template.CARD_ART_SMALL, id: 'account-card' });
+    preview.innerHTML = template.ringCardSvg(shown(card), { faces: template.PAGE_FACES, art: template.CARD_ART_SMALL, id: root.dataset.cardId || 'account-card' });
   };
 
   const drawControls = () => {

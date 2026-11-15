@@ -6,7 +6,7 @@ import Hud from './Hud.astro';
 import LangSwitch from './LangSwitch.astro';
 import ThemeSwitch from './ThemeSwitch.astro';
 import Dial from './Dial.astro';
-import OrbitMenu from './OrbitMenu.astro';
+import NavSheet from './NavSheet.astro';
 import Account from './Account.astro';
 import SpaceHolo from './holo/SpaceHolo.astro';
 import AssistantHolo from './holo/AssistantHolo.astro';
@@ -52,7 +52,7 @@ const isLong = (title: string) => title.length > 10;
 
   <Hud t={t} />
   <Dial t={t} />
-  <OrbitMenu t={t} />
+  <NavSheet t={t} />
   <Account t={t} />
 
   <div class="hud-foot">

@@ -21,8 +21,13 @@ export interface Dict {
     assistant: string;
     harness: string;
     openSource: string;
+    /** the narrow screens' menu (the HUD's links, the languages and the theme): its button's words, open and closed, and its name */
+    menu: string;
+    close: string;
     openMenu: string;
     closeMenu: string;
+    /** the ring at the HUD's end, which opens the console */
+    console: string;
     langSwitch: string;
     langSwitchLabel: string;
     skip: string;
@@ -41,8 +46,10 @@ export interface Dict {
   account: {
     signIn: string;
     signOut: string;
-    /** the account button's name once signed in */
+    /** the account's name in the HUD once signed in */
     label: string;
+    /** the signed-in view's way to the console */
+    console: string;
     title: string;
     lede: string;
     github: string;
@@ -180,13 +187,15 @@ export interface Dict {
     dark: string;
     system: string;
   };
+  /**
+   * The ring's parts and the links beyond the site. `label` names the narrow
+   * screens' menu; `destinations` the footer's links to the pages.
+   */
   menu: {
     label: string;
     destinations: string;
-    elsewhere: string;
     items: { key: string; name: string; desc: string; status: Status }[];
     external: { key: string; name: string; desc: string }[];
-    chartLabel: string;
   };
 }
 
@@ -206,8 +215,11 @@ const en: Dict = {
     assistant: 'Assistant',
     harness: 'Harness',
     openSource: 'Open source',
+    menu: 'Menu',
+    close: 'Close',
     openMenu: 'Open menu',
     closeMenu: 'Close menu',
+    console: 'Console',
     langSwitch: '中文',
     langSwitchLabel: '切换到中文',
     skip: 'Skip intro',
@@ -229,6 +241,7 @@ const en: Dict = {
     signIn: 'Sign in',
     signOut: 'Sign out',
     label: 'Your account',
+    console: 'Open console',
     title: 'Sign in to SpaceRing',
     lede: 'Your ring number is engraved on the band.',
     github: 'Continue with GitHub',
@@ -420,7 +433,6 @@ const en: Dict = {
   menu: {
     label: 'Site menu',
     destinations: 'Products',
-    elsewhere: 'Elsewhere',
     items: [
       { key: 'space', name: 'Space', desc: 'Your files, notes and memories, encrypted', status: 'planned' },
       { key: 'assistant', name: 'Personal assistant', desc: 'Always on, working while you are away', status: 'planned' },
@@ -433,7 +445,6 @@ const en: Dict = {
       { key: 'docs', name: 'Codeg docs', desc: 'docs.codeg.app' },
       { key: 'github', name: 'GitHub', desc: 'github.com/spacering-net' },
     ],
-    chartLabel: 'Orbit chart: the SpaceRing mark at the centre, each product on its own orbit. Codeg and Harness, the live ones, are lit.',
   },
 };
 
@@ -453,8 +464,11 @@ const zh: Dict = {
     assistant: '助手',
     harness: '驾驭',
     openSource: '开源',
+    menu: '菜单',
+    close: '关闭',
     openMenu: '打开菜单',
     closeMenu: '关闭菜单',
+    console: '控制台',
     langSwitch: 'EN',
     langSwitchLabel: 'Switch to English',
     skip: '跳过开场',
@@ -473,6 +487,7 @@ const zh: Dict = {
     signIn: '登录',
     signOut: '退出登录',
     label: '你的账号',
+    console: '打开控制台',
     title: '登录 SpaceRing',
     lede: '登录后，你的编号会刻在戒身上。',
     github: '使用 GitHub 登录',
@@ -664,7 +679,6 @@ const zh: Dict = {
   menu: {
     label: '站点菜单',
     destinations: '产品',
-    elsewhere: '更多',
     items: [
       { key: 'space', name: '空间', desc: '加密存放文件、笔记与记忆', status: 'planned' },
       { key: 'assistant', name: '个人助手', desc: '全天候在线，你不在时也在工作', status: 'planned' },
@@ -677,7 +691,6 @@ const zh: Dict = {
       { key: 'docs', name: 'Codeg 文档', desc: 'docs.codeg.app' },
       { key: 'github', name: 'GitHub', desc: 'github.com/spacering-net' },
     ],
-    chartLabel: '轨道图：SpaceRing 标志居中，每个产品各占一条轨道，已上线的 Codeg 和 Harness 被点亮',
   },
 };
 

@@ -2,6 +2,7 @@ import { handle } from '@astrojs/cloudflare/handler';
 import { Hono, type Context } from 'hono';
 import { getAuth } from './auth';
 import { clientRoutes } from './clients/routes';
+import { consoleRoutes } from './console/routes';
 import { authorizationPage } from './clients/pages';
 import { serveAvatar } from './avatars';
 import { withRequest } from './context';
@@ -36,7 +37,14 @@ async function sessionUser(c: Context<{ Bindings: Env }>): Promise<SessionUser |
   for (const cookie of headers.getSetCookie()) c.header('Set-Cookie', cookie, { append: true });
   const user = session?.user;
   if (!user || typeof user.number !== 'number') return null;
-  return { id: user.id, number: user.number, name: user.name, image: user.image ?? null, createdAt: new Date(user.createdAt).toISOString() };
+  return {
+    id: user.id,
+    number: user.number,
+    name: user.name,
+    image: user.image ?? null,
+    createdAt: new Date(user.createdAt).toISOString(),
+    sessionId: session.session.id,
+  };
 }
 
 /** Who is signed in: what the page needs to engrave the band, or 401. */
@@ -51,6 +59,7 @@ api.get('/avatars/*', (c) => serveAvatar(c.env, c.req.path.slice('/api/avatars/'
 
 api.route('/', ringRoutes(sessionUser));
 api.route('/', clientRoutes(sessionUser));
+api.route('/', consoleRoutes(sessionUser));
 
 api.route('/harness/v1', harnessApi);
 

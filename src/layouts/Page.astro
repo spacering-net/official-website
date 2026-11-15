@@ -1,17 +1,17 @@
 ---
 /**
  * Every page but the homepage: Harness; Space, the assistant and open source
- * (layouts/Product.astro); the policies and the ring cards. The same HUD,
- * orbit menu and account dialog as the homepage, around the page's own
- * content, with no scene and no intro. Each page has a twin in the other
- * language.
+ * (layouts/Product.astro); the policies, the ring cards and the console. The
+ * same HUD, narrow screens' menu and account dialog as the homepage, around
+ * the page's own content, with no scene and no intro. Each page has a twin in
+ * the other language.
  */
 import '@fontsource-variable/jost';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import '../styles/site.css';
 import Hud from '../components/Hud.astro';
-import OrbitMenu from '../components/OrbitMenu.astro';
+import NavSheet from '../components/NavSheet.astro';
 import Account from '../components/Account.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 // a file of its own, never inlined: these pages allow scripts from this site only
@@ -31,8 +31,10 @@ interface Props {
   current?: keyof typeof PAGES;
   /** the picture for link previews, when the page has its own (a ring card); else the site's */
   image?: { url: string; width: number; height: number; alt: string };
+  /** without the site's footer: the console ends with its own line */
+  bare?: boolean;
 }
-const { lang, title, description, paths, noindex, current, image } = Astro.props;
+const { lang, title, description, paths, noindex, current, image, bare } = Astro.props;
 const t = dicts[lang];
 const other = lang === 'en' ? 'zh' : 'en';
 const canonical = `${SITE.url}${paths[lang]}`;
@@ -53,6 +55,8 @@ const skip = lang === 'en' ? 'Skip to content' : '跳到正文';
     <meta name="color-scheme" content="dark" />
     {/* light or dark before the first paint; a file, as these pages allow no inline scripts */}
     <script is:inline src={themeScript}></script>
+    {/* nothing is drawn before the HUD shows who is signed in (Hud.astro) */}
+    <link rel="expect" href="#hud-end" blocking="render" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
@@ -74,18 +78,18 @@ const skip = lang === 'en' ? 'Skip to content' : '跳到正文';
       ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 0.28s; }
     </style>
     {/* without scripts the menu and the account dialog cannot open, so their buttons go (over the buttons' own display); the HUD's links still work */}
-    <noscript><style>[data-menu-open], [data-account-open], [data-account-card] { display: none !important; }</style></noscript>
+    <noscript><style>[data-nav-toggle], [data-account-open], [data-account-card] { display: none !important; }</style></noscript>
     <slot name="head" />
   </head>
   <body>
     <a class="skip-link" href="#main">{skip}</a>
     <Hud t={t} page={{ current }} />
-    <OrbitMenu t={t} page={{ alternate: paths[other] }} />
+    <NavSheet t={t} page={{ current, alternate: paths[other] }} />
     <Account t={t} />
     <main id="main" tabindex="-1">
       <slot />
     </main>
-    <SiteFooter t={t} alternate={paths[other]} />
+    {!bare && <SiteFooter t={t} alternate={paths[other]} />}
     <script>
       import '../client/page';
     </script>

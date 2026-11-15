@@ -1,0 +1,10 @@
+---
+import Console from '../../components/console/Console.astro';
+import { CONSOLE_SECTIONS, type ConsoleSection } from '../../i18n/console';
+
+export function getStaticPaths() {
+  return CONSOLE_SECTIONS.filter((section) => section !== 'overview').map((section) => ({ params: { section } }));
+}
+const section = Astro.params.section as ConsoleSection;
+---
+<Console lang="en" section={section} />

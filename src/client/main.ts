@@ -2,7 +2,7 @@ import Lenis from 'lenis';
 import { Stage, type FrameInput, type RingLayout, type RingPose, type StageState } from './scene/stage';
 import { Chapters } from './chapters';
 import { Intro } from './intro';
-import { initMenu } from './menu';
+import { initNavSheet } from './nav-sheet';
 import { initAccount } from './account';
 import { initScramble } from './scramble';
 import { initNavRail } from './navrail';
@@ -26,7 +26,6 @@ interface Handoff {
   /** scene clock, in seconds */
   time: number;
   chapter: number;
-  menu: boolean;
   /** activated from the keyboard, so focus should land on the switch again */
   keyboard: boolean;
   mouse: { x: number; y: number; active: boolean };
@@ -141,7 +140,7 @@ function boot() {
     endTrip();
     // Starting a scroll during the intro: let the scroller run now, because the
     // intro's hand-over would otherwise reset it halfway (see onDone).
-    if (!intro.done && !menu.isOpen()) lenis.start();
+    if (!intro.done && !sheet.isOpen()) lenis.start();
     if (jump) {
       trip = { to: i, s0: s, from: stage?.ringPose() ?? null };
       chapters.travelTo = i;
@@ -166,20 +165,14 @@ function boot() {
   };
 
   // ------------------------------------------------------------- interaction
-  const menu = initMenu({ scroll: lenis, goTo, reduceMotion });
-  // Light or dark: the scene follows the page. Switched from the menu, the
-  // still behind it is taken again, in the new light.
-  let recapture = false;
-  if (!capture)
-    initTheme((light) => {
-      stage?.setDay(light);
-      recapture = true;
-    });
+  const sheet = initNavSheet({ scroll: lenis, goTo, reduceMotion });
+  // Light or dark: the scene follows the page.
+  if (!capture) initTheme((light) => stage?.setDay(light));
   initScramble(document, root.dataset.scramble || '');
   initAccount({
     scroll: lenis,
-    menu,
-    scrollable: () => intro.done && !menu.isOpen(),
+    sheet,
+    scrollable: () => intro.done && !sheet.isOpen(),
     onRing: (number, fresh) => stage?.setInscription(number === null ? null : `SRN ${number}`, fresh && !reduceMotion),
   });
 
@@ -188,7 +181,7 @@ function boot() {
     chapters.enabled = true;
   };
   intro.onDone = () => {
-    if (!menu.isOpen()) lenis.start();
+    if (!sheet.isOpen()) lenis.start();
     try {
       sessionStorage.setItem('sr-intro', '1');
     } catch {
@@ -205,7 +198,7 @@ function boot() {
 
   document.addEventListener('click', (e) => {
     const link = (e.target as Element | null)?.closest<HTMLElement>('[data-goto]');
-    if (!link || link.closest('[data-menu]')) return;
+    if (!link || link.closest('[data-nav-sheet]')) return;
     e.preventDefault();
     if (!intro.done) intro.skip();
     const index = Number(link.dataset.goto);
@@ -225,7 +218,7 @@ function boot() {
   window.addEventListener('touchstart', skipOnInput, { passive: true });
 
   window.addEventListener('keydown', (e) => {
-    if (menu.isOpen() || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (sheet.isOpen() || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
     const target = e.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"], dialog')) return;
     const current = trip ? trip.to : Math.round(lenis.scroll / chapters.unit);
@@ -305,7 +298,6 @@ function boot() {
         at: Date.now(),
         time: (now - bootTime) / 1000,
         chapter: trip ? trip.to : clamp(Math.round(lenis.scroll / chapters.unit), 0, chapters.count - 1),
-        menu: menu.isOpen(),
         keyboard: e.detail === 0,
         mouse: { x: mouse.x, y: mouse.y, active: now - lastMove < 2500 },
         stage: stage?.state(),
@@ -329,29 +321,24 @@ function boot() {
   });
 
   // ------------------------------------------------------- to the other pages
-  // At their top the other pages' HUD is laid out as this one (and as the
-  // menu's top bar), so it holds still while the page cross-fades: the ends
-  // on show take the names theirs have (site.css) and pair up with them. Not
-  // into the other language's homepage, which takes the scene over, nor from
-  // under the intro or a dialog.
-  const ends = (bar: string, end: string) =>
-    [
-      ['site-brand', document.querySelector<HTMLElement>(`${bar} > .brand`)],
-      ['site-hud-end', document.querySelector<HTMLElement>(`${bar} > ${end}`)],
-    ] as const;
-  const hudEnds = ends('.hud', '.hud__right');
-  const menuEnds = ends('.orbit-menu__top', '.orbit-menu__actions');
-  const nameEnds = (shown: typeof hudEnds | null) =>
-    [hudEnds, menuEnds].forEach((set) => set.forEach(([name, el]) => el?.style.setProperty('view-transition-name', set === shown ? name : null)));
+  // At their top the other pages' HUD is laid out as this one, so it holds
+  // still while the page cross-fades: its ends take the names theirs have
+  // (site.css) and pair up with them. Not into the other language's
+  // homepage, which takes the scene over, nor from under the intro or a dialog.
+  const hudEnds = [
+    ['site-brand', document.querySelector<HTMLElement>('.hud > .brand')],
+    ['site-hud-end', document.querySelector<HTMLElement>('.hud > .hud__right')],
+  ] as const;
+  const nameEnds = (on: boolean) => hudEnds.forEach(([name, el]) => el?.style.setProperty('view-transition-name', on ? name : null));
   window.addEventListener('pageswap', (e) => {
     const to = e.activation?.entry.url;
     if (!e.viewTransition || !to || /^\/(?:zh\/)?(?:index\.html)?$/.test(new URL(to).pathname)) return;
     if (root.classList.contains('is-intro') || document.querySelector('dialog[open]')) return;
-    nameEnds(menu.isOpen() ? menuEnds : hudEnds);
+    nameEnds(true);
   });
   // back from the history: the next page change pairs them only if it leads there too
   window.addEventListener('pageshow', (e) => {
-    if (e.persisted) nameEnds(null);
+    if (e.persisted) nameEnds(false);
   });
 
   // ------------------------------------------------------------------ layout
@@ -394,15 +381,9 @@ function boot() {
     mouse.x = handoff.mouse.x;
     mouse.y = handoff.mouse.y;
     if (handoff.mouse.active) lastMove = performance.now();
-    // Focus goes back where it was: the switch for keyboard users, otherwise
-    // the menu itself (if it was open) so Tab and Escape keep working.
+    // Focus goes back to the switch for keyboard users.
     let refocus: HTMLElement | null = null;
-    if (handoff.menu) {
-      const menuEl = document.querySelector<HTMLElement>('[data-menu]');
-      menuEl?.setAttribute('tabindex', '-1');
-      refocus = (handoff.keyboard ? menuEl?.querySelector<HTMLElement>('[data-lang-switch]') : menuEl) ?? null;
-      menu.openNow(refocus);
-    } else if (handoff.keyboard) {
+    if (handoff.keyboard) {
       refocus = document.querySelector<HTMLElement>('.hud-foot [data-lang-switch]');
       refocus?.focus({ preventScroll: true });
     }
@@ -440,7 +421,7 @@ function boot() {
   });
 
   const snap = (now: number) => {
-    if (!intro.done || menu.isOpen() || trip || lenis.isScrolling || now - lastScrollAt < 170) return;
+    if (!intro.done || sheet.isOpen() || trip || lenis.isScrolling || now - lastScrollAt < 170) return;
     const s = lenis.scroll / chapters.unit;
     const base = Math.floor(s);
     const frac = s - base;
@@ -454,9 +435,7 @@ function boot() {
   if (!intro.done && intro.t === 0 && !handoff) window.scrollTo(0, 0);
 
   let last = performance.now();
-  // While the menu covers the page the scene stops drawing. The frame drawn as
-  // the menu opens becomes the blurred still behind it.
-  let menuWasOpen = false;
+  // While the narrow screens' menu covers the page the scene stops drawing.
   let sceneHidden = false;
   let lastFrame: FrameInput | null = null;
 
@@ -502,12 +481,10 @@ function boot() {
     const travel = trip?.from
       ? { from: trip.from, to: trip.to, t: trip.to === trip.s0 ? 1 : clamp((s - trip.s0) / (trip.to - trip.s0)) }
       : null;
-    const opened = menu.isOpen() && !menuWasOpen;
-    menuWasOpen = menu.isOpen();
-    const hidden = menu.covers();
-    if (stage && (!hidden || opened || recapture)) {
-      // the menu's opening and closing frames say nothing about the scene's own cost
-      if (opened || sceneHidden) stage.resetFrameStats();
+    const hidden = sheet.covers();
+    if (stage && !hidden) {
+      // the first frames after a pause say nothing about the scene's own cost
+      if (sceneHidden) stage.resetFrameStats();
       lastFrame = {
         dt,
         time: (now - bootTime) / 1000,
@@ -519,9 +496,7 @@ function boot() {
         reduceMotion,
       };
       stage.update(lastFrame);
-      if (opened || (recapture && menu.isOpen())) menu.capture(stage.canvas);
     }
-    recapture = false;
     sceneHidden = hidden;
     if (intro.done || chapters.enabled) setActive(trip ? trip.to : clamp(Math.round(s), 0, chapters.count - 1));
     snap(now);
