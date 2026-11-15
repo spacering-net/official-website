@@ -2,7 +2,11 @@
 /**
  * The last line of a page's foot: the languages and the theme on the left,
  * the small print on the right. The same at the foot of every page but the
- * homepage (SiteFooter.astro) and of the orbit menu, the homepage's included.
+ * homepage (SiteFooter.astro), of the narrow screens' menu (NavSheet.astro)
+ * and of the console. Where it has too little room for one line (by its own
+ * width, not the window's: the console's column is narrower than the page),
+ * the small print goes under the rest, from the left, its two links kept
+ * together on a line of their own if the whole does not fit.
  */
 import LangSwitch from './LangSwitch.astro';
 import ThemeSwitch from './ThemeSwitch.astro';
@@ -23,13 +27,16 @@ const { t, alternate, class: className } = Astro.props;
   </div>
   <p class="foot-line__legal">
     <span>© {new Date().getFullYear()} SpaceRing · spacering.net</span>
-    <a href={`${t.path}privacy/`}>{t.open.privacy}</a>
-    <a href={`${t.path}terms/`}>{t.open.terms}</a>
+    <span class="foot-line__links">
+      <a href={`${t.path}privacy/`}>{t.open.privacy}</a>
+      <a href={`${t.path}terms/`}>{t.open.terms}</a>
+    </span>
   </p>
 </div>
 
 <style>
   .foot-line {
+    container: foot-line / inline-size;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -56,6 +63,12 @@ const { t, alternate, class: className } = Astro.props;
     color: var(--graphite);
   }
 
+  .foot-line__links {
+    display: inline-flex;
+    gap: var(--s-5);
+    white-space: nowrap;
+  }
+
   .foot-line__legal a {
     transition: color 0.3s;
   }
@@ -64,10 +77,10 @@ const { t, alternate, class: className } = Astro.props;
     color: var(--corona);
   }
 
-  @media (max-width: 760px) {
-    .foot-line {
-      flex-direction: column;
-      align-items: flex-start;
+  @container foot-line (max-width: 620px) {
+    .foot-line__prefs,
+    .foot-line__legal {
+      flex-basis: 100%;
     }
 
     .foot-line__legal {
