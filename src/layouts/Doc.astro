@@ -17,7 +17,7 @@ interface Props {
 const { lang, title, description, paths, updated } = Astro.props;
 const label = lang === 'en' ? 'Last updated' : '最后更新';
 ---
-<Page lang={lang} title={`${title} · SpaceRing`} description={description} paths={paths}>
+<Page lang={lang} title={`${title} · SRN`} description={description} paths={paths}>
   <article class="wrap doc">
     <h1>{title}</h1>
     <p class="updated">{label}: {updated}</p>
