@@ -26,7 +26,6 @@ const c = a.card;
   <div class="account__view" data-account-view="out">
     <Logo class="account__mark" />
     <h2 class="account__title">{a.title}</h2>
-    <p class="account__lede">{a.lede}</p>
     <p class="account__error" role="alert" data-account-error hidden>{a.failed}</p>
     <div class="account__providers">
       <button class="btn btn--primary account__provider" type="button" data-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>

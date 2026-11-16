@@ -51,7 +51,6 @@ export interface Dict {
     /** the signed-in view's way to the console */
     console: string;
     title: string;
-    lede: string;
     github: string;
     google: string;
     /** shown under the providers when not empty */
@@ -242,8 +241,7 @@ const en: Dict = {
     signOut: 'Sign out',
     label: 'Your account',
     console: 'Open console',
-    title: 'Sign in to SpaceRing',
-    lede: 'Your ring number is engraved on the band.',
+    title: 'Sign in to SRN',
     github: 'Continue with GitHub',
     google: 'Continue with Google',
     note: '',
@@ -488,8 +486,7 @@ const zh: Dict = {
     signOut: '退出登录',
     label: '你的账号',
     console: '打开控制台',
-    title: '登录 SpaceRing',
-    lede: '登录后，你的编号会刻在戒身上。',
+    title: '登录 SRN',
     github: '使用 GitHub 登录',
     google: '使用 Google 登录',
     note: '中国大陆网络下可能无法使用 Google 登录。',
