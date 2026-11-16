@@ -33,7 +33,7 @@ export interface ConsoleDict {
   notDone: string;
   /** the account signed in here changed while the page was open */
   changed: string;
-  gate: { title: string; lede: string };
+  gate: { title: string };
   /** the holder's picture and name, changed in a dialog opened from the overview's heading or the side ({max}: the longest name) */
   profile: {
     edit: string;
@@ -127,8 +127,7 @@ const en: ConsoleDict = {
   notDone: 'That did not go through. Please try again.',
   changed: 'The account signed in here changed. This is the one signed in now.',
   gate: {
-    title: 'Sign in to open your console',
-    lede: 'Your profile, the apps connected to your ring, where you are signed in, your sign-in log and your ring card, in one place.',
+    title: 'Sign in to SRN',
   },
   profile: {
     edit: 'Edit profile',
@@ -249,8 +248,7 @@ const zh: ConsoleDict = {
   notDone: '没有成功，请再试一次。',
   changed: '这里登录的账号已变化，现在显示的是当前登录的账号。',
   gate: {
-    title: '登录后打开控制台',
-    lede: '个人资料、连接到戒指的应用、登录中的浏览器、登录日志和戒指卡片，都在这里管理。',
+    title: '登录 SRN',
   },
   profile: {
     edit: '编辑资料',

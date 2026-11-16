@@ -1112,8 +1112,8 @@ html:not(.has-account) .console[data-state='loading'] .console__main > :not(.con
 
 .gate__mark {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 72px;
+  height: 72px;
   margin-top: auto;
   fill: var(--corona);
 }
@@ -1123,13 +1123,6 @@ html:not(.has-account) .console[data-state='loading'] .console__main > :not(.con
   font-size: clamp(26px, 3vw, 34px);
   font-weight: 300;
   line-height: 1.2;
-}
-
-.gate__lede {
-  max-width: 30rem;
-  text-wrap: balance;
-  margin-top: var(--s-3);
-  color: var(--corona-64);
 }
 
 .gate__error {

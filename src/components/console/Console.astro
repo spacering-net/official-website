@@ -259,7 +259,6 @@ const isPlanned = PLANNED_SECTIONS.includes(section);
     <section class="gate" data-console-gate hidden aria-labelledby="console-gate">
       <Logo class="gate__mark" />
       <h1 class="gate__title" id="console-gate">{c.gate.title}</h1>
-      <p class="gate__lede">{c.gate.lede}</p>
       <p class="gate__error" role="alert" data-gate-error hidden>{a.failed}</p>
       <div class="gate__providers">
         <button class="btn btn--primary" type="button" data-gate-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>
