@@ -323,8 +323,6 @@ function start(root: HTMLElement) {
   function showAccount(data: AccountData) {
     const email = $('[data-email]');
     if (email) email.textContent = data.user.email;
-    const methods = $('[data-methods]');
-    if (methods) methods.replaceChildren(...data.providers.map((p) => h('span', { class: 'profile__method' }, icon(p.provider), PROVIDERS[p.provider] ?? p.provider)));
     const tile = (key: string, text: string) => {
       const el = $(`[data-tile="${key}"]`);
       if (el) el.textContent = text;

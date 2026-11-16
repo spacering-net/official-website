@@ -49,7 +49,6 @@ export interface ConsoleDict {
     problems: { empty: string; long: string; image: string; imageSize: string; limited: string };
   };
   overview: {
-    methods: string;
     clients: { label: string; value: (n: number) => string; none: string; hint: string };
     sessions: { label: string; value: (n: number) => string; hint: string };
     lastSignIn: { label: string; none: string };
@@ -151,7 +150,6 @@ const en: ConsoleDict = {
     },
   },
   overview: {
-    methods: 'Signs in with',
     clients: { label: 'Clients', value: (n) => (n === 1 ? '1 connected' : `${n} connected`), none: 'None yet', hint: 'Codeg on your devices, and the Codeg Web services you use' },
     sessions: { label: 'Signed-in browsers', value: (n) => String(n), hint: 'This one included' },
     lastSignIn: { label: 'Latest sign-in', none: 'None recorded' },
@@ -274,7 +272,6 @@ const zh: ConsoleDict = {
     },
   },
   overview: {
-    methods: '登录方式',
     clients: { label: '客户端', value: (n) => `${n} 个已连接`, none: '暂无', hint: '你设备上的 Codeg，以及你使用的 Codeg Web 服务' },
     sessions: { label: '登录中的浏览器', value: (n) => String(n), hint: '包括当前这一个' },
     lastSignIn: { label: '最近登录', none: '暂无记录' },

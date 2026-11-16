@@ -724,7 +724,7 @@ html:not(.has-account) .console[data-state='loading'] .console__main > :not(.con
 
 /* --------------------------------------------------------------- overview */
 
-/* The heading: the face, the name with the email and the ways in under it,
+/* The heading: the face, the name with the email under it,
    and the button that opens the profile (as the face does). */
 .profile {
   display: grid;
@@ -748,45 +748,13 @@ html:not(.has-account) .console[data-state='loading'] .console__main > :not(.con
   margin-top: 0;
 }
 
-/* (each keeps its line before the account arrives, so nothing below moves) */
+/* (keeps its line before the account arrives, so nothing below moves) */
 .profile__email {
   min-height: 1.6em;
   margin-top: var(--s-2);
   font-size: 15.5px;
   color: var(--corona-64);
   overflow-wrap: anywhere;
-}
-
-.profile__methods {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--s-2) var(--s-4);
-  min-height: 1.6em;
-  margin-top: var(--s-2);
-  font-size: 14px;
-  color: var(--corona-80);
-}
-
-.profile__label {
-  color: var(--graphite);
-}
-
-.profile__list {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: var(--s-2) var(--s-4);
-}
-
-.profile__method {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.profile__method .btn__icon {
-  width: 15px;
-  height: 15px;
 }
 
 .profile__end {
@@ -1458,8 +1426,8 @@ html:not(.has-account) .console[data-state='loading'] .console__main > :not(.con
     display: none;
   }
 
-  /* The heading, one column down the middle: the face, the name, how to
-     reach and sign in, and the button under them (Saved under that). */
+  /* The heading, one column down the middle: the face, the name, the email,
+     and the button under them (Saved under that). */
   .profile {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -1479,12 +1447,6 @@ html:not(.has-account) .console[data-state='loading'] .console__main > :not(.con
   .profile__email {
     margin-top: var(--s-1);
     font-size: 14.5px;
-  }
-
-  .profile__methods {
-    justify-content: center;
-    margin-top: var(--s-1);
-    font-size: 13.5px;
   }
 
   .profile__end {

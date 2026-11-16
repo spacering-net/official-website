@@ -500,12 +500,12 @@ const DIALOG = { x: 560, y: 230, width: 480, height: 540 };
       forged: /锻造/.test(head.textContent),
       side: document.querySelector('.console__side [data-account-number]').textContent,
       email: head.querySelector('[data-email]').textContent,
-      methods: head.querySelector('[data-methods]').textContent,
+      methods: !!head.querySelector('.profile__methods, [data-methods]'),
       edit: getComputedStyle(head.querySelector('.profile__edit')).visibility,
     };
   });
   report(!view.number && !view.srn && !view.forged && view.side === '10000', 'overview: no ring number or forging date in the heading; the side keeps the number', JSON.stringify(view));
-  report(view.email === 'xintaofei@example.com' && view.methods === 'GitHubGoogle' && view.edit === 'visible', 'overview: the email and the ways in under the name, and Edit profile', JSON.stringify(view));
+  report(view.email === 'xintaofei@example.com' && !view.methods && view.edit === 'visible', 'overview: the email under the name, no sign-in methods, and Edit profile', JSON.stringify(view));
   // the side: the sections at the top, who is signed in at the foot, level with the page's last line
   const side = await page.evaluate(() => {
     const box = (selector) => document.querySelector(selector).getBoundingClientRect();
