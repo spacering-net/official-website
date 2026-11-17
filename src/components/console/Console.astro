@@ -264,7 +264,6 @@ const isPlanned = PLANNED_SECTIONS.includes(section);
         <button class="btn btn--primary" type="button" data-gate-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>
         <button class="btn btn--ghost" type="button" data-gate-provider="google" data-busy={a.redirecting}><Icon name="google" /><span>{a.google}</span></button>
       </div>
-      {a.note && <p class="gate__note">{a.note}</p>}
       <p class="gate__note">{a.consent[0]}<a href={`${t.path}terms/`}>{a.consent[1]}</a>{a.consent[2]}<a href={`${t.path}privacy/`}>{a.consent[3]}</a>{a.consent[4]}</p>
       <FootLine t={t} alternate={paths[other]} class="gate__foot" />
     </section>

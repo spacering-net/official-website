@@ -53,8 +53,6 @@ export interface Dict {
     title: string;
     github: string;
     google: string;
-    /** shown under the providers when not empty */
-    note: string;
     /** before the terms link, the terms, between, the privacy policy, after */
     consent: [string, string, string, string, string];
     failed: string;
@@ -244,7 +242,6 @@ const en: Dict = {
     title: 'Sign in to SRN',
     github: 'Continue with GitHub',
     google: 'Continue with Google',
-    note: '',
     consent: ['By continuing you agree to the ', 'Terms of Service', ' and the ', 'Privacy Policy', '.'],
     failed: 'Sign-in did not finish. Please try again.',
     signOutFailed: 'Sign-out did not finish. Please try again.',
@@ -489,7 +486,6 @@ const zh: Dict = {
     title: '登录 SRN',
     github: '使用 GitHub 登录',
     google: '使用 Google 登录',
-    note: '中国大陆网络下可能无法使用 Google 登录。',
     consent: ['继续即表示你同意', '《用户协议》', '和', '《隐私政策》', '。'],
     failed: '登录没有完成，请再试一次。',
     signOutFailed: '退出没有完成，请再试一次。',

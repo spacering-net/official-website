@@ -597,19 +597,11 @@ ul {
   cursor: progress;
 }
 
-.account__note,
 .account__consent {
+  margin-top: var(--s-5);
   font-size: 12px;
   line-height: 1.6;
   color: var(--graphite);
-}
-
-.account__note {
-  margin-top: var(--s-3);
-}
-
-.account__consent {
-  margin-top: var(--s-5);
 }
 
 .account__consent a {

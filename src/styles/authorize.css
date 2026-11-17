@@ -1,11 +1,10 @@
 /* ==========================================================================
    Connecting Codeg to an SRN account (components/Authorize.astro,
-   client/authorize.ts). One sheet in the middle of the window: what is
-   asking and what it may read on the left, the decision on the right, on a
-   raised pane as the site's sign-in dialog is. The line between SpaceRing
-   and Codeg shows where the request stands. Every outcome but a pending
-   request is one centred column. The state is the root's data-state:
-   loading, pending, notice or done.
+   client/authorize.ts). One narrow column in the middle of the window: the
+   connection, the title, then the decision. The line between SpaceRing and
+   Codeg shows where the request stands. An outcome keeps the column and
+   puts its words and next step where the decision was. The state is the
+   root's data-state: loading, pending, notice or done.
    ========================================================================== */
 
 .authz {
@@ -31,29 +30,17 @@
   flex: 1;
   display: grid;
   place-items: center;
-  padding-block: var(--s-3) var(--s-5);
+  padding-block: var(--s-5) var(--s-7);
 }
 
 .authz__sheet {
-  --pad: 48px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 384px);
-  grid-template-rows: auto auto 1fr;
-  grid-template-areas:
-    'intro action'
-    'details action'
-    'notes action';
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  max-width: 1040px;
-  border: 1px solid var(--hairline);
-  border-radius: 28px;
-  overflow: clip;
+  max-width: 380px;
 }
 
 /* running text: no word left alone on its last line */
-.note,
-.authz__after,
-.authz__small,
 .authz__error {
   text-wrap: pretty;
 }
@@ -61,38 +48,44 @@
 /* ----------------------------------------------------------------- intro */
 
 .authz__intro {
-  grid-area: intro;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   min-width: 0;
-  padding: var(--pad) var(--pad) 0;
+  text-align: center;
 }
 
 .authz__title {
-  max-width: 15em;
   margin-top: var(--s-6);
-  font-size: clamp(28px, 2.2vw + 10px, 40px);
+  font-size: clamp(26px, 1vw + 18px, 32px);
   font-weight: 300;
-  line-height: 1.18;
+  line-height: 1.25;
   letter-spacing: -0.012em;
   text-wrap: balance;
 }
 
 html:lang(zh-CN) .authz__title {
   letter-spacing: 0.01em;
-  line-height: 1.3;
+  line-height: 1.35;
 }
 
-/* a title in phrases, each kept whole: it breaks between them if at all */
-.authz__title > span {
-  display: inline-block;
+/* the request's own title stays on one line; an outcome's may take two */
+:is([data-state='loading'], [data-state='pending']) .authz__title {
+  white-space: nowrap;
 }
 
 .authz__lede {
-  max-width: 32em;
+  max-width: 26em;
   margin-top: var(--s-4);
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.6;
   color: var(--corona-64);
   text-wrap: balance;
+}
+
+/* a request on show says nothing under its title */
+.authz__lede:empty {
+  display: none;
 }
 
 /* its sentences and clauses, each kept whole where it fits (client/authorize.ts) */
@@ -100,9 +93,55 @@ html:lang(zh-CN) .authz__title {
   display: inline-block;
 }
 
+/* a Codeg Web's address, under the title: the one way to tell which server
+   is asking, whole, breaking after a dot when it must */
+.origin {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--s-3);
+  max-width: 100%;
+  margin-top: var(--s-4);
+  font-size: 13.5px;
+  line-height: 22px;
+  color: var(--graphite);
+  word-break: keep-all;
+}
+
+.authz:not([data-state='pending']) .origin {
+  display: none;
+}
+
+.origin__icon {
+  flex: none;
+  width: 15px;
+  height: 22px;
+  padding-block: 3.5px;
+  color: var(--corona-64);
+}
+
+.origin > span {
+  min-width: 0;
+}
+
+.origin__host {
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  color: var(--corona);
+}
+
+/* each label whole on a line (client/authorize.ts), unless it is longer than one */
+.origin__host > span {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
 .authz__next {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--s-3);
   margin-top: var(--s-6);
 }
@@ -120,10 +159,10 @@ html:lang(zh-CN) .authz__title {
 
 /* SpaceRing's ring and Codeg's mark, each in its socket, and the line between */
 .link {
-  --end: 56px;
+  --end: 52px;
   display: flex;
   align-items: center;
-  width: min(100%, 252px);
+  width: min(100%, 228px);
 }
 
 .link__end {
@@ -300,143 +339,13 @@ html:lang(zh-CN) .authz__title {
   mask: linear-gradient(90deg, #000 0 34%, transparent 34% 66%, #000 66%);
 }
 
-/* -------------------------------------------------------------- details */
+/* --------------------------------------------------------------- action */
 
-.authz__details {
-  grid-area: details;
+.authz__action {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
   margin-top: var(--s-6);
-  padding-inline: var(--pad);
-}
-
-.facts {
-  margin: 0;
-  border-bottom: 1px solid var(--hairline);
-}
-
-.fact {
-  display: grid;
-  grid-template-columns: 8em minmax(0, 1fr);
-  gap: var(--s-2) var(--s-5);
-  padding: var(--s-4) 0;
-  border-top: 1px solid var(--hairline);
-}
-
-.fact__label {
-  /* level with the first line of the value beside it */
-  padding-top: 5px;
-  font-family: var(--f-mono);
-  font-size: 10.5px;
-  line-height: 16px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--graphite);
-}
-
-html:lang(zh-CN) .fact {
-  grid-template-columns: 6.5em minmax(0, 1fr);
-}
-
-html:lang(zh-CN) .fact__label {
-  padding-top: 3px;
-  font-size: 12px;
-  line-height: 20px;
-  letter-spacing: 0.16em;
-}
-
-.fact__value {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s-3);
-  min-width: 0;
-  margin: 0;
-  font-size: 15px;
-  line-height: 26px;
-  color: var(--corona);
-}
-
-.fact__value--off {
-  color: var(--corona-64);
-}
-
-.fact__time {
-  font-family: var(--f-mono);
-  font-size: 13.5px;
-  letter-spacing: 0.04em;
-  color: var(--corona-80);
-}
-
-/* who is asking: Codeg on this computer, or a Codeg Web at its address */
-.client {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s-3);
-  min-width: 0;
-}
-
-.client__icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 20px;
-  height: 26px;
-  color: var(--corona-64);
-}
-
-.client__icon svg {
-  width: 20px;
-  height: 20px;
-}
-
-.client__web,
-.client[data-kind='web'] .client__desktop {
-  display: none;
-}
-
-.client[data-kind='web'] .client__web {
-  display: block;
-}
-
-.client__text {
-  display: grid;
-  min-width: 0;
-}
-
-.client__where {
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--graphite);
-}
-
-/* a Web instance's address: what the person checks, so it is whole and plain */
-.client[data-kind='web'] .client__where {
-  margin-top: var(--s-1);
-  font-family: var(--f-mono);
-  font-size: 12.5px;
-  line-height: 1.55;
-  letter-spacing: 0.02em;
-  color: var(--corona-80);
-  overflow-wrap: anywhere;
-}
-
-/* until the request is read, a quiet bar where each answer will be */
-[data-state='loading'] .client__icon {
-  visibility: hidden;
-}
-
-[data-state='loading'] .client__name::before,
-[data-state='loading'] .fact__time::before {
-  content: '';
-  display: inline-block;
-  width: 10em;
-  height: 0.7em;
-  border-radius: 4px;
-  background: rgb(var(--corona-rgb) / 0.08);
-  animation: wait 1.4s var(--ease-in-out) infinite alternate;
-}
-
-[data-state='loading'] .fact__time::before {
-  width: 4em;
 }
 
 @keyframes wait {
@@ -445,101 +354,15 @@ html:lang(zh-CN) .fact__label {
   }
 }
 
-.scope {
-  display: grid;
-  gap: var(--s-1);
-}
-
-.scope__item {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-}
-
-.scope__icon {
-  flex: none;
-  width: 20px;
-  height: 26px;
-  padding-block: 3px;
-  color: var(--corona-64);
-  stroke: currentColor;
-  stroke-width: 1.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.scope__icon--mark {
-  fill: currentColor;
-  stroke: none;
-}
-
-/* ---------------------------------------------------------------- notes */
-
-.authz__notes {
-  grid-area: notes;
-  display: grid;
-  align-content: start;
-  gap: var(--s-3);
-  min-width: 0;
-  padding: var(--s-5) var(--pad) var(--pad);
-}
-
-.note {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--s-3);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--graphite);
-}
-
-.note__icon {
-  flex: none;
-  width: 16px;
-  height: 20.8px;
-  padding-block: 2.4px;
-  stroke: currentColor;
-  stroke-width: 1.3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* someone else will hold what is shared: said in the bead's colour */
-.note--web {
-  color: var(--corona-80);
-}
-
-.note--web .note__icon {
-  color: var(--bead);
-}
-
-/* --------------------------------------------------------------- action */
-
-.authz__action {
-  grid-area: action;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
-  padding: var(--pad) var(--s-6);
-  border-left: 1px solid var(--hairline);
-  background: var(--raised);
-}
-
-/* by day the sheet stands off the paper a little; by night its edge is enough */
-:root[data-theme='light'] .authz__sheet {
-  background: rgb(255 255 255 / 0.4);
-  box-shadow: 0 21px 55px rgb(23 22 28 / 0.06);
-}
-
-/* before the request and the account are known */
+/* Before the request and the account are known: the account and the two
+   buttons, each as tall as it will be, so nothing moves when they come. */
 .authz__wait {
   display: none;
-  gap: var(--s-4);
+  flex-direction: column;
 }
 
 [data-state='loading'] .authz__wait {
-  display: grid;
+  display: flex;
 }
 
 [data-state='loading'] .authz__view {
@@ -548,21 +371,27 @@ html:lang(zh-CN) .fact__label {
 
 .authz__wait i {
   display: block;
-  height: 44px;
+  height: 46px;
   border-radius: 999px;
   background: rgb(var(--corona-rgb) / 0.05);
   animation: wait 1.4s var(--ease-in-out) infinite alternate;
 }
 
 .authz__wait i:first-child {
-  width: 55%;
-  height: 21px;
-  border-radius: 6px;
-  margin-bottom: var(--s-3);
+  height: 72px;
+  border-radius: 18px;
+}
+
+.authz__wait i:nth-child(2) {
+  margin-top: var(--s-5);
+}
+
+.authz__wait i:nth-child(3) {
+  margin-top: var(--s-3);
 }
 
 .authz__error {
-  margin-bottom: var(--s-5);
+  margin-bottom: var(--s-4);
   padding: var(--s-3) var(--s-4);
   border: 1px solid rgb(var(--prominence-rgb) / 0.32);
   border-radius: 13px;
@@ -570,29 +399,92 @@ html:lang(zh-CN) .fact__label {
   font-size: 13px;
   line-height: 1.6;
   color: var(--prominence);
+  /* Chinese breaks at its commas and spaces where it can */
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 /* under an outcome's lede (client/authorize.ts moves it there) */
 .authz__intro .authz__error {
   max-width: 32em;
   margin: var(--s-5) auto 0;
+  text-wrap: balance;
 }
 
-.authz__head {
-  font-size: 21px;
-  font-weight: 400;
-  line-height: 1.3;
+.authz__buttons {
+  display: grid;
+  gap: var(--s-3);
 }
 
-/* "Signed in as", and the way to another account on the same line */
-.authz__row {
+.who + .authz__buttons {
+  margin-top: var(--s-5);
+}
+
+.authz__buttons .btn {
+  justify-content: center;
+  width: 100%;
+  min-height: 46px;
+}
+
+.authz__buttons .btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* the button that was pressed keeps its colour while the page waits on it */
+.authz__buttons .btn[aria-busy='true'] {
+  opacity: 1;
+}
+
+/* the terms, under the decision whichever way it is taken */
+.authz__legal {
+  margin-top: var(--s-5);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--graphite);
+  text-align: center;
+  text-wrap: balance;
+}
+
+[data-state='loading'] .authz__legal {
+  visibility: hidden;
+}
+
+
+.authz__legal a {
+  color: var(--corona-64);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 3px;
+  transition:
+    color 0.3s,
+    text-decoration-color 0.3s;
+}
+
+.authz__legal a:hover {
+  color: var(--corona);
+  text-decoration-color: rgb(var(--bead-rgb) / 0.6);
+}
+
+/* who is signed in, and the way to another account: the picture set in the
+   ring's band, as in the console */
+.who {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  align-items: center;
   gap: var(--s-4);
+  padding: var(--s-4) var(--s-5) var(--s-4) var(--s-4);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  background: rgb(var(--corona-rgb) / 0.025);
 }
 
-.authz__switch {
+:root[data-theme='light'] .who {
+  background: rgb(255 255 255 / 0.55);
+}
+
+.who__switch {
+  flex: none;
+  align-self: center;
   /* a little room for the focus ring round the words */
   margin: -2px -4px;
   padding: 2px 4px;
@@ -607,88 +499,14 @@ html:lang(zh-CN) .fact__label {
     text-decoration-color 0.3s;
 }
 
-.authz__switch:hover {
+.who__switch:hover {
   color: var(--corona);
   text-decoration-color: rgb(var(--bead-rgb) / 0.6);
 }
 
-.authz__switch:disabled {
+.who__switch:disabled {
   opacity: 0.6;
   cursor: progress;
-}
-
-.authz__label {
-  font-size: 10.5px;
-  letter-spacing: 0.12em;
-  color: var(--graphite);
-}
-
-html:lang(zh-CN) .authz__label {
-  font-size: 12px;
-  letter-spacing: 0.16em;
-}
-
-.authz__buttons {
-  display: grid;
-  gap: var(--s-3);
-  margin-top: var(--s-5);
-}
-
-.authz__buttons .btn {
-  justify-content: center;
-  width: 100%;
-}
-
-.authz__buttons .btn:disabled {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-/* the button that was pressed keeps its colour while the page waits on it */
-.authz__buttons .btn[aria-busy='true'] {
-  opacity: 1;
-}
-
-.authz__after {
-  display: flex;
-  gap: var(--s-3);
-  margin-top: var(--s-5);
-  padding-top: var(--s-4);
-  border-top: 1px solid var(--hairline);
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--corona-64);
-}
-
-.authz__small {
-  margin-top: var(--s-4);
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--graphite);
-}
-
-.authz__small a {
-  color: var(--corona-64);
-  text-decoration: underline;
-  text-decoration-color: var(--hairline-strong);
-  text-underline-offset: 3px;
-  transition: color 0.3s;
-}
-
-.authz__small a:hover {
-  color: var(--corona);
-}
-
-/* who is signed in: the picture set in the ring's band, as in the console */
-.who {
-  display: flex;
-  align-items: center;
-  gap: var(--s-4);
-  margin-top: var(--s-4);
-  padding: var(--s-4);
-  border: 1px solid var(--hairline);
-  border-radius: 16px;
-  background: rgb(var(--corona-rgb) / 0.025);
 }
 
 .who__face {
@@ -782,176 +600,48 @@ html:lang(zh-CN) .authz__label {
   border-top: 1px solid var(--hairline);
 }
 
-/* --------------------------------------- an outcome: one column, centred */
+/* ----------------------- an outcome: its words where the decision was */
 
-[data-state='notice'] .authz__sheet,
-[data-state='done'] .authz__sheet {
-  grid-template-columns: minmax(0, 36rem);
-  grid-template-rows: auto;
-  grid-template-areas: 'intro';
-  justify-content: center;
-  border-color: transparent;
-  text-align: center;
-}
-
-:root [data-state='notice'] .authz__sheet,
-:root [data-state='done'] .authz__sheet {
-  background: none;
-  box-shadow: none;
-}
-
-[data-state='notice'] .authz__intro,
-[data-state='done'] .authz__intro {
-  padding: 0;
-}
-
-[data-state='notice'] :is(.authz__details, .authz__notes, .authz__action),
-[data-state='done'] :is(.authz__details, .authz__notes, .authz__action) {
+[data-state='notice'] .authz__action,
+[data-state='done'] .authz__action {
   display: none;
 }
 
-[data-state='notice'] .link,
-[data-state='done'] .link {
-  margin-inline: auto;
+[data-state='notice'] .authz__sheet,
+[data-state='done'] .authz__sheet {
+  max-width: 36rem;
 }
 
-[data-state='notice'] :is(.authz__title, .authz__lede),
-[data-state='done'] :is(.authz__title, .authz__lede) {
-  margin-inline: auto;
-}
-
-[data-state='notice'] .authz__next,
-[data-state='done'] .authz__next {
-  justify-content: center;
+@media (min-width: 761px) {
+  [data-state='notice'] .authz__lede,
+  [data-state='done'] .authz__lede {
+    font-size: 16px;
+  }
 }
 
 /* ------------------------------------------------------------ responsive */
 
-@media (max-width: 1100px) {
-  .authz__sheet {
-    --pad: var(--s-6);
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
-  }
-
-  .authz__action {
-    padding-inline: var(--s-5);
-  }
-}
-
-/* Phones and narrow tablets: one column. What is asking and what it may
-   read, then the decision, then the notes; the decision is in reach after
-   a short scroll at most. */
 @media (max-width: 760px) {
   .authz__main {
-    place-items: start stretch;
-    padding-block: var(--s-3) var(--s-6);
-  }
-
-  .authz__sheet {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-    grid-template-areas:
-      'intro'
-      'details'
-      'notes'
-      'action';
-    border: 0;
-    border-radius: 0;
-    overflow: visible;
-  }
-
-  :root[data-theme='light'] .authz__sheet {
-    background: none;
-    box-shadow: none;
-  }
-
-  .authz__intro,
-  .authz__details {
-    padding-inline: 0;
-  }
-
-  .authz__intro {
-    padding-top: 0;
+    padding-block: var(--s-4) var(--s-6);
   }
 
   .link {
-    --end: 44px;
+    --end: 46px;
     width: min(100%, 204px);
   }
 
   .authz__title {
     margin-top: var(--s-5);
-    font-size: clamp(26px, 6.6vw, 32px);
-  }
-
-  .authz__lede {
-    margin-top: var(--s-3);
-    font-size: 15px;
-  }
-
-  .authz__details {
-    margin-top: var(--s-5);
-  }
-
-  .fact {
-    grid-template-columns: 7em minmax(0, 1fr);
-    gap: var(--s-1) var(--s-4);
-    padding: 11px 0;
-  }
-
-  html:lang(zh-CN) .fact {
-    grid-template-columns: 5.4em minmax(0, 1fr);
-  }
-
-  .fact__value {
-    font-size: 14.5px;
-  }
-
-  .scope {
-    gap: 0;
-  }
-
-  .authz__notes {
-    padding: var(--s-4) 0 0;
+    font-size: clamp(24px, 6.4vw, 28px);
   }
 
   .authz__action {
-    margin-top: var(--s-5);
-    padding: var(--s-5);
-    border: 1px solid var(--hairline-strong);
-    border-radius: 21px;
-  }
-
-  :root[data-theme='light'] .authz__action {
-    box-shadow: 0 13px 34px rgb(23 22 28 / 0.06);
+    margin-top: var(--s-6);
   }
 
   .who {
-    margin-top: var(--s-3);
     padding: var(--s-3) var(--s-4) var(--s-3) var(--s-3);
-  }
-
-  .authz__buttons {
-    margin-top: var(--s-4);
-  }
-
-  [data-state='notice'] .authz__main,
-  [data-state='done'] .authz__main {
-    place-items: center stretch;
-  }
-}
-
-/* the narrowest phones: each answer under its label */
-@media (max-width: 359px) {
-  .fact,
-  html:lang(zh-CN) .fact {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--s-1);
-  }
-
-  .fact__label,
-  html:lang(zh-CN) .fact__label {
-    padding-top: 0;
   }
 }
 

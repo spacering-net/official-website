@@ -31,7 +31,6 @@ const c = a.card;
       <button class="btn btn--primary account__provider" type="button" data-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>
       <button class="btn btn--ghost account__provider" type="button" data-provider="google" data-busy={a.redirecting}><Icon name="google" /><span>{a.google}</span></button>
     </div>
-    {a.note && <p class="account__note">{a.note}</p>}
     <p class="account__consent">{a.consent[0]}<a href={`${t.path}terms/`}>{a.consent[1]}</a>{a.consent[2]}<a href={`${t.path}privacy/`}>{a.consent[3]}</a>{a.consent[4]}</p>
   </div>
 

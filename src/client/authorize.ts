@@ -91,12 +91,12 @@ if (root) {
     else if (error.parentElement !== decision) decision.prepend(error);
   };
   /**
-   * The lede, in its sentences and clauses, each kept whole where it fits
-   * (styles/authorize.css): a line breaks between them rather than inside a
-   * word, which Chinese would do anywhere.
+   * The lede, in its sentences and clauses (or the phrases given), each kept
+   * whole where it fits (styles/authorize.css): a line breaks between them
+   * rather than inside a word, which Chinese would do anywhere.
    */
-  const tell = (text: string) => {
-    const parts = text.split(/(?<=[。，；])|(?<=[.;]) /);
+  const tell = (text: string | string[]) => {
+    const parts = Array.isArray(text) ? text : text.split(/(?<=[。，；])|(?<=[.;]) /);
     status.replaceChildren(...parts.flatMap((part, i) => {
       const span = document.createElement('span');
       span.textContent = part;
@@ -161,15 +161,24 @@ if (root) {
       if (data.status !== 'pending') { clearRequest(); notice('decided'); return; }
       if (!Number.isFinite(Date.parse(data.expires_at))) throw new Error('invalid_response');
       clientOrigin = data.client.type === 'web' ? data.client.origin : null;
-      el('web-note').hidden = !clientOrigin;
-      el('client').dataset.kind = clientOrigin ? 'web' : 'desktop';
-      el('client-name').textContent = clientOrigin ? `${data.client.name} Web` : say(`${data.client.name} desktop app`, `${data.client.name} 桌面端`);
-      el('client-where').textContent = clientOrigin ?? say('On this computer', '在这台电脑上');
-      const expiry = el('expiry');
-      const expires = new Date(data.expires_at);
-      expiry.textContent = expires.toLocaleTimeString(zh ? 'zh-CN' : 'en', { hour: '2-digit', minute: '2-digit' });
-      expiry.setAttribute('datetime', expires.toISOString());
-      expiry.title = expires.toLocaleString(zh ? 'zh-CN' : 'en');
+      el('origin').hidden = !clientOrigin;
+      if (clientOrigin) {
+        // Every Web instance is registered at HTTPS on the standard port, so
+        // its host alone names it; anything else is shown exactly as sent.
+        let shown = clientOrigin;
+        try {
+          const address = new URL(clientOrigin);
+          if (address.protocol === 'https:' && !address.port && address.origin === clientOrigin) shown = address.host;
+        } catch { /* shown as sent */ }
+        // A long address breaks after a dot, between the labels of its name,
+        // never at a hyphen inside one unless that label alone is too long.
+        el('origin-host').replaceChildren(...shown.split(/(?<=\.)/).flatMap((part, i) => {
+          const label = document.createElement('span');
+          label.textContent = part;
+          return i ? [document.createElement('wbr'), label] : [label];
+        }));
+        el('origin-host').title = clientOrigin;
+      }
       const account = await fetch('/api/me', { credentials: 'same-origin', cache: 'no-store' });
       if (!account.ok && account.status !== 401) throw new Error('unavailable');
       const user = account.ok ? (await account.json()).user as Me : null;
@@ -186,9 +195,9 @@ if (root) {
         image.hidden = !me.image?.startsWith('/api/avatars/');
         if (!image.hidden && me.image) image.src = me.image;
       }
-      tell(clientOrigin
-        ? say('A Codeg Web service is asking to read your SRN profile. Nothing is shared until you approve.', '一个 Codeg Web 服务请求读取你的 SRN 资料。在你确认之前，不会共享任何信息。')
-        : say('Codeg is asking to read your SRN profile. Nothing is shared until you approve.', 'Codeg 请求读取你的 SRN 资料。在你确认之前，不会共享任何信息。'));
+      // A request on show needs no words under its title: the title says what
+      // is asked, the account and the two buttons say the rest.
+      status.replaceChildren();
       show('pending', 'pending');
     } catch {
       if (asked !== sequence) return;

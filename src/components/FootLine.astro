@@ -16,9 +16,12 @@ interface Props {
   t: Dict;
   /** this page in the other language (by default, that language's homepage) */
   alternate?: string;
+  /** the small print in a new tab: on a page that must not be left half done */
+  newTab?: boolean;
   class?: string;
 }
-const { t, alternate, class: className } = Astro.props;
+const { t, alternate, newTab = false, class: className } = Astro.props;
+const away = newTab ? { target: '_blank', rel: 'noopener' } : {};
 ---
 <div class:list={['foot-line', className]}>
   <div class="foot-line__prefs">
@@ -28,8 +31,8 @@ const { t, alternate, class: className } = Astro.props;
   <p class="foot-line__legal">
     <span>© {new Date().getFullYear()} SpaceRing · spacering.net</span>
     <span class="foot-line__links">
-      <a href={`${t.path}privacy/`}>{t.open.privacy}</a>
-      <a href={`${t.path}terms/`}>{t.open.terms}</a>
+      <a href={`${t.path}privacy/`} {...away}>{t.open.privacy}</a>
+      <a href={`${t.path}terms/`} {...away}>{t.open.terms}</a>
     </span>
   </p>
 </div>

@@ -126,6 +126,12 @@ Request IDs, codes and tokens never appear in a URL that SRN receives.
   registrations can still be revoked. Lists return at most 100 rows and
   `next_cursor`; pass it as `?cursor=...` to see older connections.
 
+The authorization page asks the signed-in account for an explicit approval.
+For a Web instance it also shows the instance's address from the lookup, the
+person's only way to see which server is asking: its host in full, never
+shortened (the whole origin when it is not HTTPS on the standard port). A
+desktop request shows no address.
+
 The authorization page reads the request ID from the fragment and removes it
 from the address bar before making requests. A short-lived request reference and
 a fixed local tab retention deadline live only in that tab's sessionStorage,

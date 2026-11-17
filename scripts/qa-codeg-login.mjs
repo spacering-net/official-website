@@ -52,6 +52,7 @@ try {
   let detailStatus = 200;
   let requestStatus = 'pending';
   let signedIn = true;
+  let lookupClient = { name: 'Codeg', type: 'desktop', origin: null };
   let providerBody;
   let revokeAttempts = 0;
   let revoked = false;
@@ -66,7 +67,7 @@ try {
       return route.fulfill({ status: 409, json: { error: 'account_changed' } });
     }
     if (detailStatus !== 200) return route.fulfill({ status: detailStatus, json: { error: detailStatus === 429 ? 'rate_limited' : 'server_error' } });
-    return route.fulfill({ json: { status: requestStatus, scope: 'profile:read', expires_at: new Date(Date.now() + 590000).toISOString(), client: { name: 'Codeg', type: 'desktop', origin: null } } });
+    return route.fulfill({ json: { status: requestStatus, scope: 'profile:read', expires_at: new Date(Date.now() + 590000).toISOString(), client: lookupClient } });
   });
   await page.route('**/api/me', route => route.fulfill({ status: signedIn ? 200 : 401, json: { user: signedIn ? { number: srn, name: srn === 10000 ? 'Ada' : 'Grace', image: null } : null } }));
   // the console asks who is signed in for itself (client/console.ts)
@@ -93,6 +94,17 @@ try {
   assert.ok(clean(page), 'Request ID must immediately leave the address bar');
   assert.deepEqual(await page.evaluate(() => Object.keys(JSON.parse(sessionStorage.getItem('srn-codeg-authorization'))).sort()), ['request_id', 'retention_deadline']);
   assert.equal(decisions, 0, 'An existing website account must not grant automatically');
+  // A request on show has nothing under its title; a desktop request names no server.
+  assert.equal(await page.locator('[data-status]').textContent(), '');
+  assert.equal(await page.locator('[data-origin]').isVisible(), false);
+  // The terms are under the decision, and open beside it rather than in its place.
+  for (const path of ['/terms/', '/privacy/']) {
+    const terms = page.locator(`.authz__legal a[href="${path}"]`);
+    assert.equal(await terms.isVisible(), true, path);
+    assert.equal(await terms.getAttribute('target'), '_blank', path);
+    assert.match(await terms.getAttribute('rel'), /noopener/, path);
+    assert.equal(await page.locator(`.authz__foot a[href="${path}"]`).getAttribute('target'), '_blank', path);
+  }
   await page.locator('[data-approve]').click();
   await page.getByText('SRN 10001', { exact: true }).waitFor();
   assert.ok((await page.locator('[data-error]').textContent()).includes('account changed'));
@@ -103,7 +115,7 @@ try {
   await page.locator('[data-approve]').waitFor({ state: 'visible' });
   assert.equal(new URL(page.url()).pathname, '/zh/authorize/');
   assert.equal(new URL(page.url()).search, '');
-  assert.ok((await page.locator('h1').textContent()).includes('Codeg'));
+  assert.equal(await page.locator('h1').textContent(), '使用 SRN 账号登录');
   // A new request in the same tab changes only the fragment: the page reloads to read it.
   await page.evaluate(() => { location.hash = `request_id=${'d'.repeat(43)}`; });
   await page.waitForFunction(() => JSON.parse(sessionStorage.getItem('srn-codeg-authorization') ?? 'null')?.request_id === 'd'.repeat(43));
@@ -135,8 +147,30 @@ try {
     await enter(page, `/${lang}authorize/${query}`);
     await page.locator('[data-approve]').waitFor({ state: 'visible' });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Mobile page must not overflow');
-    assert.equal(await page.locator('[data-web-note]').isVisible(), false);
+    assert.equal(await page.locator('[data-status]').textContent(), '');
+    assert.equal(await page.locator('[data-approve]').evaluate(button => button.getBoundingClientRect().bottom <= innerHeight), true, 'The decision is in view on a phone');
+    assert.equal(await page.locator('[data-origin]').isVisible(), false);
   }
+  // A Codeg Web's address is shown whole even when it is long, on the
+  // narrowest phone, and the page still fits.
+  const host = 'codeg-workspace-production.engineering.internal.example-company-name.com';
+  lookupClient = { name: 'Codeg', type: 'web', origin: `https://${host}` };
+  await page.setViewportSize({ width: 320, height: 640 });
+  for (const lang of ['', 'zh/']) {
+    await enter(page, `/${lang}authorize/${query}`);
+    await page.locator('[data-approve]').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('[data-origin]').isVisible(), true);
+    assert.equal(await page.locator('[data-origin-host]').textContent(), host);
+    assert.equal(await page.locator('[data-origin-host]').getAttribute('title'), `https://${host}`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'A long Web address must not overflow');
+  }
+  // Anything but HTTPS on the standard port is shown exactly as sent.
+  lookupClient = { name: 'Codeg', type: 'web', origin: 'https://codeg.example.com:8443' };
+  await enter(page, `/authorize/${query}`);
+  await page.locator('[data-approve]').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('[data-origin-host]').textContent(), 'https://codeg.example.com:8443');
+  lookupClient = { name: 'Codeg', type: 'desktop', origin: null };
+  await page.setViewportSize({ width: 375, height: 812 });
   requestStatus = 'consumed';
   await page.reload();
   await page.getByText(/already decided|已完成决定/).waitFor();
@@ -173,6 +207,14 @@ try {
     }
     await enter(tab, `/authorize/${query}`);
     assert.equal(await tab.evaluate(() => document.documentElement.dataset.theme), 'light');
+    // A Codeg Web says so, and where it is asking from.
+    await tab.locator(`[data-${decision}]`).waitFor({ state: 'visible' });
+    if (client.origin) {
+      assert.equal(await tab.locator('[data-origin]').isVisible(), true);
+      assert.equal(await tab.locator('[data-origin-host]').textContent(), 'codeg.example.com');
+      assert.equal(await tab.locator('[data-origin-host]').getAttribute('title'), client.origin);
+      assert.match(await tab.locator('[data-origin]').textContent(), /^\s*From codeg\.example\.com\s*$/);
+    } else assert.equal(await tab.locator('[data-origin]').isVisible(), false);
     await tab.locator(`[data-${decision}]`).click();
     if (followed) {
       await tab.waitForFunction(() => document.querySelector('[data-authorize]')?.dataset.state === 'done');
@@ -305,5 +347,5 @@ try {
     await skewContext.close();
   }
   assert.deepEqual(errors, []);
-  console.info(`SRN login QA passed: 8 canonical routes and ${aliases.length} encoded/slash/index aliases in ordinary/navigation requests; no authorization HTML assets; request IDs only in the fragment and request bodies (same-tab fragment changes reload); explicit consent, account changes, decisions followed only to the client's own callback (approve, deny, Web) and offered as a link, warnings kept in view after a lost or refused decision, the site's theme, fixed local tab retention with clock offsets -2/+2/+20 minutes, no provider request IDs, retries/cleanup, EN/ZH mobile layout and connection revocation protections.`);
+  console.info(`SRN login QA passed: 8 canonical routes and ${aliases.length} encoded/slash/index aliases in ordinary/navigation requests; no authorization HTML assets; request IDs only in the fragment and request bodies (same-tab fragment changes reload); explicit consent with a Web request's whole address, account changes, decisions followed only to the client's own callback (approve, deny, Web) and offered as a link, warnings kept in view after a lost or refused decision, the site's theme, fixed local tab retention with clock offsets -2/+2/+20 minutes, no provider request IDs, retries/cleanup, EN/ZH mobile layout and connection revocation protections.`);
 } finally { await browser.close(); }

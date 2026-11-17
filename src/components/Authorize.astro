@@ -3,10 +3,11 @@
  * Connecting Codeg to an SRN account (/authorize/, /zh/authorize/). Rendered
  * by the Worker only, under its own headers (api/index.ts): Codeg opens it
  * with the request in the fragment, and client/authorize.ts does the rest.
- * Two columns: what is asking and what it may read on the left, the account
- * and the decision on the right; on phones the decision comes right after
- * the details. Every outcome but a pending request (an answer, a request that
- * cannot be used, a service that cannot be reached) is one column, centred.
+ * One narrow column in the middle of the window: the connection, the title
+ * (and for a Codeg Web, the server asking), then who is signed in and the
+ * decision, or the ways to sign in. Every outcome (an answer, a request that
+ * cannot be used, a service that cannot be reached) keeps the column and
+ * puts its words and next step where the decision was.
  */
 import '@fontsource-variable/jost';
 import '@fontsource/ibm-plex-mono/400.css';
@@ -31,56 +32,28 @@ const a = t.account;
 const c = zh
   ? {
       page: '连接 Codeg · SRN',
-      title: ['将 Codeg 连接到', '你的 SRN 账号'],
+      title: '使用 SRN 账号登录',
       loading: '正在读取授权请求…',
-      details: '授权详情',
-      from: '发起方',
-      reads: '可读取',
-      excludes: '不包括',
-      expires: '有效期至',
-      scope: [
-        ['name', '昵称'],
-        ['avatar', '头像'],
-        ['srn', 'SRN 编号'],
-      ],
-      workspace: '任何 Codeg 工作区的访问权限',
-      started: '只授权你本人刚刚在 Codeg 中发起的连接。',
-      web: '此 Codeg Web 的运营者可以读取以上资料，请只连接你信任的服务。',
+      origin: '来自',
       signIn: '登录以继续',
-      after: '登录后，仍需你确认授权。',
       signedIn: '当前账号',
       switch: '切换账号',
       approve: '授权 Codeg',
       deny: '取消',
-      later: '之后可随时在控制台断开此连接。',
       reload: '刷新',
       back: '返回 Codeg',
       noscript: '请启用 JavaScript 完成授权。',
     }
   : {
       page: 'Connect Codeg · SRN',
-      title: ['Connect Codeg to', 'your SRN account'],
+      title: 'Sign in with SRN',
       loading: 'Loading the request…',
-      details: 'Request details',
-      from: 'Requested by',
-      reads: 'Can read',
-      excludes: 'Not included',
-      expires: 'Expires',
-      scope: [
-        ['name', 'Your name'],
-        ['avatar', 'Your avatar'],
-        ['srn', 'Your SRN number'],
-      ],
-      workspace: 'Access to any Codeg workspace',
-      started: 'Approve only a connection you just started in Codeg.',
-      web: 'Whoever runs this Codeg Web can read the profile above. Connect only a service you trust.',
+      origin: 'From',
       signIn: 'Sign in to continue',
-      after: 'You will still be asked to approve after signing in.',
       signedIn: 'Signed in as',
       switch: 'Switch account',
       approve: 'Authorize Codeg',
       deny: 'Cancel',
-      later: 'You can disconnect it at any time in your console.',
       reload: 'Refresh',
       back: 'Return to Codeg',
       noscript: 'Enable JavaScript to connect Codeg.',
@@ -100,7 +73,7 @@ const c = zh
     <title>{c.page}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     {/* without scripts nothing can be decided here: only the title and why, centred as an outcome is */}
-    <noscript><style>.authz__intro [data-status], .authz__details, .authz__notes, .authz__action, .link__bead { display: none !important; } .authz .authz__sheet { grid-template-columns: minmax(0, 36rem); grid-template-areas: 'intro'; justify-content: center; border-color: transparent; background: none; box-shadow: none; text-align: center; } .authz .authz__intro { padding: 0; } .authz .link, .authz .authz__title { margin-inline: auto; }</style></noscript>
+    <noscript><style>.authz__intro [data-status], .authz__action, .link__bead { display: none !important; }</style></noscript>
   </head>
   <body>
     <div class="authz" data-authorize data-lang={lang} data-state="loading">
@@ -142,83 +115,18 @@ const c = zh
                 </svg>
               </span>
             </div>
-            <h1 class="authz__title" id="authz-title" tabindex="-1" data-title><span>{c.title[0]}</span> <span>{c.title[1]}</span></h1>
+            <h1 class="authz__title" id="authz-title" tabindex="-1" data-title>{c.title}</h1>
             <p class="authz__lede" role="status" aria-live="polite" data-status>{c.loading}</p>
+            {/* a Codeg Web's address: the one way to tell which server is asking */}
+            <p class="origin" data-origin hidden>
+              <ConsoleIcon name="web" class="origin__icon" />
+              <span>{c.origin} <bdi class="origin__host" data-origin-host></bdi></span>
+            </p>
             <noscript><p class="authz__lede">{c.noscript}</p></noscript>
             <div class="authz__next">
               <a class="btn btn--primary" data-open hidden><span>{c.back}</span><Icon name="arrow" /></a>
               <button class="btn btn--ghost" type="button" data-reload hidden>{c.reload}</button>
             </div>
-          </section>
-
-          {/* what is asking, what it may read and what it may not, and until when */}
-          <section class="authz__details" aria-label={c.details}>
-            <dl class="facts">
-              <div class="fact">
-                <dt class="fact__label">{c.from}</dt>
-                <dd class="fact__value">
-                  <span class="client" data-client>
-                    <span class="client__icon">
-                      <ConsoleIcon name="desktop" class="client__desktop" />
-                      <ConsoleIcon name="web" class="client__web" />
-                    </span>
-                    <span class="client__text">
-                      <span class="client__name" data-client-name></span>
-                      <span class="client__where" data-client-where></span>
-                    </span>
-                  </span>
-                </dd>
-              </div>
-              <div class="fact">
-                <dt class="fact__label">{c.reads}</dt>
-                <dd class="fact__value">
-                  <ul class="scope">
-                    {c.scope.map(([key, label]) => (
-                      <li class="scope__item">
-                        {key === 'srn' ? <Logo class="scope__icon scope__icon--mark" /> : <svg class="scope__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                          {key === 'name' && (
-                            <>
-                              <path d="M2.8 14.6l3.4-9.2 3.4 9.2M4 11.4h4.4"></path>
-                              <path d="M15.6 9.2v5.4M15.6 11.9c0-1.6-1-2.7-2.3-2.7s-2.3 1.2-2.3 2.7 1 2.7 2.3 2.7 2.3-1.1 2.3-2.7z"></path>
-                            </>
-                          )}
-                          {key === 'avatar' && (
-                            <>
-                              <circle cx="10" cy="10" r="7.2"></circle>
-                              <circle cx="10" cy="8.4" r="2.5"></circle>
-                              <path d="M5.3 15.4c1-2 2.7-3.1 4.7-3.1s3.7 1.1 4.7 3.1"></path>
-                            </>
-                          )}
-                        </svg>}
-                        <span>{label}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </dd>
-              </div>
-              <div class="fact">
-                <dt class="fact__label">{c.excludes}</dt>
-                <dd class="fact__value fact__value--off">
-                  <svg class="scope__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.8 6.2c0-.9.7-1.6 1.6-1.6h3.4l1.6 1.8h6.2c.9 0 1.6.7 1.6 1.6v6.4c0 .9-.7 1.6-1.6 1.6H4.4c-.9 0-1.6-.7-1.6-1.6z"></path><path d="M3 17L17 3"></path></svg>
-                  <span>{c.workspace}</span>
-                </dd>
-              </div>
-              <div class="fact">
-                <dt class="fact__label">{c.expires}</dt>
-                <dd class="fact__value"><time class="fact__time" data-expiry></time></dd>
-              </div>
-            </dl>
-          </section>
-
-          <section class="authz__notes" aria-label={zh ? '注意' : 'Before you approve'}>
-            <p class="note">
-              <svg class="note__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 9v4.6M10 6.6v.1"></path></svg>
-              <span>{c.started}</span>
-            </p>
-            <p class="note note--web" data-web-note hidden>
-              <svg class="note__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3.2l7.4 13H2.6z"></path><path d="M10 8.4v3.7M10 14.2v.1"></path></svg>
-              <span>{c.web}</span>
-            </p>
           </section>
 
           {/* the decision: who is signed in, or the ways to sign in */}
@@ -227,21 +135,15 @@ const c = zh
             <p class="authz__error" role="alert" data-error hidden></p>
 
             <div class="authz__view" data-signed-out hidden>
-              <h2 class="authz__head">{c.signIn}</h2>
+              <h2 class="sr-only">{c.signIn}</h2>
               <div class="authz__buttons">
                 <button class="btn btn--primary" type="button" data-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>
                 <button class="btn btn--ghost" type="button" data-provider="google" data-busy={a.redirecting}><Icon name="google" /><span>{a.google}</span></button>
               </div>
-              {a.note && <p class="authz__small">{a.note}</p>}
-              <p class="authz__after">{c.after}</p>
-              <p class="authz__small">{a.consent[0]}<a href={`${t.path}terms/`}>{a.consent[1]}</a>{a.consent[2]}<a href={`${t.path}privacy/`}>{a.consent[3]}</a>{a.consent[4]}</p>
             </div>
 
             <div class="authz__view" data-signed-in hidden>
-              <div class="authz__row">
-                <h2 class="authz__label mono">{c.signedIn}</h2>
-                <button class="authz__switch" type="button" data-switch>{c.switch}</button>
-              </div>
+              <h2 class="sr-only">{c.signedIn}</h2>
               <div class="who">
                 <span class="who__face" aria-hidden="true">
                   <span class="who__initial" data-initial></span>
@@ -252,18 +154,21 @@ const c = zh
                   <strong class="who__name" data-name></strong>
                   <span class="who__srn" data-srn></span>
                 </span>
+                <button class="who__switch" type="button" data-switch>{c.switch}</button>
               </div>
               <div class="authz__buttons">
                 <button class="btn btn--primary" type="button" data-approve data-busy={zh ? '正在授权…' : 'Authorizing…'}><span>{c.approve}</span></button>
                 <button class="btn btn--ghost" type="button" data-deny data-busy={zh ? '正在取消…' : 'Canceling…'}><span>{c.deny}</span></button>
               </div>
-              <p class="authz__small">{c.later}</p>
             </div>
+
+            {/* the terms, under either way on; in a new tab, as leaving would set the request aside */}
+            <p class="authz__legal">{a.consent[0]}<a href={`${t.path}terms/`} target="_blank" rel="noopener">{a.consent[1]}</a>{a.consent[2]}<a href={`${t.path}privacy/`} target="_blank" rel="noopener">{a.consent[3]}</a>{a.consent[4]}</p>
           </section>
         </div>
       </main>
 
-      <FootLine t={t} alternate={zh ? '/authorize/' : '/zh/authorize/'} class="authz__foot" />
+      <FootLine t={t} alternate={zh ? '/authorize/' : '/zh/authorize/'} newTab class="authz__foot" />
     </div>
     <script>
       import '../client/authorize';
