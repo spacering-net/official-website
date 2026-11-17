@@ -99,7 +99,7 @@ try {
   assert.equal(decisions, 1);
   await page.reload();
   await page.locator('[data-approve]').waitFor({ state: 'visible' });
-  await page.locator('[data-language]').click();
+  await page.locator('[data-lang-switch]').click();
   await page.locator('[data-approve]').waitFor({ state: 'visible' });
   assert.equal(new URL(page.url()).pathname, '/zh/authorize/');
   assert.equal(new URL(page.url()).search, '');
@@ -145,6 +145,72 @@ try {
   await enter(page, '/authorize/#request_id=invalid');
   assert.equal(await page.locator('[data-approve]').isVisible(), false);
   assert.ok((await page.locator('[data-status]').textContent()).includes('Invalid request'));
+  // A decision that goes through: the page follows the client's callback, and
+  // offers it as a link; one that names any other address is not followed.
+  // The page also follows the site's theme.
+  for (const [client, decision, callbackUrl, followed] of [
+    [{ name: 'Codeg', type: 'desktop', origin: null }, 'approve', `http://127.0.0.1:53682/auth/callback?code=${'c'.repeat(43)}&state=${'s'.repeat(43)}`, true],
+    [{ name: 'Codeg', type: 'desktop', origin: null }, 'deny', `http://127.0.0.1:53682/auth/callback?error=access_denied&state=${'s'.repeat(43)}`, true],
+    [{ name: 'Codeg', type: 'web', origin: 'https://codeg.example.com' }, 'approve', `https://codeg.example.com/auth/srn/callback?code=${'c'.repeat(43)}&state=${'s'.repeat(43)}`, true],
+    [{ name: 'Codeg', type: 'web', origin: 'https://codeg.example.com' }, 'approve', `https://elsewhere.example.com/auth/srn/callback?code=${'c'.repeat(43)}&state=${'s'.repeat(43)}`, false],
+  ]) {
+    const context = await browser.newContext();
+    // (about:blank, where each entry starts, has no storage)
+    await context.addInitScript(() => { try { localStorage.setItem('sr-theme', 'light'); } catch { /* not this document */ } });
+    const tab = await context.newPage();
+    tab.on('pageerror', err => errors.push(err.message));
+    const visited = [];
+    await tab.route('**/api/client/v1/login-requests/lookup', route => route.fulfill({ json: { status: 'pending', scope: 'profile:read', expires_at: new Date(Date.now() + 590000).toISOString(), client } }));
+    await tab.route('**/api/client/v1/login-requests/decision', async route => {
+      assert.equal((await route.request().allHeaders()).origin, origin, 'Decisions carry the exact SRN Origin');
+      assert.equal(route.request().postDataJSON().decision, decision);
+      return route.fulfill({ json: { callback_url: callbackUrl } });
+    });
+    await tab.route('**/api/me', route => route.fulfill({ json: { user: { number: 10000, name: 'Ada', image: null } } }));
+    // a 204 leaves the page where it is, so what it shows can be checked
+    for (const host of ['http://127.0.0.1:53682/**', 'https://codeg.example.com/**', 'https://elsewhere.example.com/**']) {
+      await tab.route(host, route => { visited.push(route.request().url()); return route.fulfill({ status: 204 }); });
+    }
+    await enter(tab, `/authorize/${query}`);
+    assert.equal(await tab.evaluate(() => document.documentElement.dataset.theme), 'light');
+    await tab.locator(`[data-${decision}]`).click();
+    if (followed) {
+      await tab.waitForFunction(() => document.querySelector('[data-authorize]')?.dataset.state === 'done');
+      await tab.waitForFunction(() => !document.querySelector('[data-open]')?.hidden);
+      assert.equal(await tab.locator('[data-open]').getAttribute('href'), callbackUrl);
+      assert.equal(await tab.locator('h1').count(), 1);
+      assert.equal(await tab.evaluate(() => sessionStorage.getItem('srn-codeg-authorization')), null);
+      for (let i = 0; i < 100 && !visited.length; i++) await tab.waitForTimeout(20);
+      assert.deepEqual(visited, [callbackUrl]);
+    } else {
+      await tab.locator('[data-error]').waitFor({ state: 'visible' });
+      assert.equal(await tab.locator('[data-open]').isVisible(), false);
+      assert.deepEqual(visited, []);
+    }
+    await context.close();
+  }
+  // A decision whose answer is lost or refused, after which the request is no
+  // longer pending or SRN cannot be reached: the page shows where the
+  // request stands, and the warning stays in view with it.
+  for (const [reply, after, standing, warning, retry] of [
+    ['abort', { json: { status: 'authorized', scope: 'profile:read', expires_at: new Date(Date.now() + 590000).toISOString(), client: { name: 'Codeg', type: 'desktop', origin: null } } }, /already decided/, /uncertain/, false],
+    [{ status: 500, json: { error: 'server_error' } }, { status: 503, json: { error: 'server_error' } }, /could not be checked/, /Unable to confirm/, true],
+  ]) {
+    const context = await browser.newContext();
+    const tab = await context.newPage();
+    tab.on('pageerror', err => errors.push(err.message));
+    let decided = false;
+    await tab.route('**/api/client/v1/login-requests/lookup', route => route.fulfill(decided ? after : { json: { status: 'pending', scope: 'profile:read', expires_at: new Date(Date.now() + 590000).toISOString(), client: { name: 'Codeg', type: 'desktop', origin: null } } }));
+    await tab.route('**/api/client/v1/login-requests/decision', route => { decided = true; return reply === 'abort' ? route.abort() : route.fulfill(reply); });
+    await tab.route('**/api/me', route => route.fulfill({ json: { user: { number: 10000, name: 'Ada', image: null } } }));
+    await enter(tab, `/authorize/${query}`);
+    await tab.locator('[data-approve]').click();
+    await tab.locator('[data-error]').filter({ hasText: warning }).waitFor({ state: 'visible' });
+    assert.match(await tab.locator('[data-status]').textContent(), standing);
+    assert.equal(await tab.locator('[data-approve]').isVisible(), false);
+    assert.equal(await tab.locator('[data-reload]').isVisible(), retry);
+    await context.close();
+  }
   // A cookie-only website session must be recognized when the account dialog
   // opens, even if authorization never wrote a homepage localStorage hint.
   srn = 10000;
@@ -209,7 +275,7 @@ try {
     await skewPage.reload();
     await provider.waitFor({ state: 'visible' });
     assert.deepEqual(await reference(), first);
-    await skewPage.locator('[data-language]').click();
+    await skewPage.locator('[data-lang-switch]').click();
     await provider.waitFor({ state: 'visible' });
     assert.deepEqual(await reference(), first);
     await provider.click();
@@ -239,5 +305,5 @@ try {
     await skewContext.close();
   }
   assert.deepEqual(errors, []);
-  console.info(`SRN login QA passed: 8 canonical routes and ${aliases.length} encoded/slash/index aliases in ordinary/navigation requests; no authorization HTML assets; request IDs only in the fragment and request bodies (same-tab fragment changes reload); explicit consent, account changes, fixed local tab retention with clock offsets -2/+2/+20 minutes, no provider request IDs, retries/cleanup, EN/ZH mobile layout and connection revocation protections.`);
+  console.info(`SRN login QA passed: 8 canonical routes and ${aliases.length} encoded/slash/index aliases in ordinary/navigation requests; no authorization HTML assets; request IDs only in the fragment and request bodies (same-tab fragment changes reload); explicit consent, account changes, decisions followed only to the client's own callback (approve, deny, Web) and offered as a link, warnings kept in view after a lost or refused decision, the site's theme, fixed local tab retention with clock offsets -2/+2/+20 minutes, no provider request IDs, retries/cleanup, EN/ZH mobile layout and connection revocation protections.`);
 } finally { await browser.close(); }

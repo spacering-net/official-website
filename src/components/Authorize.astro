@@ -1,81 +1,272 @@
 ---
+/**
+ * Connecting Codeg to an SRN account (/authorize/, /zh/authorize/). Rendered
+ * by the Worker only, under its own headers (api/index.ts): Codeg opens it
+ * with the request in the fragment, and client/authorize.ts does the rest.
+ * Two columns: what is asking and what it may read on the left, the account
+ * and the decision on the right; on phones the decision comes right after
+ * the details. Every outcome but a pending request (an answer, a request that
+ * cannot be used, a service that cannot be reached) is one column, centred.
+ */
 import '@fontsource-variable/jost';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
 import '../styles/site.css';
+import '../styles/authorize.css';
 import Logo from './Logo.astro';
 import Icon from './Icon.astro';
-import type { Lang } from '../i18n';
-interface Props { lang: Lang }
+import FootLine from './FootLine.astro';
+import ConsoleIcon from './console/ConsoleIcon.astro';
+// a file of its own, never inlined: this page allows scripts from this site only
+import themeScript from '../client/theme.js?url&no-inline';
+import { dicts, type Lang } from '../i18n';
+
+interface Props {
+  lang: Lang;
+}
 const { lang } = Astro.props;
 const zh = lang === 'zh';
+const t = dicts[lang];
+const a = t.account;
+const c = zh
+  ? {
+      page: '连接 Codeg · SRN',
+      title: ['将 Codeg 连接到', '你的 SRN 账号'],
+      loading: '正在读取授权请求…',
+      details: '授权详情',
+      from: '发起方',
+      reads: '可读取',
+      excludes: '不包括',
+      expires: '有效期至',
+      scope: [
+        ['name', '昵称'],
+        ['avatar', '头像'],
+        ['srn', 'SRN 编号'],
+      ],
+      workspace: '任何 Codeg 工作区的访问权限',
+      started: '只授权你本人刚刚在 Codeg 中发起的连接。',
+      web: '此 Codeg Web 的运营者可以读取以上资料，请只连接你信任的服务。',
+      signIn: '登录以继续',
+      after: '登录后，仍需你确认授权。',
+      signedIn: '当前账号',
+      switch: '切换账号',
+      approve: '授权 Codeg',
+      deny: '取消',
+      later: '之后可随时在控制台断开此连接。',
+      reload: '刷新',
+      back: '返回 Codeg',
+      noscript: '请启用 JavaScript 完成授权。',
+    }
+  : {
+      page: 'Connect Codeg · SRN',
+      title: ['Connect Codeg to', 'your SRN account'],
+      loading: 'Loading the request…',
+      details: 'Request details',
+      from: 'Requested by',
+      reads: 'Can read',
+      excludes: 'Not included',
+      expires: 'Expires',
+      scope: [
+        ['name', 'Your name'],
+        ['avatar', 'Your avatar'],
+        ['srn', 'Your SRN number'],
+      ],
+      workspace: 'Access to any Codeg workspace',
+      started: 'Approve only a connection you just started in Codeg.',
+      web: 'Whoever runs this Codeg Web can read the profile above. Connect only a service you trust.',
+      signIn: 'Sign in to continue',
+      after: 'You will still be asked to approve after signing in.',
+      signedIn: 'Signed in as',
+      switch: 'Switch account',
+      approve: 'Authorize Codeg',
+      deny: 'Cancel',
+      later: 'You can disconnect it at any time in your console.',
+      reload: 'Refresh',
+      back: 'Return to Codeg',
+      noscript: 'Enable JavaScript to connect Codeg.',
+    };
 ---
 <!doctype html>
-<html lang={zh ? 'zh-CN' : 'en'}>
+<html lang={t.htmlLang}>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
     <meta name="referrer" content="no-referrer" />
-    <meta name="color-scheme" content="dark light" />
-    <title>{zh ? '登录并授权 Codeg · SpaceRing' : 'Connect Codeg · SpaceRing'}</title>
+    <meta name="theme-color" content="#050507" />
+    <meta name="color-scheme" content="dark" />
+    {/* light or dark before the first paint; a file, as this page allows no inline scripts */}
+    <script is:inline src={themeScript}></script>
+    <title>{c.page}</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    {/* without scripts nothing can be decided here: only the title and why, centred as an outcome is */}
+    <noscript><style>.authz__intro [data-status], .authz__details, .authz__notes, .authz__action, .link__bead { display: none !important; } .authz .authz__sheet { grid-template-columns: minmax(0, 36rem); grid-template-areas: 'intro'; justify-content: center; border-color: transparent; background: none; box-shadow: none; text-align: center; } .authz .authz__intro { padding: 0; } .authz .link, .authz .authz__title { margin-inline: auto; }</style></noscript>
   </head>
   <body>
-    <main class="authorize" data-authorize data-lang={lang}>
-      <a class="authorize__brand" href={zh ? '/zh/' : '/'} aria-label="SpaceRing"><Logo /></a>
-      <p class="authorize__eyebrow">SPACERING → CODEG</p>
-      <h1>{zh ? '登录并授权 Codeg' : 'Connect Codeg to SpaceRing'}</h1>
-      <p class="authorize__lede">{zh ? '确认你的 SRN 账号，连接你刚才打开的 Codeg。' : 'Confirm your SRN account to connect the Codeg you just opened.'}</p>
-      <p class="authorize__status" role="status" aria-live="polite" data-status>{zh ? '正在读取授权请求…' : 'Loading request…'}</p>
-      <p class="authorize__error" role="alert" data-error hidden></p>
-      <section data-request hidden>
-        <p data-client></p>
-        <p class="authorize__permission">{zh ? '允许读取：昵称、头像、SRN。' : 'Allow access to your name, avatar and SRN.'}</p>
-        <p class="authorize__note">{zh ? '仅确认本人发起的连接。' : 'Confirm only a connection you initiated.'}</p>
-        <p class="authorize__note" data-web-note hidden>{zh ? '此 Web 服务的运营者将能读取以上资料，请只连接你信任的服务。' : 'This Web service operator can read the profile above. Connect only a service you trust.'}</p>
-        <p class="authorize__note" data-expiry></p>
-        <div data-signed-out hidden>
-          <div class="authorize__actions">
-            <button class="btn btn--primary" type="button" data-provider="github"><Icon name="github" /><span>{zh ? '使用 GitHub 登录' : 'Continue with GitHub'}</span></button>
-            <button class="btn btn--ghost" type="button" data-provider="google"><Icon name="google" /><span>{zh ? '使用 Google 登录' : 'Continue with Google'}</span></button>
-          </div>
-          <p class="authorize__note">{zh ? '登录后仍需你明确确认授权。' : 'Signing in still requires your explicit approval.'}</p>
+    <div class="authz" data-authorize data-lang={lang} data-state="loading">
+      <header class="authz__top">
+        <a class="brand" href={t.path} aria-label={t.nav.home}>
+          <Logo class="brand__mark" />
+          <span class="brand__word" aria-hidden="true">SpaceRing</span>
+        </a>
+      </header>
+
+      <main class="authz__main">
+        <div class="authz__sheet">
+          <section class="authz__intro" aria-labelledby="authz-title">
+            {/* SRN's ring and Codeg's icon, and the state of the line between them */}
+            <div class="link" data-link="loading" aria-hidden="true">
+              <span class="link__end link__end--ring"><Logo /></span>
+              <span class="link__line">
+                <span class="link__bead"></span>
+                <span class="link__badge">
+                  <svg class="link__icon link__icon--linked" viewBox="0 0 20 20" fill="none"><path d="M5.6 10.3l2.9 2.9 5.9-6.4"></path></svg>
+                  <svg class="link__icon link__icon--canceled" viewBox="0 0 20 20" fill="none"><path d="M6.6 6.6l6.8 6.8M13.4 6.6l-6.8 6.8"></path></svg>
+                </span>
+              </span>
+              <span class="link__end link__end--codeg">
+                {/* Codeg's own icon, as the app draws it (public/icon.svg in Codeg): its dark tile, the brackets, the three coloured dots */}
+                <svg viewBox="0 0 512 512">
+                  <defs>
+                    <linearGradient id="codeg-icon-brackets" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#dcdfe9"></stop><stop offset="100%" stop-color="#cdd1e2"></stop></linearGradient>
+                    <linearGradient id="codeg-icon-dot-1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ff4081"></stop><stop offset="100%" stop-color="#e91e63"></stop></linearGradient>
+                    <linearGradient id="codeg-icon-dot-2" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ffeb3b"></stop><stop offset="100%" stop-color="#fdd835"></stop></linearGradient>
+                    <linearGradient id="codeg-icon-dot-3" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#29b6f6"></stop><stop offset="100%" stop-color="#03a9f4"></stop></linearGradient>
+                  </defs>
+                  <rect width="512" height="512" rx="90" ry="90" fill="#1a1a2e"></rect>
+                  <polyline points="180,186 100,256 180,326" fill="none" stroke="url(#codeg-icon-brackets)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                  <polyline points="332,186 412,256 332,326" fill="none" stroke="url(#codeg-icon-brackets)" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"></polyline>
+                  <circle cx="206" cy="256" r="30" fill="url(#codeg-icon-dot-1)" opacity="0.95"></circle>
+                  <circle cx="256" cy="256" r="36" fill="url(#codeg-icon-dot-2)" opacity="0.95"></circle>
+                  <circle cx="306" cy="256" r="30" fill="url(#codeg-icon-dot-3)" opacity="0.95"></circle>
+                </svg>
+              </span>
+            </div>
+            <h1 class="authz__title" id="authz-title" tabindex="-1" data-title><span>{c.title[0]}</span> <span>{c.title[1]}</span></h1>
+            <p class="authz__lede" role="status" aria-live="polite" data-status>{c.loading}</p>
+            <noscript><p class="authz__lede">{c.noscript}</p></noscript>
+            <div class="authz__next">
+              <a class="btn btn--primary" data-open hidden><span>{c.back}</span><Icon name="arrow" /></a>
+              <button class="btn btn--ghost" type="button" data-reload hidden>{c.reload}</button>
+            </div>
+          </section>
+
+          {/* what is asking, what it may read and what it may not, and until when */}
+          <section class="authz__details" aria-label={c.details}>
+            <dl class="facts">
+              <div class="fact">
+                <dt class="fact__label">{c.from}</dt>
+                <dd class="fact__value">
+                  <span class="client" data-client>
+                    <span class="client__icon">
+                      <ConsoleIcon name="desktop" class="client__desktop" />
+                      <ConsoleIcon name="web" class="client__web" />
+                    </span>
+                    <span class="client__text">
+                      <span class="client__name" data-client-name></span>
+                      <span class="client__where" data-client-where></span>
+                    </span>
+                  </span>
+                </dd>
+              </div>
+              <div class="fact">
+                <dt class="fact__label">{c.reads}</dt>
+                <dd class="fact__value">
+                  <ul class="scope">
+                    {c.scope.map(([key, label]) => (
+                      <li class="scope__item">
+                        {key === 'srn' ? <Logo class="scope__icon scope__icon--mark" /> : <svg class="scope__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                          {key === 'name' && (
+                            <>
+                              <path d="M2.8 14.6l3.4-9.2 3.4 9.2M4 11.4h4.4"></path>
+                              <path d="M15.6 9.2v5.4M15.6 11.9c0-1.6-1-2.7-2.3-2.7s-2.3 1.2-2.3 2.7 1 2.7 2.3 2.7 2.3-1.1 2.3-2.7z"></path>
+                            </>
+                          )}
+                          {key === 'avatar' && (
+                            <>
+                              <circle cx="10" cy="10" r="7.2"></circle>
+                              <circle cx="10" cy="8.4" r="2.5"></circle>
+                              <path d="M5.3 15.4c1-2 2.7-3.1 4.7-3.1s3.7 1.1 4.7 3.1"></path>
+                            </>
+                          )}
+                        </svg>}
+                        <span>{label}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </div>
+              <div class="fact">
+                <dt class="fact__label">{c.excludes}</dt>
+                <dd class="fact__value fact__value--off">
+                  <svg class="scope__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M2.8 6.2c0-.9.7-1.6 1.6-1.6h3.4l1.6 1.8h6.2c.9 0 1.6.7 1.6 1.6v6.4c0 .9-.7 1.6-1.6 1.6H4.4c-.9 0-1.6-.7-1.6-1.6z"></path><path d="M3 17L17 3"></path></svg>
+                  <span>{c.workspace}</span>
+                </dd>
+              </div>
+              <div class="fact">
+                <dt class="fact__label">{c.expires}</dt>
+                <dd class="fact__value"><time class="fact__time" data-expiry></time></dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="authz__notes" aria-label={zh ? '注意' : 'Before you approve'}>
+            <p class="note">
+              <svg class="note__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><circle cx="10" cy="10" r="7.2"></circle><path d="M10 9v4.6M10 6.6v.1"></path></svg>
+              <span>{c.started}</span>
+            </p>
+            <p class="note note--web" data-web-note hidden>
+              <svg class="note__icon" viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M10 3.2l7.4 13H2.6z"></path><path d="M10 8.4v3.7M10 14.2v.1"></path></svg>
+              <span>{c.web}</span>
+            </p>
+          </section>
+
+          {/* the decision: who is signed in, or the ways to sign in */}
+          <section class="authz__action">
+            <div class="authz__wait" aria-hidden="true"><i></i><i></i><i></i></div>
+            <p class="authz__error" role="alert" data-error hidden></p>
+
+            <div class="authz__view" data-signed-out hidden>
+              <h2 class="authz__head">{c.signIn}</h2>
+              <div class="authz__buttons">
+                <button class="btn btn--primary" type="button" data-provider="github" data-busy={a.redirecting}><Icon name="github" /><span>{a.github}</span></button>
+                <button class="btn btn--ghost" type="button" data-provider="google" data-busy={a.redirecting}><Icon name="google" /><span>{a.google}</span></button>
+              </div>
+              {a.note && <p class="authz__small">{a.note}</p>}
+              <p class="authz__after">{c.after}</p>
+              <p class="authz__small">{a.consent[0]}<a href={`${t.path}terms/`}>{a.consent[1]}</a>{a.consent[2]}<a href={`${t.path}privacy/`}>{a.consent[3]}</a>{a.consent[4]}</p>
+            </div>
+
+            <div class="authz__view" data-signed-in hidden>
+              <div class="authz__row">
+                <h2 class="authz__label mono">{c.signedIn}</h2>
+                <button class="authz__switch" type="button" data-switch>{c.switch}</button>
+              </div>
+              <div class="who">
+                <span class="who__face" aria-hidden="true">
+                  <span class="who__initial" data-initial></span>
+                  <img class="who__avatar" width="44" height="44" alt="" decoding="async" data-avatar hidden />
+                  <span class="who__node"></span>
+                </span>
+                <span class="who__text">
+                  <strong class="who__name" data-name></strong>
+                  <span class="who__srn" data-srn></span>
+                </span>
+              </div>
+              <div class="authz__buttons">
+                <button class="btn btn--primary" type="button" data-approve data-busy={zh ? '正在授权…' : 'Authorizing…'}><span>{c.approve}</span></button>
+                <button class="btn btn--ghost" type="button" data-deny data-busy={zh ? '正在取消…' : 'Canceling…'}><span>{c.deny}</span></button>
+              </div>
+              <p class="authz__small">{c.later}</p>
+            </div>
+          </section>
         </div>
-        <div data-signed-in hidden>
-          <div class="authorize__account"><img width="48" height="48" alt="" data-avatar hidden /><div><strong data-name></strong><p data-srn></p></div></div>
-          <div class="authorize__actions">
-            <button class="btn btn--primary" type="button" data-approve>{zh ? '授权并连接 Codeg' : 'Authorize and connect Codeg'}</button>
-            <button class="btn btn--ghost" type="button" data-deny>{zh ? '取消连接' : 'Cancel connection'}</button>
-          </div>
-          <button class="authorize__switch" type="button" data-switch>{zh ? '切换 SRN 账号' : 'Switch SRN account'}</button>
-        </div>
-      </section>
-      <a class="btn btn--primary" data-open hidden>{zh ? '返回 Codeg' : 'Return to Codeg'}</a>
-      <button class="btn btn--ghost" type="button" data-reload hidden>{zh ? '刷新状态' : 'Refresh status'}</button>
-      <p class="authorize__note">{zh ? '此授权不赋予 Codeg 工作区访问权。' : 'This authorization does not grant access to a Codeg workspace.'}</p>
-      <footer><a href={zh ? '/zh/privacy/' : '/privacy/'}>{zh ? '隐私政策' : 'Privacy'}</a><a href={zh ? '/zh/terms/' : '/terms/'}>{zh ? '服务条款' : 'Terms'}</a><a href={zh ? '/authorize/' : '/zh/authorize/'} data-language>{zh ? 'English' : '简体中文'}</a></footer>
-      <noscript>{zh ? '请启用 JavaScript 完成登录授权。' : 'Enable JavaScript to connect Codeg.'}</noscript>
-    </main>
-    <script>import '../client/authorize';</script>
+      </main>
+
+      <FootLine t={t} alternate={zh ? '/authorize/' : '/zh/authorize/'} class="authz__foot" />
+    </div>
+    <script>
+      import '../client/authorize';
+    </script>
   </body>
 </html>
-<style>
-  body { display: grid; min-height: 100svh; place-items: center; background: var(--bg, #08090d); color: var(--fg, #f3f3f6); }
-  .authorize { width: min(100% - 40px, 520px); padding: 52px 0; }
-  .authorize__brand { display: block; width: 64px; margin-bottom: 30px; }
-  .authorize__brand :global(svg) { fill: currentColor; width: 64px; height: 64px; }
-  .authorize__eyebrow { color: #a5b4fc; font-size: 12px; letter-spacing: .16em; margin-bottom: 12px; }
-  h1 { font-size: clamp(25px, 6vw, 34px); line-height: 1.25; margin-bottom: 14px; font-weight: 500; }
-  .authorize__lede, [data-client] { line-height: 1.6; opacity: .85; overflow-wrap: anywhere; }
-  .authorize__status { margin: 24px 0 16px; }
-  .authorize__error { color: #fca5a5; margin: 16px 0; line-height: 1.6; }
-  .authorize__permission { padding-top: 12px; font-weight: 500; }
-  .authorize__note { font-size: 13px; line-height: 1.7; opacity: .65; margin: 14px 0; }
-  .authorize__actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 16px; }
-  .authorize__actions .btn { gap: 9px; }
-  .authorize__account { display: flex; align-items: center; gap: 14px; margin-top: 24px; padding: 18px; border: 1px solid #ffffff24; border-radius: 12px; }
-  .authorize__account img { border-radius: 50%; }
-  .authorize__account p { font-size: 13px; opacity: .7; margin-top: 4px; }
-  .authorize__switch { color: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 4px; }
-  footer { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 36px; font-size: 12px; opacity: .7; }
-  [hidden] { display: none !important; }
-</style>

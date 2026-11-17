@@ -1,0 +1,967 @@
+/* ==========================================================================
+   Connecting Codeg to an SRN account (components/Authorize.astro,
+   client/authorize.ts). One sheet in the middle of the window: what is
+   asking and what it may read on the left, the decision on the right, on a
+   raised pane as the site's sign-in dialog is. The line between SpaceRing
+   and Codeg shows where the request stands. Every outcome but a pending
+   request is one centred column. The state is the root's data-state:
+   loading, pending, notice or done.
+   ========================================================================== */
+
+.authz {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+  padding-inline: var(--edge);
+}
+
+/* the page's own way of hiding things wins over the display set below */
+.authz [hidden] {
+  display: none !important;
+}
+
+.authz__top {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: var(--hud-h);
+}
+
+.authz__main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding-block: var(--s-3) var(--s-5);
+}
+
+.authz__sheet {
+  --pad: 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 384px);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas:
+    'intro action'
+    'details action'
+    'notes action';
+  width: 100%;
+  max-width: 1040px;
+  border: 1px solid var(--hairline);
+  border-radius: 28px;
+  overflow: clip;
+}
+
+/* running text: no word left alone on its last line */
+.note,
+.authz__after,
+.authz__small,
+.authz__error {
+  text-wrap: pretty;
+}
+
+/* ----------------------------------------------------------------- intro */
+
+.authz__intro {
+  grid-area: intro;
+  min-width: 0;
+  padding: var(--pad) var(--pad) 0;
+}
+
+.authz__title {
+  max-width: 15em;
+  margin-top: var(--s-6);
+  font-size: clamp(28px, 2.2vw + 10px, 40px);
+  font-weight: 300;
+  line-height: 1.18;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
+html:lang(zh-CN) .authz__title {
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+/* a title in phrases, each kept whole: it breaks between them if at all */
+.authz__title > span {
+  display: inline-block;
+}
+
+.authz__lede {
+  max-width: 32em;
+  margin-top: var(--s-4);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--corona-64);
+  text-wrap: balance;
+}
+
+/* its sentences and clauses, each kept whole where it fits (client/authorize.ts) */
+.authz__lede > span {
+  display: inline-block;
+}
+
+.authz__next {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-6);
+}
+
+.authz__next:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+.authz__next .btn {
+  justify-content: center;
+  min-width: 13em;
+}
+
+/* --------------------------------------------------------------- the line */
+
+/* SpaceRing's ring and Codeg's mark, each in its socket, and the line between */
+.link {
+  --end: 56px;
+  display: flex;
+  align-items: center;
+  width: min(100%, 252px);
+}
+
+.link__end {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--end);
+  height: var(--end);
+  border: 1px solid var(--hairline-strong);
+  background: var(--raised);
+  transition:
+    opacity 0.5s,
+    border-color 0.5s;
+}
+
+.link__end--ring {
+  border-radius: 50%;
+}
+
+.link__end--ring svg {
+  width: 60%;
+  height: 60%;
+  fill: var(--corona);
+}
+
+.link__end--codeg {
+  /* Codeg's icon is a tile of its own: no socket round it. A square looks
+     larger than a circle as wide, so it is drawn a little smaller. */
+  width: calc(var(--end) * 0.9);
+  height: calc(var(--end) * 0.9);
+  border: 0;
+  background: none;
+}
+
+.link__end--codeg svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.link__line {
+  position: relative;
+  flex: 1;
+  height: 1px;
+  margin-inline: var(--s-3);
+  /* the HUD rail's dashes */
+  background: repeating-linear-gradient(
+    90deg,
+    var(--hud-line) 0 14px,
+    transparent 14px 17px,
+    var(--hud-line) 17px 19px,
+    transparent 19px 22px
+  );
+  transition: opacity 0.5s;
+}
+
+/* the node, travelling while something is under way and resting between the two while it waits */
+.link__bead {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -2.5px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--bead-hot);
+  box-shadow: 0 0 8px 2px var(--bead-glow);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+[data-link='loading'] .link__bead {
+  opacity: 1;
+  animation: bead-seek 1.6s var(--ease-in-out) infinite alternate;
+}
+
+[data-link='pending'] .link__bead {
+  opacity: 1;
+  animation: bead-rest 2.6s ease-in-out infinite;
+}
+
+[data-link='busy'] .link__bead {
+  opacity: 1;
+  animation: bead-send 1.1s var(--ease-in-out) infinite;
+}
+
+@keyframes bead-seek {
+  from {
+    left: 8%;
+  }
+  to {
+    left: 92%;
+  }
+}
+
+@keyframes bead-rest {
+  50% {
+    box-shadow: 0 0 3px 1px var(--bead-glow);
+  }
+}
+
+@keyframes bead-send {
+  from {
+    left: 0;
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  to {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+/* the answer, set on the line: a tick once connected, a cross when declined */
+.link__badge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  display: none;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+  background: var(--void);
+}
+
+.link__icon {
+  display: none;
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+[data-link='linked'] .link__line {
+  background: linear-gradient(90deg, rgb(var(--bead-rgb) / 0.2), rgb(var(--bead-rgb) / 0.85), rgb(var(--bead-rgb) / 0.2));
+}
+
+[data-link='linked'] .link__badge {
+  display: grid;
+  border-color: rgb(var(--bead-rgb) / 0.7);
+  color: var(--bead);
+  box-shadow: 0 0 18px rgb(var(--bead-rgb) / 0.22);
+}
+
+[data-link='linked'] .link__icon--linked,
+[data-link='canceled'] .link__icon--canceled {
+  display: block;
+}
+
+[data-link='canceled'] .link__badge {
+  display: grid;
+  color: var(--corona-64);
+}
+
+[data-link='canceled'] .link__line,
+[data-link='idle'] .link__line {
+  opacity: 0.55;
+}
+
+/* a request that cannot be used: the line parted in the middle */
+[data-link='broken'] .link__line {
+  -webkit-mask: linear-gradient(90deg, #000 0 34%, transparent 34% 66%, #000 66%);
+  mask: linear-gradient(90deg, #000 0 34%, transparent 34% 66%, #000 66%);
+}
+
+/* -------------------------------------------------------------- details */
+
+.authz__details {
+  grid-area: details;
+  min-width: 0;
+  margin-top: var(--s-6);
+  padding-inline: var(--pad);
+}
+
+.facts {
+  margin: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.fact {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr);
+  gap: var(--s-2) var(--s-5);
+  padding: var(--s-4) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+.fact__label {
+  /* level with the first line of the value beside it */
+  padding-top: 5px;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  line-height: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--graphite);
+}
+
+html:lang(zh-CN) .fact {
+  grid-template-columns: 6.5em minmax(0, 1fr);
+}
+
+html:lang(zh-CN) .fact__label {
+  padding-top: 3px;
+  font-size: 12px;
+  line-height: 20px;
+  letter-spacing: 0.16em;
+}
+
+.fact__value {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  min-width: 0;
+  margin: 0;
+  font-size: 15px;
+  line-height: 26px;
+  color: var(--corona);
+}
+
+.fact__value--off {
+  color: var(--corona-64);
+}
+
+.fact__time {
+  font-family: var(--f-mono);
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  color: var(--corona-80);
+}
+
+/* who is asking: Codeg on this computer, or a Codeg Web at its address */
+.client {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.client__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 26px;
+  color: var(--corona-64);
+}
+
+.client__icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.client__web,
+.client[data-kind='web'] .client__desktop {
+  display: none;
+}
+
+.client[data-kind='web'] .client__web {
+  display: block;
+}
+
+.client__text {
+  display: grid;
+  min-width: 0;
+}
+
+.client__where {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--graphite);
+}
+
+/* a Web instance's address: what the person checks, so it is whole and plain */
+.client[data-kind='web'] .client__where {
+  margin-top: var(--s-1);
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  color: var(--corona-80);
+  overflow-wrap: anywhere;
+}
+
+/* until the request is read, a quiet bar where each answer will be */
+[data-state='loading'] .client__icon {
+  visibility: hidden;
+}
+
+[data-state='loading'] .client__name::before,
+[data-state='loading'] .fact__time::before {
+  content: '';
+  display: inline-block;
+  width: 10em;
+  height: 0.7em;
+  border-radius: 4px;
+  background: rgb(var(--corona-rgb) / 0.08);
+  animation: wait 1.4s var(--ease-in-out) infinite alternate;
+}
+
+[data-state='loading'] .fact__time::before {
+  width: 4em;
+}
+
+@keyframes wait {
+  to {
+    opacity: 0.45;
+  }
+}
+
+.scope {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.scope__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.scope__icon {
+  flex: none;
+  width: 20px;
+  height: 26px;
+  padding-block: 3px;
+  color: var(--corona-64);
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.scope__icon--mark {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* ---------------------------------------------------------------- notes */
+
+.authz__notes {
+  grid-area: notes;
+  display: grid;
+  align-content: start;
+  gap: var(--s-3);
+  min-width: 0;
+  padding: var(--s-5) var(--pad) var(--pad);
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--graphite);
+}
+
+.note__icon {
+  flex: none;
+  width: 16px;
+  height: 20.8px;
+  padding-block: 2.4px;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* someone else will hold what is shared: said in the bead's colour */
+.note--web {
+  color: var(--corona-80);
+}
+
+.note--web .note__icon {
+  color: var(--bead);
+}
+
+/* --------------------------------------------------------------- action */
+
+.authz__action {
+  grid-area: action;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: var(--pad) var(--s-6);
+  border-left: 1px solid var(--hairline);
+  background: var(--raised);
+}
+
+/* by day the sheet stands off the paper a little; by night its edge is enough */
+:root[data-theme='light'] .authz__sheet {
+  background: rgb(255 255 255 / 0.4);
+  box-shadow: 0 21px 55px rgb(23 22 28 / 0.06);
+}
+
+/* before the request and the account are known */
+.authz__wait {
+  display: none;
+  gap: var(--s-4);
+}
+
+[data-state='loading'] .authz__wait {
+  display: grid;
+}
+
+[data-state='loading'] .authz__view {
+  display: none;
+}
+
+.authz__wait i {
+  display: block;
+  height: 44px;
+  border-radius: 999px;
+  background: rgb(var(--corona-rgb) / 0.05);
+  animation: wait 1.4s var(--ease-in-out) infinite alternate;
+}
+
+.authz__wait i:first-child {
+  width: 55%;
+  height: 21px;
+  border-radius: 6px;
+  margin-bottom: var(--s-3);
+}
+
+.authz__error {
+  margin-bottom: var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid rgb(var(--prominence-rgb) / 0.32);
+  border-radius: 13px;
+  background: rgb(var(--prominence-rgb) / 0.07);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--prominence);
+}
+
+/* under an outcome's lede (client/authorize.ts moves it there) */
+.authz__intro .authz__error {
+  max-width: 32em;
+  margin: var(--s-5) auto 0;
+}
+
+.authz__head {
+  font-size: 21px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+/* "Signed in as", and the way to another account on the same line */
+.authz__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+
+.authz__switch {
+  /* a little room for the focus ring round the words */
+  margin: -2px -4px;
+  padding: 2px 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--corona-64);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 4px;
+  transition:
+    color 0.3s,
+    text-decoration-color 0.3s;
+}
+
+.authz__switch:hover {
+  color: var(--corona);
+  text-decoration-color: rgb(var(--bead-rgb) / 0.6);
+}
+
+.authz__switch:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.authz__label {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--graphite);
+}
+
+html:lang(zh-CN) .authz__label {
+  font-size: 12px;
+  letter-spacing: 0.16em;
+}
+
+.authz__buttons {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+}
+
+.authz__buttons .btn {
+  justify-content: center;
+  width: 100%;
+}
+
+.authz__buttons .btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* the button that was pressed keeps its colour while the page waits on it */
+.authz__buttons .btn[aria-busy='true'] {
+  opacity: 1;
+}
+
+.authz__after {
+  display: flex;
+  gap: var(--s-3);
+  margin-top: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--corona-64);
+}
+
+.authz__small {
+  margin-top: var(--s-4);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--graphite);
+}
+
+.authz__small a {
+  color: var(--corona-64);
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 3px;
+  transition: color 0.3s;
+}
+
+.authz__small a:hover {
+  color: var(--corona);
+}
+
+/* who is signed in: the picture set in the ring's band, as in the console */
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+  padding: var(--s-4);
+  border: 1px solid var(--hairline);
+  border-radius: 16px;
+  background: rgb(var(--corona-rgb) / 0.025);
+}
+
+.who__face {
+  --size: 44px;
+  --gap: 3.5px;
+  --d: 6px;
+  position: relative;
+  flex: none;
+  width: var(--size);
+  height: var(--size);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 50%;
+}
+
+.who__avatar,
+.who__initial {
+  position: absolute;
+  inset: var(--gap);
+  width: calc(100% - 2 * var(--gap));
+  height: calc(100% - 2 * var(--gap));
+  border-radius: 50%;
+}
+
+.who__avatar {
+  object-fit: cover;
+  background: var(--raised);
+}
+
+.who__initial {
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--corona);
+  background: rgb(var(--corona-rgb) / 0.08);
+}
+
+.who__node {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.who__node::before {
+  --r: calc(var(--size) / 2 - 1.5px);
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--d);
+  height: var(--d);
+  margin: calc(var(--d) / -2) 0 0 calc(var(--d) / -2);
+  border-radius: 50%;
+  background: var(--bead);
+  box-shadow: 0 0 0 2px var(--raised);
+  translate: calc(var(--r) * -0.5) calc(var(--r) * 0.866);
+}
+
+.who__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+/* a long name takes a second line, then gives way (the whole of it is its title) */
+.who__name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.who__srn {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0.08em;
+  color: var(--graphite);
+}
+
+/* ------------------------------------------------------------------ foot */
+
+.authz__foot {
+  flex: none;
+  padding: var(--s-5) 0;
+  border-top: 1px solid var(--hairline);
+}
+
+/* --------------------------------------- an outcome: one column, centred */
+
+[data-state='notice'] .authz__sheet,
+[data-state='done'] .authz__sheet {
+  grid-template-columns: minmax(0, 36rem);
+  grid-template-rows: auto;
+  grid-template-areas: 'intro';
+  justify-content: center;
+  border-color: transparent;
+  text-align: center;
+}
+
+:root [data-state='notice'] .authz__sheet,
+:root [data-state='done'] .authz__sheet {
+  background: none;
+  box-shadow: none;
+}
+
+[data-state='notice'] .authz__intro,
+[data-state='done'] .authz__intro {
+  padding: 0;
+}
+
+[data-state='notice'] :is(.authz__details, .authz__notes, .authz__action),
+[data-state='done'] :is(.authz__details, .authz__notes, .authz__action) {
+  display: none;
+}
+
+[data-state='notice'] .link,
+[data-state='done'] .link {
+  margin-inline: auto;
+}
+
+[data-state='notice'] :is(.authz__title, .authz__lede),
+[data-state='done'] :is(.authz__title, .authz__lede) {
+  margin-inline: auto;
+}
+
+[data-state='notice'] .authz__next,
+[data-state='done'] .authz__next {
+  justify-content: center;
+}
+
+/* ------------------------------------------------------------ responsive */
+
+@media (max-width: 1100px) {
+  .authz__sheet {
+    --pad: var(--s-6);
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  }
+
+  .authz__action {
+    padding-inline: var(--s-5);
+  }
+}
+
+/* Phones and narrow tablets: one column. What is asking and what it may
+   read, then the decision, then the notes; the decision is in reach after
+   a short scroll at most. */
+@media (max-width: 760px) {
+  .authz__main {
+    place-items: start stretch;
+    padding-block: var(--s-3) var(--s-6);
+  }
+
+  .authz__sheet {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      'intro'
+      'details'
+      'notes'
+      'action';
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  :root[data-theme='light'] .authz__sheet {
+    background: none;
+    box-shadow: none;
+  }
+
+  .authz__intro,
+  .authz__details {
+    padding-inline: 0;
+  }
+
+  .authz__intro {
+    padding-top: 0;
+  }
+
+  .link {
+    --end: 44px;
+    width: min(100%, 204px);
+  }
+
+  .authz__title {
+    margin-top: var(--s-5);
+    font-size: clamp(26px, 6.6vw, 32px);
+  }
+
+  .authz__lede {
+    margin-top: var(--s-3);
+    font-size: 15px;
+  }
+
+  .authz__details {
+    margin-top: var(--s-5);
+  }
+
+  .fact {
+    grid-template-columns: 7em minmax(0, 1fr);
+    gap: var(--s-1) var(--s-4);
+    padding: 11px 0;
+  }
+
+  html:lang(zh-CN) .fact {
+    grid-template-columns: 5.4em minmax(0, 1fr);
+  }
+
+  .fact__value {
+    font-size: 14.5px;
+  }
+
+  .scope {
+    gap: 0;
+  }
+
+  .authz__notes {
+    padding: var(--s-4) 0 0;
+  }
+
+  .authz__action {
+    margin-top: var(--s-5);
+    padding: var(--s-5);
+    border: 1px solid var(--hairline-strong);
+    border-radius: 21px;
+  }
+
+  :root[data-theme='light'] .authz__action {
+    box-shadow: 0 13px 34px rgb(23 22 28 / 0.06);
+  }
+
+  .who {
+    margin-top: var(--s-3);
+    padding: var(--s-3) var(--s-4) var(--s-3) var(--s-3);
+  }
+
+  .authz__buttons {
+    margin-top: var(--s-4);
+  }
+
+  [data-state='notice'] .authz__main,
+  [data-state='done'] .authz__main {
+    place-items: center stretch;
+  }
+}
+
+/* the narrowest phones: each answer under its label */
+@media (max-width: 359px) {
+  .fact,
+  html:lang(zh-CN) .fact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-1);
+  }
+
+  .fact__label,
+  html:lang(zh-CN) .fact__label {
+    padding-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link__bead {
+    left: 50% !important;
+    animation: none !important;
+  }
+
+  [data-link='busy'] .link__bead {
+    opacity: 1;
+  }
+}
