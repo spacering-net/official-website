@@ -42,6 +42,22 @@ export interface HarnessDict {
     about: { title: string; text: string; api: string };
   };
   copy: { label: string; done: string };
+  /** "Open in Codeg": the ways to get an item there (components/harness/OpenInCodeg.astro) */
+  opener: {
+    close: string;
+    desktop: string;
+    /** `v`: the first Codeg version that opens these links */
+    needs: (v: string) => string;
+    /** said once the link was followed, since a page cannot tell whether an app answered */
+    after: string;
+    web: string;
+    /** read out with the host it leads to */
+    webLabel: string;
+    copyNote: string;
+    copyAddress: string;
+    none: string;
+    download: string;
+  };
   card: { stars: string; unclaimed: string; listed: string };
   /** prompts: their cards, and what their pages show instead of installing */
   prompt: {
@@ -224,6 +240,18 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       },
     },
     copy: { label: 'Copy', done: 'Copied' },
+    opener: {
+      close: 'Close',
+      desktop: 'Codeg desktop',
+      needs: (v) => `Needs Codeg ${v} or later`,
+      after: 'Nothing happened? Install or update Codeg.',
+      web: 'Codeg Web',
+      webLabel: 'Open in Codeg Web',
+      copyNote: 'Or copy its address to search for in Codeg’s Discover.',
+      copyAddress: 'Copy address',
+      none: 'No Codeg yet?',
+      download: 'Download',
+    },
     card: { stars: 'GitHub stars', unclaimed: 'Unclaimed', listed: 'Listed only' },
     prompt: {
       results: (n) => `${n.toLocaleString('en')} result${n === 1 ? '' : 's'}`,
@@ -239,7 +267,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       sharedBy: 'Shared by',
       use: 'Use',
       download: 'Download PROMPT.md',
-      useNote: 'Paste it into Claude or any agent. Codeg can keep it as a command.',
+      useNote: 'Paste it into Claude or any agent. Codeg can keep it as a quick message.',
       glance: 'At a glance',
       model: 'Written for',
       lang: 'Language',
@@ -297,7 +325,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       download: 'Download definition',
       modelUnset: 'Not set',
       copy: 'Copy definition',
-      note: 'Put it in ~/.claude/agents/ to use it in Claude Code. Codeg converts it for Codex and OpenCode when it installs it.',
+      note: 'Put it in ~/.claude/agents/ to use it in Claude Code. Codeg can show it; installing it from there comes later.',
       glance: 'At a glance',
       needs: 'Needs',
     },
@@ -459,6 +487,18 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       },
     },
     copy: { label: '复制', done: '已复制' },
+    opener: {
+      close: '关闭',
+      desktop: 'Codeg 桌面版',
+      needs: (v) => `需要 Codeg ${v} 或更新版本`,
+      after: '没有反应？请确认已安装并更新 Codeg。',
+      web: 'Codeg Web',
+      webLabel: '在 Codeg Web 中打开',
+      copyNote: '也可以复制地址，在 Codeg 的「发现」里搜索。',
+      copyAddress: '复制地址',
+      none: '还没有 Codeg？',
+      download: '下载',
+    },
     card: { stars: 'GitHub 星标', unclaimed: '未认领', listed: '仅收录' },
     prompt: {
       results: (n) => `${n.toLocaleString('zh-CN')} 个作品`,
@@ -474,7 +514,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       sharedBy: '分享者',
       use: '使用',
       download: '下载 PROMPT.md',
-      useNote: '粘贴给 Claude 或任何智能体即可。Codeg 还能把它存成命令。',
+      useNote: '粘贴给 Claude 或任何智能体即可。Codeg 还能把它存成快捷消息。',
       glance: '概要',
       model: '适用模型',
       lang: '语言',
@@ -531,7 +571,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       download: '下载定义文件',
       modelUnset: '未指定',
       copy: '复制定义',
-      note: '放进 ~/.claude/agents/ 就能在 Claude Code 里用。Codeg 安装时会换算成 Codex、OpenCode 的格式。',
+      note: '放进 ~/.claude/agents/ 就能在 Claude Code 里用。在 Codeg 里可以查看，安装稍后上线。',
       glance: '概要',
       needs: '依赖',
     },

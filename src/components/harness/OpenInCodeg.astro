@@ -1,0 +1,354 @@
+---
+/**
+ * The ways to get an item into Codeg, opened by every "Open in Codeg" on its
+ * page (client/harness.ts): the desktop app; the visitor's own Codeg Web,
+ * when they are signed in and have one connected (asked for each time it
+ * opens, in the browser only, so the page itself stays the same for
+ * everyone); the item's address, to search for in Codeg; and where to get
+ * Codeg. A link only ever opens the item there: installing is agreed to in
+ * Codeg. Without scripts the buttons stay plain codeg:// links.
+ */
+import Copy from './Copy.astro';
+import { harnessDicts } from '../../i18n/harness';
+import type { Lang } from '../../i18n';
+import { SITE, releasesUrl } from '../../config';
+
+interface Props {
+  lang: Lang;
+  /** publisher/name */
+  itemRef: string;
+  /** the codeg:// link the page's buttons already carry */
+  href: string;
+}
+const { lang, itemRef, href } = Astro.props;
+const h = harnessDicts[lang];
+const o = h.opener;
+const since = SITE.codeg.opensHarness;
+---
+<dialog class="opener" aria-labelledby="opener-title" data-opener data-ref={itemRef}>
+  <div class="opener__head">
+    <h2 class="opener__title" id="opener-title">{h.item.openInCodeg}</h2>
+    <button class="opener__close" type="button" aria-label={o.close} data-opener-close>
+      <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"></path></svg>
+    </button>
+  </div>
+
+  <ul class="opener__ways" data-opener-ways>
+    <li>
+      <a class="way" href={href} autofocus data-opener-desktop>
+        <span class="way__icon">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2.2" y="3" width="13.6" height="9.4" rx="1.8"></rect>
+            <path d="M6.6 15.2h4.8M9 12.4v2.8"></path>
+          </svg>
+        </span>
+        <span class="way__text">
+          <span class="way__name">{o.desktop}</span>
+          <span class="way__note" aria-live="polite" data-opener-note data-needs={o.needs(since)} data-after={o.after}>{o.needs(since)}</span>
+        </span>
+        <svg class="way__go" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
+      </a>
+    </li>
+    <template data-opener-web>
+      <li data-opener-instance>
+        <a class="way" target="_blank" rel="noopener noreferrer" data-label={o.webLabel}>
+          <span class="way__icon">
+            <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="9" cy="9" r="6.6"></circle>
+              <path d="M2.4 9h13.2M9 2.4c1.9 1.8 2.9 4 2.9 6.6s-1 4.8-2.9 6.6c-1.9-1.8-2.9-4-2.9-6.6s1-4.8 2.9-6.6z"></path>
+            </svg>
+          </span>
+          <span class="way__text">
+            <span class="way__name">{o.web}</span>
+            <span class="way__note way__note--host" data-opener-host></span>
+          </span>
+          <svg class="way__go way__go--out" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11l6-6M6 5h5v5"></path></svg>
+        </a>
+      </li>
+    </template>
+  </ul>
+
+  <div class="opener__address">
+    <p class="opener__hint">{o.copyNote}</p>
+    <div class="cmd">
+      <code>{itemRef}</code>
+      <Copy lang={lang} text={itemRef} label={o.copyAddress} />
+    </div>
+  </div>
+
+  <p class="opener__foot">
+    {o.none}
+    <a href={releasesUrl(SITE.codeg.repo)} target="_blank" rel="noopener">
+      {o.download}
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11l6-6M6 5h5v5"></path></svg>
+    </a>
+  </p>
+</dialog>
+
+<style>
+  /* As the site's other dialogs: a raised frame over a plain veil. On small
+     screens it rises from the foot, as the filters' sheet does. */
+  .opener {
+    width: min(440px, calc(100vw - 2 * var(--s-4)));
+    max-width: none;
+    max-height: calc(100dvh - 2 * var(--s-4));
+    padding: 0;
+    border: 1px solid var(--hairline-strong);
+    border-radius: 21px;
+    background: var(--raised);
+    color: var(--corona);
+    box-shadow: 0 34px 89px var(--shadow-deep);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .opener::backdrop {
+    background: var(--scrim);
+  }
+
+  .opener[open] {
+    animation: opener-in 0.4s var(--ease-out);
+  }
+
+  @keyframes opener-in {
+    from {
+      opacity: 0;
+      translate: 0 8px;
+    }
+  }
+
+  .opener__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-4);
+    padding: var(--s-5) var(--s-5) var(--s-3) var(--s-6);
+  }
+
+  .opener__title {
+    font-size: 19px;
+    font-weight: 400;
+    line-height: 34px;
+  }
+
+  .opener__close {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    border-radius: 50%;
+    color: var(--corona-64);
+    transition:
+      color 0.3s,
+      background-color 0.3s;
+  }
+
+  .opener__close:hover {
+    color: var(--corona);
+    background: rgb(var(--corona-rgb) / 0.05);
+  }
+
+  .opener__close svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+  }
+
+  /* each way a row: what it is, a line about it, and where it leads */
+  /* the rows' insides start where the title does: only what lights up under the pointer reaches past it */
+  .opener__ways {
+    display: grid;
+    gap: var(--s-1);
+    padding: 0 var(--s-5);
+  }
+
+  .way {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 15px;
+    align-items: center;
+    column-gap: var(--s-4);
+    min-height: 64px;
+    padding: var(--s-3) var(--s-4);
+    border-radius: 13px;
+    transition: background-color 0.2s;
+  }
+
+  /* pressed, a row answers at once; under a pointer it lights up (not under a finger: the sheet
+     opens right where it tapped, and the row that lands there would stay lit) */
+  .way:active {
+    background: rgb(var(--corona-rgb) / 0.07);
+  }
+
+  .way__icon {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--hairline);
+    border-radius: 11px;
+    background: var(--well);
+    color: var(--corona-80);
+    transition:
+      color 0.2s,
+      border-color 0.2s;
+  }
+
+
+  .way__icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .way__text {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+  }
+
+  .way__name {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 22px;
+  }
+
+  .way__note {
+    font-size: 12.5px;
+    line-height: 18px;
+    color: var(--graphite);
+    text-wrap: balance;
+  }
+
+  /* a host, on one line however long */
+  .way__note--host {
+    overflow: hidden;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.01em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .way__go {
+    width: 15px;
+    height: 15px;
+    color: var(--graphite);
+    transition:
+      color 0.2s,
+      translate 0.35s var(--ease-out);
+  }
+
+  @media (hover: hover) {
+    .way:hover {
+      background: rgb(var(--corona-rgb) / 0.05);
+    }
+
+    .way:hover .way__icon {
+      color: var(--bead);
+      border-color: rgb(var(--bead-rgb) / 0.4);
+    }
+
+    .way:hover .way__go {
+      color: var(--corona);
+      translate: 2px 0;
+    }
+
+    .way:hover .way__go--out {
+      translate: 2px -2px;
+    }
+  }
+
+  /* the address, for searching in Codeg: under a line, apart from the ways that open something */
+  .opener__address {
+    display: grid;
+    gap: var(--s-3);
+    margin: var(--s-4) var(--s-6) 0;
+    padding-top: var(--s-5);
+    border-top: 1px solid var(--hairline);
+  }
+
+  .opener__hint {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--graphite);
+    text-wrap: balance;
+  }
+
+  .opener__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-3);
+    padding: var(--s-5) var(--s-6) var(--s-6);
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--graphite);
+  }
+
+  .opener__foot a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-2);
+    color: var(--corona);
+    transition: color 0.2s;
+  }
+
+  .opener__foot a:hover {
+    color: var(--bead);
+  }
+
+  .opener__foot svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  @media (max-width: 640px) {
+    .opener {
+      position: fixed;
+      inset: auto 0 0;
+      width: 100%;
+      max-height: min(82dvh, 46rem);
+      margin: 0;
+      border: 0;
+      border-top: 1px solid var(--hairline-strong);
+      border-radius: 21px 21px 0 0;
+      box-shadow: 0 -34px 89px var(--shadow-deep);
+    }
+
+    .opener[open] {
+      animation: opener-up 0.42s var(--ease-out);
+    }
+
+    @keyframes opener-up {
+      from {
+        translate: 0 40%;
+        opacity: 0;
+      }
+    }
+
+    .opener__head {
+      padding-inline: var(--edge) calc(var(--edge) - var(--s-3));
+    }
+
+    .opener__ways {
+      padding-inline: calc(var(--edge) - var(--s-4));
+    }
+
+    .opener__address {
+      margin-inline: var(--edge);
+    }
+
+    .opener__foot {
+      padding-inline: var(--edge);
+      padding-bottom: calc(var(--s-6) + env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .opener[open] {
+      animation: none;
+    }
+  }
+</style>

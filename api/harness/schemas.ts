@@ -289,6 +289,76 @@ export const Config = z
   })
   .openapi('Config');
 
+/** What is asked of /resolve: what a client has installed, by the items' stable ids. */
+export const ResolveRequest = z
+  .object({
+    installed: z
+      .array(
+        z.object({
+          id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/).openapi({ description: "The item's id, as `item.id` gave it when it was installed." }),
+          revision: z.number().int().min(1).openapi({ description: 'The revision that was installed.' }),
+        }),
+      )
+      .max(100),
+  })
+  .openapi('ResolveRequest');
+
+export const VersionState = z
+  .object({
+    revision: z.number().int(),
+    status: z.enum(['ok', 'yanked', 'blocked']),
+    risk: Risk,
+    reviewed: z.boolean(),
+    permissions: z.object({ declared: Permissions.partial(), detected: Permissions }),
+    checks: z.object({
+      findings: z.object({ low: z.number().int(), medium: z.number().int(), high: z.number().int() }).openapi({ description: 'How many findings of each severity.' }),
+      secrets: z.number().int(),
+      review: z.enum(['off', 'pending', 'done']),
+    }),
+    packages: z.array(
+      z.object({
+        registryType: z.string(),
+        identifier: z.string(),
+        version: z.string().nullable(),
+        verified: z.enum(['ok', 'missing', 'unchecked', 'pending']),
+        hasInstallScript: z.boolean(),
+      }),
+    ),
+    stateSha256: z.string().openapi({
+      description:
+        'SHA-256 of the fields above as JSON with sorted keys. Equal on two answers means nothing a person agreed to has changed in between.',
+    }),
+  })
+  .openapi('VersionState', {
+    description:
+      "What can change about a version after it is published: its files never do, but it can be yanked or blocked, and a later check can change its risk, permissions, findings or packages. Read this right before installing; it is never cached.",
+  });
+
+export const Resolved = z
+  .union([
+    z.object({
+      id: z.string(),
+      status: z.enum(['public', 'listed']),
+      ref: z.string().openapi({ example: 'anthropics/pdf', description: 'Its address now: a rename keeps the id.' }),
+      kind: Kind,
+      latest: z.object({ revision: z.number().int(), version: z.string().nullable(), publishedAt: z.string() }),
+      advisories: z.array(Advisory),
+      installed: VersionState.nullable().openapi({ description: 'The revision asked about, as it stands now; null if the item has no such revision.' }),
+    }),
+    z.object({
+      id: z.string(),
+      status: z.enum(['retired', 'removed']).openapi({ description: 'retired: stopped by its author or its source; removed: taken down.' }),
+      installed: z.object({ revision: z.number().int(), status: z.enum(['ok', 'yanked', 'blocked']) }).nullable(),
+    }),
+    z.object({
+      id: z.string(),
+      status: z.enum(['unavailable']).openapi({ description: 'Not out, private, or no such item: which of these is not told.' }),
+    }),
+  ])
+  .openapi('Resolved');
+
+export const ResolveResponse = z.object({ items: z.array(Resolved).openapi({ description: 'One per item asked about, in the order asked.' }) }).openapi('ResolveResponse');
+
 export const ErrorBody = z.object({ error: z.string().openapi({ example: 'not_found' }) }).openapi('Error');
 
 export type ItemSummary = z.infer<typeof ItemSummary>;
@@ -305,3 +375,5 @@ export type PromptCard = z.infer<typeof PromptCard>;
 export type PromptInfo = z.infer<typeof PromptInfo>;
 export type AssistantCard = z.infer<typeof AssistantCard>;
 export type AssistantInfo = z.infer<typeof AssistantInfo>;
+export type VersionState = z.infer<typeof VersionState>;
+export type Resolved = z.infer<typeof Resolved>;

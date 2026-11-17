@@ -1,3 +1,4 @@
+import { hex } from '../ids';
 import { accessOf } from './assistant';
 import { mediaPath } from './importers/media';
 import type { AssistantMeta, Checks, ItemKind, ItemStatus, PinnedPackage, PromptMeta, Risk, Showcase, StoredAssistantCard, StoredPromptCard } from './model';
@@ -12,14 +13,16 @@ import type {
   PromptCard,
   PublisherInfo,
   PublisherSummary,
+  Resolved,
   TagInfo,
+  VersionState,
   VersionSummary,
 } from './schemas';
 import { facetKey, searchIds } from './search';
 import type { SkillMeta } from './skill';
 import { NAME_RE, type Localized } from './text';
 
-export type { AssistantCard, AssistantInfo, InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
+export type { AssistantCard, AssistantInfo, InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, Resolved, TagInfo, VersionState, VersionSummary };
 
 /**
  * Reading the catalog: browsing, search, an item and its versions. The API
@@ -521,6 +524,103 @@ export async function getVersion(db: D1Database, handle: string, name: string, r
   if (!v) return null;
   const [item] = await summaries(db, [row]);
   return installInfo(db, item, v);
+}
+
+/** JSON with every object's keys in order, so the same state always reads the same. */
+const canonical = (value: unknown): string =>
+  JSON.stringify(value, (_, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : v,
+  );
+
+interface ResolveRow {
+  /** which of the asked this row answers */
+  n: number;
+  id: string | null;
+  kind: ItemKind;
+  status: ItemStatus;
+  visibility: 'public' | 'private';
+  name: string;
+  reviewed: number;
+  latest_revision: number;
+  version_at: string;
+  handle: string;
+  latest_version: string | null;
+  revision: number | null;
+  v_status: VersionState['status'];
+  v_risk: Risk;
+  permissions: string;
+  checks: string;
+  packages: string;
+}
+
+/** A version as it stands now: what may change after it is published, and a hash that tells when any of it has. */
+async function versionState(r: ResolveRow): Promise<VersionState> {
+  const checks = JSON.parse(r.checks) as Checks;
+  const count = (severity: Risk) => checks.findings.filter((f) => f.severity === severity).length;
+  const state = {
+    revision: r.revision!,
+    status: r.v_status,
+    risk: r.v_risk,
+    reviewed: !!r.reviewed,
+    permissions: JSON.parse(r.permissions) as PermissionProfile,
+    checks: { findings: { low: count('low'), medium: count('medium'), high: count('high') }, secrets: checks.secrets.length, review: checks.review },
+    packages: (JSON.parse(r.packages) as PinnedPackage[]).map((p) => ({
+      registryType: p.registryType,
+      identifier: p.identifier,
+      version: p.version,
+      verified: p.verified,
+      hasInstallScript: !!p.hasInstallScript,
+    })),
+  };
+  return { ...state, stateSha256: hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical(state)))) };
+}
+
+/**
+ * What a client has installed, as it stands now: asked by the items' ids, so
+ * a rename changes nothing, and answered in the order asked. An item that is
+ * out tells its address, its latest version and the asked revision's state; a
+ * retired or removed one only that revision's status; anything else (not out
+ * yet, private, no such id) is told apart from nothing: 'unavailable'.
+ *
+ * One statement, with the list as one JSON parameter (a statement takes at
+ * most a hundred): each id is looked up by the items' unique index, each
+ * revision by the versions'.
+ */
+export async function resolveInstalled(db: D1Database, installed: { id: string; revision: number }[]): Promise<Resolved[]> {
+  if (installed.length === 0) return [];
+  const { results } = await db
+    .prepare(
+      `SELECT j.key AS n, i.id, i.kind, i.status, i.visibility, i.name, i.reviewed, i.latest_revision, i.version_at, p.handle,
+              (SELECT l.version FROM item_versions l WHERE l.id = i.latest_version_id) AS latest_version,
+              v.revision, v.status AS v_status, v.risk AS v_risk, v.permissions, v.checks, v.packages
+         FROM json_each(?1) j
+         LEFT JOIN items i ON i.id = json_extract(j.value, '$.id')
+         LEFT JOIN publishers p ON p.id = i.publisher_id
+         LEFT JOIN item_versions v ON v.item_id = i.id AND v.revision = json_extract(j.value, '$.revision')
+        ORDER BY j.key`,
+    )
+    .bind(JSON.stringify(installed))
+    .all<ResolveRow>();
+  const rows = new Map(results.map((r) => [r.n, r]));
+  return Promise.all(
+    installed.map(async ({ id }, n): Promise<Resolved> => {
+      const r = rows.get(n);
+      if (!r?.id || r.visibility !== 'public') return { id, status: 'unavailable' };
+      if (r.status === 'retired' || r.status === 'removed') {
+        return { id, status: r.status, installed: r.revision === null ? null : { revision: r.revision, status: r.v_status } };
+      }
+      if (r.status !== 'public' && r.status !== 'listed') return { id, status: 'unavailable' };
+      return {
+        id,
+        status: r.status,
+        ref: `${r.handle}/${r.name}`,
+        kind: r.kind,
+        latest: { revision: r.latest_revision, version: r.latest_version, publishedAt: r.version_at },
+        advisories: [],
+        installed: r.revision === null ? null : await versionState(r),
+      };
+    }),
+  );
 }
 
 /** The R2 key of an item's rendered description (latest version), or null. */

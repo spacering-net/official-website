@@ -7,12 +7,15 @@
  * A prompt shows itself instead (with a button that copies it) and the
  * results made with it, and is used rather than installed. An assistant shows
  * its seal, its instructions, what to say to it and what it may use.
+ * "Open in Codeg" is a codeg:// link everywhere; with scripts it opens the
+ * ways to get there instead (OpenInCodeg.astro).
  */
 import Copy from './Copy.astro';
 import Avatar from './Avatar.astro';
 import Shot from './Shot.astro';
 import Seal from './Seal.astro';
 import Access from './Access.astro';
+import OpenInCodeg from './OpenInCodeg.astro';
 import { harnessDicts, pick } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
 import { modelName, withoutAgentWord, type ItemDetail, type VersionSummary } from '../../lib/harness';
@@ -553,7 +556,7 @@ const usage = {
                 <span class="use__idle">{h.prompt.copy}</span>
                 <span class="use__done">{h.copy.done}</span>
               </button>
-              <a class="btn btn--ghost" href={codeg}>{t.openInCodeg}</a>
+              <a class="btn btn--ghost" href={codeg} data-codeg-open>{t.openInCodeg}</a>
               {promptBlob && (
                 <a class="btn btn--ghost" href={`/api/harness/v1/blobs/${promptBlob.sha256}`} download="PROMPT.md">{h.prompt.download}</a>
               )}
@@ -564,7 +567,7 @@ const usage = {
           <section class="panel install" data-install aria-labelledby="install-title">
             <h2 class="eyebrow" id="install-title">{t.install}</h2>
             <div class="install__actions">
-              <a class="btn btn--primary" href={codeg}>
+              <a class="btn btn--primary" href={codeg} data-codeg-open>
                 {t.openInCodeg}
                 <svg class="btn__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
               </a>
@@ -596,7 +599,7 @@ const usage = {
         <section class="panel install" data-install aria-labelledby="install-title">
           <h2 class="eyebrow" id="install-title">{t.install}</h2>
           <div class="install__actions">
-            <a class="btn btn--primary" href={codeg}>
+            <a class="btn btn--primary" href={codeg} data-codeg-open>
               {t.openInCodeg}
               <svg class="btn__icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
             </a>
@@ -788,9 +791,11 @@ const usage = {
         <span class="use__done">{h.copy.done}</span>
       </button>
     ) : (
-      <a class="btn btn--primary" href={codeg}>{t.openInCodeg}</a>
+      <a class="btn btn--primary" href={codeg} data-codeg-open>{t.openInCodeg}</a>
     )}
   </div>
+
+  <OpenInCodeg lang={lang} itemRef={item.ref} href={codeg} />
 </div>
 
 <style>

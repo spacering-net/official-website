@@ -12,6 +12,8 @@ export const SITE = {
   codeg: {
     repo: 'spacering-net/codeg',
     docs: 'https://docs.codeg.app',
+    /** the first version that opens Harness links (codeg://harness/…, /workspace?harness=…); set when it ships */
+    opensHarness: '0.46',
   },
 } as const;
 

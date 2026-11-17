@@ -5,7 +5,8 @@
  * step; on small screens the filters open in a sheet.
  * Copy buttons (a prompt's card copies its prompt, fetched when clicked); on
  * an item page, the summary and a long prompt fold, the section bar follows
- * the reading, and a dock keeps "Open in Codeg" (or "Copy prompt") at hand.
+ * the reading, a dock keeps "Open in Codeg" (or "Copy prompt") at hand, and
+ * "Open in Codeg" opens the ways to get there.
  * Everything works without it, with plain links and the form.
  */
 const root = document.documentElement;
@@ -419,6 +420,98 @@ function initItem() {
   }
 }
 
+// ------------------------------------------------------------------ opener
+
+/**
+ * "Open in Codeg" (components/harness/OpenInCodeg.astro). Each button is a
+ * codeg:// link; here it opens the ways to get there instead: that link for
+ * the desktop app, the visitor's own Codeg Web, the address to search for,
+ * and where to get Codeg. Whatever is followed only opens the item in Codeg.
+ *
+ * The visitor's Codeg Web instances are their active Web connections
+ * (/api/me/clients), asked for each time this opens and only when someone
+ * is signed in; nothing about them is in the page itself.
+ */
+function initOpener() {
+  const opener = document.querySelector<HTMLDialogElement>('[data-opener]');
+  const ways = opener?.querySelector<HTMLElement>('[data-opener-ways]');
+  const web = opener?.querySelector<HTMLTemplateElement>('[data-opener-web]');
+  const note = opener?.querySelector<HTMLElement>('[data-opener-note]');
+  const ref = opener?.dataset.ref;
+  if (!opener || !ways || !web || !ref || typeof opener.showModal !== 'function') return;
+
+  let from: HTMLElement | null = null;
+  let turn = 0;
+
+  /** The visitor's Codeg Web instances, one row each, after the desktop app's. */
+  const instances = async () => {
+    const mine = ++turn;
+    ways.querySelectorAll('[data-opener-instance]').forEach((row) => row.remove());
+    if (!root.classList.contains('has-account')) return;
+    let origins: string[];
+    try {
+      const res = await fetch('/api/me/clients', { credentials: 'same-origin', cache: 'no-store', headers: { accept: 'application/json' } });
+      if (!res.ok) return;
+      const { clients } = (await res.json()) as { clients?: { client_type?: string; status?: string; client_origin?: string | null }[] };
+      origins = (clients ?? []).filter((c) => c.client_type === 'web' && c.status === 'active').map((c) => c.client_origin ?? '');
+    } catch {
+      // not reached: the other ways are still there
+      return;
+    }
+    // closed or opened again meanwhile: this answer is no longer the one wanted
+    if (mine !== turn || !opener.open) return;
+    const rows: Element[] = [];
+    for (const origin of new Set(origins)) {
+      let at: URL;
+      try {
+        at = new URL(origin);
+      } catch {
+        continue;
+      }
+      if (at.protocol !== 'https:') continue;
+      const row = web.content.firstElementChild?.cloneNode(true) as HTMLElement | undefined;
+      const link = row?.querySelector('a');
+      const host = row?.querySelector<HTMLElement>('[data-opener-host]');
+      if (!row || !link || !host) continue;
+      link.href = `${at.origin}/workspace?harness=${encodeURIComponent(ref)}`;
+      link.setAttribute('aria-label', `${link.dataset.label} · ${at.host}`);
+      host.textContent = at.host;
+      host.title = at.host;
+      rows.push(row);
+    }
+    web.before(...rows);
+  };
+
+  document.addEventListener('click', (e) => {
+    const link = (e.target as Element | null)?.closest<HTMLAnchorElement>('a[data-codeg-open]');
+    // a click meant for a new tab or window is left to the link
+    if (!link || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    from = link;
+    if (note) note.textContent = note.dataset.needs ?? '';
+    opener.showModal();
+    root.classList.add('is-locked');
+    void instances();
+  });
+  opener.addEventListener('close', () => {
+    // closed and opened again at once: this tells of the earlier closing, late
+    if (opener.open) return;
+    turn++;
+    root.classList.remove('is-locked');
+    from?.focus({ preventScroll: true });
+  });
+  opener.querySelector('[data-opener-close]')?.addEventListener('click', () => opener.close());
+  // a click on the veil around it closes it
+  opener.addEventListener('click', (e) => {
+    if (e.target === opener) opener.close();
+  });
+  // a page cannot tell whether an app took the link: say what to check
+  opener.querySelector('[data-opener-desktop]')?.addEventListener('click', () => {
+    if (note) note.textContent = note.dataset.after ?? '';
+  });
+}
+
 initCopy();
 initBrowse();
 initItem();
+initOpener();

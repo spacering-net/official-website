@@ -1,9 +1,9 @@
 // The pages beside the homepage (Harness, the policies; Space, the assistant
 // and open source): the shared HUD, narrow screens' menu and account dialog, what stays in
 // view while scrolling, Harness's in-place browsing, the edges they share, the
-// light theme, the prompts' gallery, the assistants' shelf and pages, and the
-// product pages' drawings and previews, all without a page error or a refused
-// script.
+// light theme, the prompts' gallery, the assistants' shelf and pages, the
+// product pages' drawings and previews, and "Open in Codeg", all without a
+// page error or a refused script.
 // Usage: node scripts/check-pages.mjs [baseUrl]
 import { chromium } from 'playwright';
 
@@ -15,12 +15,20 @@ const report = (ok, what, detail = '') => {
   console.log(ok ? 'ok ' : '✗  ', what, detail);
 };
 
-async function open(path, { phone = false } = {}) {
+/**
+ * `prepare` runs before the page loads (to stand in for an API, say); `scripts: false` loads it as a
+ * browser without scripts would; `touch` makes the phone a real one (a finger, and scrollbars that take
+ * no room: a desktop browser's keep their gutter, which what is fixed to the screen's edges stops short of).
+ */
+async function open(path, { phone = false, prepare, scripts = true, touch = false } = {}) {
   const ctx = await browser.newContext({
     viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 900 },
     deviceScaleFactor: phone ? 2 : 1,
     locale: 'zh-CN',
     permissions: ['clipboard-read', 'clipboard-write'],
+    javaScriptEnabled: scripts,
+    isMobile: touch,
+    hasTouch: touch,
   });
   const page = await ctx.newPage();
   const errors = [];
@@ -29,6 +37,7 @@ async function open(path, { phone = false } = {}) {
   const signedOut = (m) => /status of 401/.test(m.text()) && new URL(m.location().url || 'about:blank', base).pathname === '/api/me';
   page.on('console', (m) => m.type() === 'error' && !signedOut(m) && errors.push(m.text()));
   await page.addInitScript(() => document.addEventListener('securitypolicyviolation', (e) => console.error(`CSP: ${e.violatedDirective} ${e.blockedURI}`)));
+  await prepare?.(page);
   await page.goto(`${base}${path}`, { waitUntil: 'networkidle' });
   return { ctx, page, errors };
 }
@@ -862,6 +871,188 @@ for (const [path, twin] of [
   }
   report(still.every((s) => s.moving === 0 && s.smil !== false), 'reduced motion: every drawing holds still', JSON.stringify(still));
   await ctx.close();
+}
+
+// 12. "Open in Codeg": every such button is a codeg:// link that, with scripts, opens the ways to get
+// there (the desktop app, the visitor's own Codeg Web, the address to search for, where to get Codeg);
+// by keyboard, from the foot on a phone, with the visitor's instances asked for only when signed in
+{
+  const ref = 'anthropics/docx';
+  const link = `codeg://harness/install?ref=${encodeURIComponent(ref)}`;
+  /** what the dialog shows now */
+  const shown = (page) =>
+    page.evaluate(() => {
+      const d = document.querySelector('[data-opener]');
+      const box = d.getBoundingClientRect();
+      const a = document.activeElement;
+      return {
+        open: d.open,
+        locked: document.documentElement.classList.contains('is-locked'),
+        // where the focus is: the desktop app's row, elsewhere among the ways, the page's own button, or
+        // on nothing of the page (Tab passes through the browser's own controls on its way round)
+        focus: a?.matches('[data-opener-desktop]') ? 'desktop' : d.contains(a) ? 'inside' : a?.matches('[data-install] a[data-codeg-open]') ? 'button' : !a || a === document.body ? 'browser' : a.tagName,
+        desktop: d.querySelector('[data-opener-desktop]').getAttribute('href'),
+        note: d.querySelector('[data-opener-note]').textContent,
+        instances: [...d.querySelectorAll('[data-opener-instance] a')].map((x) => `${x.getAttribute('href')} ${x.target} ${x.rel} ${x.querySelector('[data-opener-host]').textContent}`),
+        download: d.querySelector('.opener__foot a').getAttribute('href'),
+        box: [Math.round(box.left), Math.round(box.width), Math.round(box.bottom)],
+        screen: [innerWidth, innerHeight],
+      };
+    });
+
+  // signed out, by keyboard
+  {
+    const asked = [];
+    const { ctx, page, errors } = await open(`/zh/harness/${ref}/`, { prepare: (page) => page.on('request', (r) => r.url().includes('/api/me/clients') && asked.push(r.url())) });
+    const links = await page.$$eval('a[data-codeg-open]', (as) => as.map((a) => a.getAttribute('href')));
+    report(links.length === 2 && links.every((h) => h === link), 'the install panel’s and the dock’s buttons are codeg:// links to the item, its address encoded', links.join(' '));
+    report(!(await page.locator('[data-opener]').isVisible()), 'the ways stay away until asked for');
+    await page.focus('[data-install] a[data-codeg-open]');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(600);
+    const first = await shown(page);
+    report(
+      first.open && first.locked && first.focus === 'desktop' && first.desktop === link && /0\.\d+/.test(first.note) && first.instances.length === 0 && /^https:\/\/github\.com\/spacering-net\/codeg\/releases/.test(first.download),
+      'Enter on the button opens them: the desktop app first (the focus on it, the version it takes), and where to get Codeg',
+      JSON.stringify(first),
+    );
+    report(asked.length === 0, 'signed out, nothing is asked about the visitor', asked.join(' '));
+    // the focus stays among them
+    const around = [];
+    for (let i = 0; i < 6; i++) {
+      await page.keyboard.press('Tab');
+      around.push((await shown(page)).focus);
+    }
+    report(around.every((f) => ['desktop', 'inside', 'browser'].includes(f)) && around.includes('desktop') && around.includes('inside'), 'Tab goes round the ways, never out to the page', around.join(' '));
+    // followed, the link is left to the browser (here it is only watched), and the row says what to check
+    await page.evaluate(() => document.querySelector('[data-opener-desktop]').addEventListener('click', (e) => e.preventDefault(), { once: true }));
+    await page.click('[data-opener-desktop]');
+    const after = (await shown(page)).note;
+    report(after !== first.note && /Codeg/.test(after), 'once the desktop link is followed, the row says what to check if nothing happened', `${first.note} → ${after}`);
+    await page.click('[data-opener] [data-copy]');
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    report(copied === ref, 'the address copies, to search for in Codeg', copied);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    const closed = await shown(page);
+    report(!closed.open && !closed.locked && closed.focus === 'button', 'Escape closes them: the page scrolls again, the focus back on the button', JSON.stringify([closed.open, closed.locked, closed.focus]));
+    // by the pointer: the close button, and the veil around
+    await page.click('[data-install] a[data-codeg-open]');
+    const again = await shown(page);
+    await page.click('[data-opener-close]');
+    const byButton = (await shown(page)).open;
+    await page.click('[data-install] a[data-codeg-open]');
+    await page.mouse.click(20, 20);
+    const byVeil = (await shown(page)).open;
+    report(again.open && again.note === first.note && !byButton && !byVeil, 'a click opens them afresh; the close button and the veil close them', JSON.stringify([again.open, again.note, byButton, byVeil]));
+    report(!errors.length, 'the ways to Codeg: no errors', errors.join(' | '));
+    await ctx.close();
+  }
+
+  // signed in, with Codeg Web connected: the visitor's instances, asked for each time
+  {
+    const me = { number: 7, name: 'someone', image: null };
+    const client = (id, type, origin, status = 'active') => ({ id, client_name: 'Codeg', client_type: type, status, client_origin: origin });
+    let answers = 0;
+    let fail = false;
+    const { ctx, page, errors } = await open(`/zh/harness/${ref}/`, {
+      prepare: async (page) => {
+        await page.addInitScript((m) => localStorage.setItem('sr-account', JSON.stringify(m)), me);
+        await page.route('**/api/me', (r) => r.fulfill({ json: { user: me } }));
+        await page.route('**/api/me/clients', (r) => {
+          answers++;
+          if (fail) return r.fulfill({ status: 503, json: { error: 'unavailable' } });
+          return r.fulfill({
+            json: {
+              account_srn: 7,
+              next_cursor: null,
+              clients: [
+                client('6', 'web', 'https://codeg.example.com'),
+                client('5', 'desktop', null),
+                client('4', 'web', 'https://codeg.example.com'),
+                client('3', 'web', 'https://team.example.org:8443'),
+                client('2', 'web', 'https://gone.example.net', 'revoked'),
+                client('1', 'web', 'http://plain.example.net'),
+              ],
+            },
+          });
+        });
+      },
+    });
+    const html = await (await fetch(`${base}/zh/harness/${ref}/`)).text();
+    report(!/workspace\?harness=|example\.com/.test(html), 'the page itself names no instance: it is the same for everyone');
+    await page.click('[data-install] a[data-codeg-open]');
+    await page.waitForTimeout(500);
+    const once = await shown(page);
+    const want = [
+      `https://codeg.example.com/workspace?harness=${encodeURIComponent(ref)} _blank noopener noreferrer codeg.example.com`,
+      `https://team.example.org:8443/workspace?harness=${encodeURIComponent(ref)} _blank noopener noreferrer team.example.org:8443`,
+    ];
+    report(once.instances.join('|') === want.join('|'), 'signed in: each active Codeg Web instance once, by its host, leading to the item there (none revoked, none over plain http)', once.instances.join(' | '));
+    await page.keyboard.press('Escape');
+    await page.click('[data-install] a[data-codeg-open]');
+    await page.waitForTimeout(500);
+    const twice = await shown(page);
+    report(answers === 2 && twice.instances.length === 2, 'opened again, they are asked for again, and listed once', `${answers} asked, ${twice.instances.length} listed`);
+    await page.keyboard.press('Escape');
+    fail = true;
+    await page.click('[data-install] a[data-codeg-open]');
+    await page.waitForTimeout(500);
+    const none = await shown(page);
+    report(none.open && none.instances.length === 0 && none.desktop === link, 'when they cannot be had, the other ways are still there', JSON.stringify(none.instances));
+    // the browser notes the refused request itself; nothing else may go wrong
+    const others = errors.filter((e) => !/status of 503/.test(e));
+    report(!others.length, 'the ways to Codeg, signed in: no errors', others.join(' | '));
+    await ctx.close();
+  }
+
+  // on a phone: from the dock, rising from the foot
+  {
+    const { ctx, page, errors } = await open(`/zh/harness/${ref}/`, { phone: true, touch: true });
+    await page.evaluate(() => window.scrollTo(0, 2400));
+    await page.waitForTimeout(700);
+    await page.tap('[data-dock] a[data-codeg-open]');
+    await page.waitForTimeout(700);
+    const sheet = await shown(page);
+    report(
+      sheet.open && sheet.box[0] === 0 && sheet.box[1] === sheet.screen[0] && sheet.box[2] === sheet.screen[1],
+      'on a phone the dock’s button opens them as a sheet, the screen’s width, at its foot',
+      JSON.stringify([sheet.box, sheet.screen]),
+    );
+    const wide = await page.evaluate(() => {
+      const d = document.querySelector('[data-opener]');
+      return [...d.querySelectorAll('*')].filter((el) => el.getBoundingClientRect().right > innerWidth + 0.5).length;
+    });
+    report(wide === 0, 'nothing in the sheet is wider than the phone', `${wide}`);
+    report(!errors.length, 'the ways to Codeg on a phone: no errors', errors.join(' | '));
+    await ctx.close();
+  }
+
+  // a prompt and an assistant: the same button, the same ways
+  for (const [kind, a] of [['prompt', 'a prompt'], ['assistant', 'an assistant']]) {
+    const { items } = await (await fetch(`${base}/api/harness/v1/items?kind=${kind}&limit=1`)).json();
+    if (!items.length) {
+      report(true, `no ${kind} in this catalog to open in Codeg`);
+      continue;
+    }
+    const { ctx, page, errors } = await open(`/zh/harness/${items[0].ref}/`);
+    const hrefs = await page.$$eval('a[data-codeg-open]', (as) => as.map((a) => a.getAttribute('href')));
+    await page.click('[data-install] a[data-codeg-open]');
+    const dialog = await shown(page);
+    const own = `codeg://harness/install?ref=${encodeURIComponent(items[0].ref)}`;
+    report(hrefs.length > 0 && hrefs.every((h) => h === own) && dialog.open && dialog.desktop === own, `${a}’s button opens the same ways`, `${hrefs.join(' ')} ${dialog.open}`);
+    report(!errors.length, `the ways to Codeg, ${a}: no errors`, errors.join(' | '));
+    await ctx.close();
+  }
+
+  // without scripts: the button is the plain link, and the ways never show
+  {
+    const { ctx, page } = await open(`/zh/harness/${ref}/`, { scripts: false });
+    const plain = await page.locator('[data-install] a[data-codeg-open]').getAttribute('href');
+    const hidden = !(await page.locator('[data-opener]').isVisible());
+    report(plain === link && hidden, 'without scripts the button is still the codeg:// link, and the ways stay away', `${plain} ${hidden}`);
+    await ctx.close();
+  }
 }
 
 await browser.close();

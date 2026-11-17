@@ -1,8 +1,9 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context, Next } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
 import { etag } from 'hono/etag';
 import { cacheKey, edgeCache, forCache, fromCache } from './cache';
-import { facetCounts, getItem, getPublisher, getVersion, getVersions, KINDS, listItems, listTags, promptText, readmeKey, SORTS } from './catalog';
+import { facetCounts, getItem, getPublisher, getVersion, getVersions, KINDS, listItems, listTags, promptText, readmeKey, resolveInstalled, SORTS } from './catalog';
 import { MEDIA_TYPES } from './importers/media';
 import { LIMITS } from './limits';
 import * as S from './schemas';
@@ -10,8 +11,8 @@ import * as S from './schemas';
 /**
  * The Harness API, v1 (docs: section 8), under /api/harness/v1. Everything
  * here reads, anonymously: browsing and search, items, versions with what it
- * takes to install them, and the files. Signing in and publishing come in
- * H2 and H3.
+ * takes to install them, the files, and how what a client has installed
+ * stands now. Signing in and publishing come in H2 and H3.
  */
 export const harnessApi = new OpenAPIHono<{ Bindings: Env }>({
   defaultHook: (result, c) => {
@@ -150,9 +151,42 @@ harnessApi.openapi(
     const { publisher, name, revision } = c.req.valid('param');
     const info = await getVersion(c.env.HARNESS_DB, publisher, name, revision);
     if (!info) return c.json({ error: 'not_found' }, 404);
-    // a version never changes: a client may keep this for good
-    return c.json(info, 200, { 'Cache-Control': 'public, max-age=3600, s-maxage=3600' });
+    // A version's files and hashes never change, but what is derived from it does (its status, risk,
+    // permissions, the packages' checks), so this is kept no longer than the rest. Before installing,
+    // a client reads /resolve, which is never kept.
+    return c.json(info, 200);
   },
+);
+
+// what a client sends is a short list, as JSON: anything longer is not read, anything else is told so as the rest of the API tells it
+harnessApi.use('/resolve', bodyLimit({ maxSize: 16 * 1024, onError: (c) => c.json({ error: 'invalid_request' }, 413) }));
+harnessApi.use('/resolve', async (c, next) => {
+  if (c.req.method !== 'POST') return next();
+  if (!/^application\/json\s*(;|$)/i.test(c.req.header('content-type') ?? '')) return c.json({ error: 'invalid_request' }, 415);
+  try {
+    await c.req.json();
+  } catch {
+    return c.json({ error: 'invalid_request' }, 400);
+  }
+  await next();
+});
+
+harnessApi.openapi(
+  createRoute({
+    method: 'post',
+    path: '/resolve',
+    summary: 'How installed items stand now',
+    description:
+      "For what a client has installed (at most 100, by the items' ids): each item's status, its latest version, and the installed revision as it stands now, with a hash that changes when anything a person agreed to has. Never cached. Anything not out, private or unknown answers `unavailable`, with nothing else.",
+    request: { body: { required: true, content: { 'application/json': { schema: S.ResolveRequest } } } },
+    responses: {
+      200: json(S.ResolveResponse, 'One answer per item, in the order asked'),
+      400: json(S.ErrorBody, 'Not a list this takes'),
+      413: json(S.ErrorBody, 'Too long'),
+      415: json(S.ErrorBody, 'Not JSON'),
+    },
+  }),
+  async (c) => c.json({ items: await resolveInstalled(c.env.HARNESS_DB, c.req.valid('json').installed) }, 200, { 'Cache-Control': 'no-store' }),
 );
 
 harnessApi.openapi(
