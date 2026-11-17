@@ -116,3 +116,16 @@ test('isPublicHttps refuses this machine, private networks and plain http', () =
     assert.ok(!isPublicHttps(bad), bad);
   }
 });
+
+test('isPublicHttps sees through other spellings of this machine and of non-public ranges', () => {
+  for (const ok of ['https://[2606:4700::6810:84e5]/', 'https://1.1.1.1/', 'https://mcp.example.org./', 'https://100.128.0.1/', 'https://172.32.0.1/']) assert.ok(isPublicHttps(ok), ok);
+  for (const bad of [
+    'https://localhost./', 'https://LOCALHOST../', 'https://api.localhost./', 'https://router.home.arpa/', 'https://box.localdomain/',
+    'https://[fe81::1]/', 'https://[febf::1]/', 'https://[fec0::1]/', 'https://[::ffff:127.0.0.1]/', 'https://[::ffff:10.0.0.1]/', 'https://[::ffff:8.8.8.8]/',
+    'https://[::127.0.0.1]/', 'https://[64:ff9b::a00:1]/', 'https://[2002:7f00:1::]/', 'https://[2001::1]/', 'https://[2001:db8::1]/', 'https://[3fff::1]/',
+    'https://[ff02::1]/', 'https://[fd00::1]/', 'https://[::]/', 'https://[100::1]/',
+    'https://0x7f.0.0.1/', 'https://2130706433/', 'https://0177.0.0.1/', 'https://127.1/',
+    'https://198.18.0.1/', 'https://198.19.255.255/', 'https://192.0.0.8/', 'https://192.0.2.1/', 'https://198.51.100.7/', 'https://203.0.113.9/',
+    'https://192.88.99.1/', 'https://100.64.0.1/', 'https://0.0.0.0/', 'https://224.0.0.1/', 'https://255.255.255.255/',
+  ]) assert.ok(!isPublicHttps(bad), bad);
+});

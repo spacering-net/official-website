@@ -61,6 +61,49 @@ export function ownsRepository(s: ServerJson, login: string | undefined): boolea
   return !!m && m[1].toLowerCase() === login.toLowerCase();
 }
 
+/** IPv4 ranges that are not the public internet (RFC 6890 and its successors), as [first octets, prefix length]. */
+const NON_PUBLIC_V4: [number[], number][] = [
+  [[0], 8], [[10], 8], [[100, 64], 10], [[127], 8], [[169, 254], 16], [[172, 16], 12], [[192, 0, 0], 24], [[192, 0, 2], 24],
+  [[192, 88, 99], 24], [[192, 168], 16], [[198, 18], 15], [[198, 51, 100], 24], [[203, 0, 113], 24], [[224], 4], [[240], 4],
+];
+
+function publicV4(octets: number[]): boolean {
+  const n = ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>> 0;
+  return !NON_PUBLIC_V4.some(([start, bits]) => {
+    const base = ((start[0] << 24) | ((start[1] ?? 0) << 16) | ((start[2] ?? 0) << 8)) >>> 0;
+    const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+    return ((n & mask) >>> 0) === ((base & mask) >>> 0);
+  });
+}
+
+/** The eight 16-bit groups of an IPv6 address as the URL parser writes it (compressed hex, no dotted tail), or null. */
+function v6Groups(h: string): number[] | null {
+  const halves = h.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  const parts = [...head, ...Array(Math.max(fill, 0)).fill('0'), ...tail];
+  if (parts.length !== 8 || parts.some((p) => !/^[0-9a-f]{1,4}$/.test(p))) return null;
+  return parts.map((p) => parseInt(p, 16));
+}
+
+/**
+ * Only global unicast (2000::/3), minus the ranges inside it that are not
+ * an ordinary public host: Teredo and the other IETF special-purpose blocks
+ * (2001::/23), documentation (2001:db8::/32, 3fff::/20) and 6to4 (2002::/16),
+ * which wraps an IPv4 address of any kind. Loopback, link-local, unique-local,
+ * multicast, IPv4-mapped and NAT64 addresses all fall outside 2000::/3.
+ */
+function publicV6(g: number[]): boolean {
+  if ((g[0] & 0xe000) !== 0x2000) return false;
+  if (g[0] === 0x2001 && g[1] < 0x0200) return false;
+  if (g[0] === 0x2001 && g[1] === 0x0db8) return false;
+  if (g[0] === 0x2002) return false;
+  if (g[0] === 0x3fff && g[1] < 0x1000) return false;
+  return true;
+}
+
 /** Hosts a remote endpoint may not be: this machine, private networks, names that only resolve inside one. */
 export function isPublicHttps(raw: string): boolean {
   let u: URL;
@@ -70,14 +113,16 @@ export function isPublicHttps(raw: string): boolean {
     return false;
   }
   if (u.protocol !== 'https:' || u.username || u.password) return false;
-  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || h.endsWith('.lan') || !h.includes('.') && !h.includes(':')) return false;
-  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
-  if (v4) {
-    const [a, b] = [Number(v4[1]), Number(v4[2])];
-    if (a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224) return false;
+  // A trailing dot names the same host ("localhost." is localhost).
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
+  if (h.includes(':')) {
+    const groups = v6Groups(h);
+    return !!groups && publicV6(groups);
   }
-  if (h.includes(':') && (h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80') || h === '::')) return false;
+  // The URL parser has already turned every IPv4 spelling (hex, octal, short forms) into dotted decimal.
+  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
+  if (v4) return publicV4(v4.slice(1, 5).map(Number));
+  if (!h.includes('.') || ['localhost', 'local', 'internal', 'lan', 'home.arpa', 'localdomain'].some((s) => h === s || h.endsWith(`.${s}`))) return false;
   return true;
 }
 
