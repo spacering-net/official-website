@@ -79,7 +79,7 @@ harnessApi.openapi(
       .map(([k, count]) => ({ id: k.slice('runtime:'.length), count }))
       .sort((a, b) => b.count - a.count);
     return c.json(
-      { limits: LIMITS, kinds: [...KINDS], sorts: [...SORTS], runtimes, tags, review: c.env.HARNESS_REVIEW === 'on' ? ('on' as const) : ('off' as const) },
+      { limits: LIMITS, kinds: KINDS.filter((k) => k !== 'plugin' || c.env.HARNESS_PLUGINS === 'on'), sorts: [...SORTS], runtimes, tags, review: c.env.HARNESS_REVIEW === 'on' ? ('on' as const) : ('off' as const) },
       200,
     );
   },
@@ -95,7 +95,7 @@ harnessApi.openapi(
     request: {
       query: z.object({
         q: z.string().max(200).optional(),
-        kind: z.enum(['skill', 'mcp', 'prompt', 'assistant', 'connector']).optional(),
+        kind: z.enum(['skill', 'mcp', 'prompt', 'assistant', 'connector', 'plugin']).optional(),
         runtime: z.string().max(20).optional(),
         tag: z.string().max(40).optional(),
         publisher: z.string().max(253).optional(),

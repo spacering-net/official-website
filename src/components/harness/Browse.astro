@@ -31,7 +31,7 @@ const { lang, path, state, list, tags, counts, catalog } = Astro.props;
 const h = harnessDicts[lang];
 const n = (v: number) => v.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en');
 const tagMap = new Map(tags.map((t) => [t.id, t]));
-const kinds = (['all', 'skill', 'mcp', 'prompt', 'assistant', 'connector'] as const).filter(
+const kinds = (['all', 'plugin', 'skill', 'mcp', 'prompt', 'assistant', 'connector'] as const).filter(
   (k) => k === 'all' || (counts[`kind:${k}`] ?? 0) > 0 || state.kind === k,
 );
 // how many there are, when the counts say: no filter, a kind, or one filter (within a kind, if one is chosen)

@@ -1,5 +1,6 @@
 import { asText, sha256, treeHash, type PackageFile } from './files';
 import { LIMITS } from './limits';
+import type { StoredPluginCard } from './model';
 import { isPublicHttps } from './mcp';
 import type { Finding } from './scan/content';
 import { scanStructure } from './scan/content';
@@ -224,6 +225,14 @@ export interface PluginDescriptor {
   /** what Codeg asks the user to agree to again when it changes (section 6) */
   execSha256: string;
 }
+
+/** What a plugin's card shows (items.card), from its descriptor. */
+export const pluginCardOf = (d: PluginDescriptor): StoredPluginCard => ({
+  skills: d.components.filter((c) => c.kind === 'skill').length,
+  assistants: d.components.filter((c) => c.kind === 'assistant').length,
+  hosts: d.hosts.map((h) => h.host),
+  autorun: d.autorun.length > 0,
+});
 
 const ROOT_VARS = /\$\{?(?:CLAUDE_PLUGIN_ROOT|CURSOR_PLUGIN_ROOT|CODEX_PLUGIN_ROOT|PLUGIN_ROOT|PLUGIN_DIR|extensionPath)\}?/;
 

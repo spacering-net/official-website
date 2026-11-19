@@ -63,6 +63,8 @@ export interface PluginRun {
   /** its members' source keys */
   members: string[];
   autorun: boolean;
+  /** what Claude Code installs it as from the repository's own marketplace (`name@marketplace`), when it is in one */
+  claude?: string;
 }
 
 export interface RepoResult {
@@ -287,6 +289,15 @@ export async function importRepo(
     if (text !== null) first.set(path, text);
   }
   const declared = pluginSpecs(paths, first);
+  // the repository as a Claude Code marketplace: its name, and the plugins it lists from its own folders
+  const claudeMarket = (() => {
+    const m = parseJson(first.get('.claude-plugin/marketplace.json') ?? null) as { name?: unknown; plugins?: unknown } | null;
+    const word = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(v) ? v : null);
+    const name = word(m?.name);
+    if (!name || !Array.isArray(m?.plugins)) return null;
+    const plugins = new Set(m.plugins.filter((e) => e && typeof e === 'object' && typeof (e as { source?: unknown }).source === 'string').map((e) => word((e as { name?: unknown }).name)));
+    return { name, plugins };
+  })();
   for (const p of declared.problems) result.rejected.push({ path: `plugin:${p.plugin}`, errors: [p.reason] });
   const specs = declared.specs.filter((spec) => {
     const problem = folderProblem(spec.root, tree.tree);
@@ -511,7 +522,8 @@ export async function importRepo(
     }
     for (const k of members) if (!memberOf.has(k)) memberOf.set(k, key);
     pluginInputs.push(await pluginInput(repo, commit.sha, committedAt, spec, d, files, { rules, hash, tags, repoLicense, publisher, name: d.name, key, db }));
-    runs.push({ key, version: '', order: spec.order, members, autorun: d.autorun.length > 0 });
+    const claude = spec.name && claudeMarket?.plugins.has(spec.name) ? `${spec.name}@${claudeMarket.name}` : undefined;
+    runs.push({ key, version: '', order: spec.order, members, autorun: d.autorun.length > 0, ...(claude ? { claude } : {}) });
   }
   result.plugins = runs.length;
   result.loosePlugins = loose.length;
@@ -666,7 +678,6 @@ async function pluginInput(repo: Repo, sha: string, committedAt: string, spec: P
     versionAt: committedAt,
     risk: riskOf(findings),
     repoStars: repo.stargazers_count,
-    card: { skills: d.components.filter((c) => c.kind === 'skill').length, assistants: d.components.filter((c) => c.kind === 'assistant').length, hosts: d.hosts.map((h) => h.host), autorun: d.autorun.length > 0 },
     staged: true,
     components: d.components,
   };

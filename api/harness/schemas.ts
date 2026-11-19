@@ -66,6 +66,16 @@ export const AssistantCard = z
   })
   .openapi('AssistantCard');
 
+export const PluginCard = z
+  .object({
+    skills: z.number().int(),
+    assistants: z.number().int(),
+    hosts: z.array(z.string()).openapi({ description: 'The hosts it has a manifest for.' }),
+    autorun: z.boolean().openapi({ description: 'Something in it runs on its own once installed whole (hooks, code, MCP servers).' }),
+    has: z.string().nullable().openapi({ description: 'In a search: the member whose name the query matched; null otherwise.' }),
+  })
+  .openapi('PluginCard');
+
 export const ItemSummary = z
   .object({
     id: z.string().openapi({ description: 'Stable id (UUIDv7); survives renames.' }),
@@ -88,6 +98,7 @@ export const ItemSummary = z
     latest: z.object({ revision: z.number().int(), version: z.string().nullable(), publishedAt: z.string() }),
     prompt: PromptCard.optional().openapi({ description: 'Prompts only: what their cards show.' }),
     assistant: AssistantCard.optional().openapi({ description: 'Assistants only: what their cards show.' }),
+    plugin: PluginCard.optional().openapi({ description: 'Plugins only: what their cards show.' }),
   })
   .openapi('ItemSummary');
 
@@ -239,6 +250,7 @@ export const PluginInfo = z
     components: z.array(PluginComponent).openapi({ description: 'Its skills and assistants. They are installed with it, never one by one.' }),
     autorun: z.array(AutorunPart),
     autorunFiles: z.array(z.string()).openapi({ description: 'What runs on its own, with the manifests and the files its commands name.' }),
+    mcpUnpinned: z.array(z.string()).openapi({ description: 'MCP servers it brings that are not pinned to an exact version: while there are any, it is not installed whole.' }),
     execSha256: z.string().openapi({ description: 'Changes when anything but its Markdown, plain text and pictures does: ask the user again before updating.' }),
     approved: z.boolean().openapi({ description: 'This revision is installed whole (hooks and all) on the strength of a person having looked at it.' }),
     full: z
@@ -461,3 +473,4 @@ export type VersionState = z.infer<typeof VersionState>;
 export type Resolved = z.infer<typeof Resolved>;
 export type PluginInfo = z.infer<typeof PluginInfo>;
 export type Release = z.infer<typeof Release>;
+export type PluginCard = z.infer<typeof PluginCard>;

@@ -27,6 +27,7 @@ const h = harnessDicts[lang];
 const title = pick(item.title, lang) ?? item.name;
 const prompt = item.kind === 'prompt' ? item.prompt : undefined;
 const assistant = item.kind === 'assistant' ? item.assistant : undefined;
+const plugin = item.kind === 'plugin' ? item.plugin : undefined;
 const summary = assistant ? roleText(pick(item.summary, lang) ?? assistant.role) : pick(item.summary, lang);
 const model = assistant && (assistant.model === 'inherit' ? h.assistant.inherit : modelName(assistant.model, true));
 ---
@@ -69,6 +70,12 @@ const model = assistant && (assistant.model === 'inherit' ? h.assistant.inherit 
         <>
           {model && <span class="card__runtime">{model}</span>}
           <Access access={assistant.access} lang={lang} compact />
+        </>
+      ) : plugin ? (
+        <>
+          {plugin.has && <span class="card__has">{h.plugin.has(plugin.has)}</span>}
+          {!plugin.has && plugin.skills > 0 && <span class="card__runtime">{h.plugin.skills(plugin.skills)}</span>}
+          {!plugin.has && plugin.assistants > 0 && <span class="card__runtime">{h.plugin.assistants(plugin.assistants)}</span>}
         </>
       ) : (
         <span class="card__runtime">{h.runtime.names[item.runtime] ?? item.runtime}</span>
@@ -193,6 +200,16 @@ const model = assistant && (assistant.model === 'inherit' ? h.assistant.inherit 
     font-size: 11px;
     letter-spacing: 0.04em;
     color: var(--corona-64);
+  }
+
+  /* a plugin found by one of its members */
+  .card__has {
+    padding: 1px 7px;
+    border-radius: 5px;
+    background: rgb(var(--bead-rgb) / 0.1);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--bead-hot);
   }
 
   .card__tag::before {

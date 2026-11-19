@@ -7,6 +7,7 @@ import {
   facetCounts,
   getItem,
   getPublisher,
+  getReleases,
   getVersions,
   KINDS,
   listItems,
@@ -19,12 +20,13 @@ import {
   type ItemSummary,
   type PromptCard,
   type PublisherInfo,
+  type Release,
   type TagInfo,
   type VersionSummary,
 } from '../../api/harness/catalog';
 import type { ItemKind } from '../../api/harness/model';
 
-export type { AssistantCard, AssistantInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, TagInfo, VersionSummary };
+export type { AssistantCard, AssistantInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, Release, TagInfo, VersionSummary };
 export { modelName } from '../../api/harness/prompt';
 export { roleText, withoutAgentWord } from '../../api/harness/assistant';
 
@@ -45,7 +47,8 @@ export function browseState(url: URL): BrowseState {
   const sort = p.get('sort');
   return {
     q: (p.get('q') ?? '').trim().slice(0, 200),
-    kind: (KINDS as readonly string[]).includes(kind ?? '') ? (kind as ItemKind) : undefined,
+    // plugins are a kind of the shelves once the switch puts them there (docs/harness-plugins.md, section 10)
+    kind: (KINDS as readonly string[]).includes(kind ?? '') && (kind !== 'plugin' || env.HARNESS_PLUGINS === 'on') ? (kind as ItemKind) : undefined,
     runtime: word(p.get('runtime'), 20),
     tag: word(p.get('tag'), 40),
     sort: SORTS.includes(sort as BrowseState['sort']) ? (sort as BrowseState['sort']) : 'popular',
@@ -68,20 +71,63 @@ export async function loadBrowse(state: BrowseState, publisher?: string): Promis
   return { list, tags, counts };
 }
 
-export async function loadItem(publisher: string, name: string): Promise<{ item: ItemDetail; readme: string | null; versions: VersionSummary[] } | null> {
+/** What a plugin's page shows besides its item: its releases (the latest ones' notes with them), and how Claude Code installs it from its repository. */
+export interface PluginPage {
+  releases: (Release & { html: string | null })[];
+  /** `name@marketplace`, when its repository is a Claude Code marketplace that lists it */
+  claude: string | null;
+}
+
+/** Releases whose notes a plugin's page shows; older ones link to theirs. */
+const NOTES_SHOWN = 10;
+
+async function loadPlugin(item: ItemDetail, publisher: string, name: string): Promise<PluginPage> {
+  const db = env.HARNESS_DB;
+  const [releases, keys, run] = await Promise.all([
+    getReleases(db, publisher, name),
+    db.prepare('SELECT version, notes_key FROM releases WHERE item_id = ?1').bind(item.id).all<{ version: string; notes_key: string | null }>(),
+    db
+      .prepare(
+        `SELECT r.plugins, i.source_key FROM items i JOIN import_runs r ON i.source_key >= r.source || ':' AND i.source_key < r.source || ';'
+          WHERE i.id = ?1 ORDER BY r.completed_at DESC, r.run_id DESC LIMIT 1`,
+      )
+      .bind(item.id)
+      .first<{ plugins: string; source_key: string }>(),
+  ]);
+  const key = new Map(keys.results.map((k) => [k.version, k.notes_key]));
+  const list = releases ?? [];
+  const html = await Promise.all(
+    list.slice(0, NOTES_SHOWN).map(async (r) => {
+      const k = key.get(r.version);
+      const object = k ? await env.HARNESS_FILES.get(k) : null;
+      return object ? object.text() : null;
+    }),
+  );
+  let claude: string | null = null;
+  try {
+    const plugins = run ? (JSON.parse(run.plugins) as { plugins?: { key: string; claude?: string }[] }).plugins : undefined;
+    claude = plugins?.find((p) => p.key === run!.source_key)?.claude ?? null;
+  } catch {}
+  return { releases: list.map((r, i) => ({ ...r, html: html[i] ?? null })), claude };
+}
+
+export async function loadItem(
+  publisher: string,
+  name: string,
+): Promise<{ item: ItemDetail; readme: string | null; versions: VersionSummary[]; plugin: PluginPage | null } | null> {
   const db = env.HARNESS_DB;
   const item = await getItem(db, publisher, name);
-  // a plugin's page comes with phase P2 (docs/harness-plugins.md); until then it is not one
-  if (!item || item.kind === 'plugin') return null;
-  const [versions, readme] = await Promise.all([
+  if (!item) return null;
+  const [versions, readme, plugin] = await Promise.all([
     getVersions(db, publisher, name),
     (async () => {
       const key = item.readme ? await db.prepare('SELECT readme FROM item_versions WHERE item_id = ?1 AND revision = ?2').bind(item.id, item.latest.revision).first<{ readme: string | null }>() : null;
       const object = key?.readme ? await env.HARNESS_FILES.get(key.readme) : null;
       return object ? object.text() : null;
     })(),
+    item.kind === 'plugin' ? loadPlugin(item, publisher, name) : null,
   ]);
-  return { item, readme, versions: versions ?? [] };
+  return { item, readme, versions: versions ?? [], plugin };
 }
 
 export const loadPublisher = (handle: string): Promise<PublisherInfo | null> => getPublisher(env.HARNESS_DB, handle);

@@ -17,7 +17,7 @@ const paths = { en: withQuery('/harness/', state, { cursor: state.cursor }), zh:
 const filtered = !!(state.q || state.cursor || state.runtime || state.tag || state.sort !== 'popular');
 const n = (v: number) => v.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en');
 // what is on the shelves, by kind, largest first
-const shares = (['skill', 'mcp', 'prompt', 'assistant', 'connector'] as const)
+const shares = (['plugin', 'skill', 'mcp', 'prompt', 'assistant', 'connector'] as const)
   .map((k) => ({ k, n: counts[`kind:${k}`] ?? 0 }))
   .filter((s) => s.n > 0)
   .sort((a, b) => b.n - a.n);

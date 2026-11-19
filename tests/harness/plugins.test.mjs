@@ -950,3 +950,68 @@ test('a copy waiting for review holds nothing and blocks nothing; npm exec -p af
   assert.equal(mcpPinned({ command: 'bun', args: ['x', '-p', 'x@1.0.0', '--', 'x'] }), false);
   assert.equal(mcpPinned({ command: 'npm', args: ['exec', 'semver', '--package', 'semver'] }), false);
 });
+
+test('on the shelves: a plugin card says what it has, a member\'s name finds it, its publisher lists it first, its page has its description', async (t) => {
+  const env = envWith('on');
+  const gh = fakeGithub(t);
+  gh.commit(superpowers());
+  await sync(env);
+  const db = env.HARNESS_DB;
+  const p = item(env, KEY);
+
+  // its card, from the reconcile (a staged version leaves the item's card to it)
+  const shelf = await listItems(db, { kind: 'plugin' });
+  assert.deepEqual(shelf.items.map((i) => i.ref), ['obra/superpowers']);
+  assert.deepEqual(shelf.items[0].plugin, { skills: 3, assistants: 0, hosts: shelf.items[0].plugin.hosts, autorun: true, has: null });
+  assert.ok(shelf.items[0].plugin.hosts.includes('claude'));
+
+  // a member's name: the plugin first, saying which member; its own name says none
+  const byMember = await listItems(db, { q: 'brainstorming' });
+  assert.equal(byMember.items[0].ref, 'obra/superpowers');
+  assert.equal(byMember.items[0].plugin.has, 'brainstorming');
+  assert.equal((await listItems(db, { q: 'superpowers' })).items[0].plugin.has, null);
+
+  // the publisher's page: its plugins first, a more popular skill after them, across pages
+  await saveVersions(env, [
+    versionInput({ name: 'other-skill', sourceKey: 'github:obra/other:skills/other-skill', publisher: { kind: 'github', handle: 'obra', name: 'obra', githubLogin: 'obra' } }),
+  ]);
+  db.sqlite.prepare("UPDATE items SET status = 'public', popularity = 99 WHERE name = 'other-skill'").run();
+  const first = await listItems(db, { publisher: 'obra', limit: 1 });
+  assert.deepEqual(first.items.map((i) => i.ref), ['obra/superpowers']);
+  const second = await listItems(db, { publisher: 'obra', limit: 1, cursor: first.next });
+  assert.deepEqual(second.items.map((i) => i.ref), ['obra/other-skill']);
+  assert.equal(second.next, null);
+
+  // its description, kept with the staged version and served once it is current
+  const detail = await getItem(db, 'obra', 'superpowers');
+  assert.ok(detail.readme);
+  const key = db.rows('SELECT readme FROM item_versions WHERE id = ?', p.latest_version_id)[0].readme;
+  assert.match(await (await env.HARNESS_FILES.get(key)).text(), /agentic skills framework/);
+  // and how Claude Code installs it from the repository's own marketplace
+  const run = JSON.parse(db.rows("SELECT plugins FROM import_runs WHERE source = ? ORDER BY completed_at DESC LIMIT 1", SOURCE)[0].plugins);
+  assert.equal(run.plugins[0].claude, 'superpowers@dev');
+});
+
+test('a plugin saved without its description gets it at the next reconcile; /config lists plugins only with the switch on', async (t) => {
+  const env = envWith('on');
+  const gh = fakeGithub(t);
+  gh.commit(superpowers());
+  await sync(env);
+  const db = env.HARNESS_DB;
+  const p = item(env, KEY);
+  db.sqlite.prepare('UPDATE item_versions SET readme = NULL, excerpt = NULL WHERE id = ?').run(p.latest_version_id);
+  await reconcile(env, SOURCE);
+  const v = db.rows('SELECT readme, excerpt FROM item_versions WHERE id = ?', p.latest_version_id)[0];
+  assert.equal(v.readme, `readme/${p.latest_version_id}.html`);
+  assert.match(v.excerpt, /agentic skills framework/);
+  assert.ok((await found(env, 'agentic')).includes(p.id));
+
+  const { harnessApi } = await import('../../api/harness/routes.ts');
+  const kinds = async (flag) => (await (await harnessApi.request('/config', {}, { ...env, HARNESS_PLUGINS: flag, HARNESS_LIMIT: { limit: async () => ({ success: true }) } })).json()).kinds;
+  assert.ok((await kinds('on')).includes('plugin'));
+  assert.ok(!(await kinds('off')).includes('plugin'));
+  // and the kind it lists is one the list takes
+  const res = await harnessApi.request('/items?kind=plugin', {}, { ...env, HARNESS_LIMIT: { limit: async () => ({ success: true }) } });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).items.map((i) => i.ref), ['obra/superpowers']);
+});

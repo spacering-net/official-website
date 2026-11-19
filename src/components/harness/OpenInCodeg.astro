@@ -19,11 +19,14 @@ interface Props {
   itemRef: string;
   /** the codeg:// link the page's buttons already carry */
   href: string;
+  /** a plugin's page: the first Codeg that installs plugins */
+  plugin?: boolean;
 }
-const { lang, itemRef, href } = Astro.props;
+const { lang, itemRef, href, plugin = false } = Astro.props;
 const h = harnessDicts[lang];
 const o = h.opener;
-const since = SITE.codeg.opensHarness;
+const plugins = SITE.codeg.installsPlugins;
+const needs = plugin ? (plugins ? o.needs(plugins) : o.noPlugins) : o.needs(SITE.codeg.opensHarness);
 ---
 <dialog class="opener" aria-labelledby="opener-title" data-opener data-ref={itemRef}>
   <div class="opener__head">
@@ -44,7 +47,7 @@ const since = SITE.codeg.opensHarness;
         </span>
         <span class="way__text">
           <span class="way__name">{o.desktop}</span>
-          <span class="way__note" aria-live="polite" data-opener-note data-needs={o.needs(since)} data-after={o.after}>{o.needs(since)}</span>
+          <span class="way__note" aria-live="polite" data-opener-note data-needs={needs} data-after={o.after}>{needs}</span>
         </span>
         <svg class="way__go" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"></path></svg>
       </a>

@@ -1,6 +1,8 @@
 import { uuidv7 } from '../ids';
 import type { PluginRun } from './importers/github';
 import type { Checks, ItemStatus, Listing, Risk } from './model';
+import { excerpt, renderMarkdown } from './markdown';
+import { pluginCardOf, type PluginDescriptor } from './plugin';
 import { freshChecks, type RescanRow } from './rescan';
 import { docsFor, membersOf, searchDoc, searchStatements, withMembers } from './search';
 import { decideStatus, popularityOf } from './store';
@@ -75,6 +77,7 @@ interface VersionRow {
   hosted: number;
   source_commit: string | null;
   metadata: string;
+  readme: string | null;
 }
 
 const ITEM_COLUMNS = `i.seq, i.id, i.kind, i.name, i.status, i.listed_reasons, i.source_key, i.publisher_id, p.handle, i.covered_by, i.covered_status,
@@ -97,7 +100,7 @@ async function versions(db: D1Database, ids: string[]): Promise<Map<string, Vers
     const chunk = ids.slice(i, i + 90);
     const { results } = await db
       .prepare(
-        `SELECT id, item_id, revision, status, risk, checks, listing, content_sha256, committed_at, created_at, excerpt, hosted, source_commit, metadata
+        `SELECT id, item_id, revision, status, risk, checks, listing, content_sha256, committed_at, created_at, excerpt, hosted, source_commit, metadata, readme
            FROM item_versions WHERE id IN (${marks(chunk.length)})`,
       )
       .bind(...chunk)
@@ -105,6 +108,29 @@ async function versions(db: D1Database, ids: string[]): Promise<Map<string, Vers
     for (const r of results) out.set(r.id, r);
   }
   return out;
+}
+
+/**
+ * A plugin version's description, when it was saved without one (before
+ * plugins kept theirs): its README, rendered as an import renders one, and
+ * its excerpt for search. Null when there is nothing to add.
+ */
+async function described(env: Env, v: VersionRow): Promise<D1PreparedStatement | null> {
+  if (!v.hosted || v.readme || (JSON.parse(v.checks) as Checks).secrets.length) return null;
+  const db = env.HARNESS_DB;
+  const file = await db
+    .prepare("SELECT sha256 FROM version_files WHERE version_id = ?1 AND (path LIKE 'README.md' OR path LIKE 'README.markdown') ORDER BY path LIMIT 1")
+    .bind(v.id)
+    .first<{ sha256: string }>();
+  const object = file ? await env.HARNESS_FILES.get(`blobs/${file.sha256}`) : null;
+  if (!object) return null;
+  const text = await object.text();
+  if (!text.trim()) return null;
+  const key = `readme/${v.id}.html`;
+  await env.HARNESS_FILES.put(key, renderMarkdown(text), { httpMetadata: { contentType: 'text/html; charset=utf-8' } });
+  v.readme = key;
+  v.excerpt ??= excerpt(text);
+  return db.prepare('UPDATE item_versions SET readme = ?1, excerpt = COALESCE(excerpt, ?2) WHERE id = ?3 AND readme IS NULL').bind(key, v.excerpt, v.id);
 }
 
 /** Why an item would not be on the shelves, by the same rules saving uses (store.ts), but for its being a copy. */
@@ -359,26 +385,30 @@ async function reconcileHeld(env: Env, sourceId: string, run: string, lease: str
       );
     }
     if (newVersion) g.statements.push(db.prepare("UPDATE item_versions SET status = 'ok' WHERE id = ?1 AND status = 'staged'").bind(version.id));
+    const description = await described(env, version);
+    if (description) g.statements.push(description);
     const quality = (JSON.parse(version.checks) as Checks).quality.score;
     const popularity = popularityOf(quality, item.repo_stars, !!item.featured, item.boost, plan.run.order + 1);
+    const descriptor = (JSON.parse(version.metadata) as { plugin?: PluginDescriptor }).plugin;
     g.statements.push(
       db
         .prepare(
           `UPDATE items SET status = ?1, listed_reasons = ?2, latest_version_id = ?3, latest_revision = ?4, title_en = ?5, title_zh = ?6,
                   summary_en = ?7, summary_zh = ?8, dedupe_key = ?9, risk = ?10, quality = ?11, popularity = ?12, version_at = ?13,
-                  published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN ?13 END), updated_at = ?14
+                  published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN ?13 END), updated_at = ?14, card = ?16
             WHERE id = ?15 AND latest_revision <= ?4`,
         )
         .bind(
           status, json(reasons), version.id, version.revision, listing.title.en ?? null, listing.title.zh ?? null, listing.summary.en ?? null,
           listing.summary.zh ?? null, `plugin:${version.content_sha256}`, version.risk, quality, popularity, committed, now, item.id,
+          descriptor ? json(pluginCardOf(descriptor)) : null,
         ),
     );
     if (newVersion) {
       g.statements.push(db.prepare('DELETE FROM item_tags WHERE item_id = ?1').bind(item.id));
       for (const t of listing.tags) g.statements.push(db.prepare('INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?1, ?2)').bind(item.id, t));
     }
-    if (item.status !== status || newVersion) {
+    if (item.status !== status || newVersion || description) {
       const doc = searchDoc({
         name: item.name,
         handle: item.handle,

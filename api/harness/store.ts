@@ -378,7 +378,15 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
         result.created++;
       } else result.updated++;
       const revision = Math.max(last?.revision ?? 0, old?.latest_revision ?? 0) + 1;
-      group.push(versionStatement(db, input, versionId, itemId, revision, 'staged', fileRows, archive, null, null, now));
+      // its description, as any version's (served once the reconcile makes it current)
+      let readmeKey: string | null = null;
+      if (input.hosted && input.readme?.trim()) {
+        const key = `readme/${versionId}.html`;
+        const html = renderMarkdown(input.readme);
+        readmeKey = key;
+        writes.set(key, () => env.HARNESS_FILES.put(key, html, { httpMetadata: { contentType: 'text/html; charset=utf-8' } }));
+      }
+      group.push(versionStatement(db, input, versionId, itemId, revision, 'staged', fileRows, archive, readmeKey, input.hosted ? (input.excerpt ?? null) : null, now));
       group.push(...fileStatements(db, versionId, fileRows));
       for (const c of input.components ?? []) {
         group.push(

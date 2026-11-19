@@ -16,8 +16,8 @@ export interface HarnessDict {
   lede: string;
   count: (n: number) => string;
   search: { label: string; placeholder: string; submit: string; results: (n: number, q: string) => string; none: string; noneHint: string; clear: string };
-  kinds: Record<'all' | 'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector', string>;
-  kind: Record<'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector', string>;
+  kinds: Record<'all' | 'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector' | 'plugin', string>;
+  kind: Record<'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector' | 'plugin', string>;
   sort: { label: string; popular: string; new: string; updated: string };
   /** `apply`: sends the runtime list's form, where scripts do not apply a choice at once */
   runtime: { label: string; any: string; apply: string; names: Record<string, string> };
@@ -57,6 +57,8 @@ export interface HarnessDict {
     copyAddress: string;
     none: string;
     download: string;
+    /** a plugin's page, while no Codeg installs plugins */
+    noPlugins: string;
   };
   card: { stars: string; unclaimed: string; listed: string };
   /** prompts: their cards, and what their pages show instead of installing */
@@ -124,6 +126,37 @@ export interface HarnessDict {
     glance: string;
     needs: string;
   };
+  /** plugins: their cards, and what their pages show */
+  plugin: {
+    /** a card's: the member a search found it by */
+    has: (name: string) => string;
+    skills: (n: number) => string;
+    assistants: (n: number) => string;
+    hosts: string;
+    host: string;
+    gets: string;
+    /** what a host gets of it, by kind */
+    parts: Record<'skills' | 'agents' | 'commands' | 'hooks' | 'mcp' | 'code', (n: number) => string>;
+    /** a host without a manifest of its own */
+    skillsOnly: string;
+    hostNames: Record<string, string>;
+    members: string;
+    download: (file: string) => string;
+    failed: string;
+    autorun: string;
+    types: Record<'hook' | 'code' | 'mcp' | 'lsp' | 'monitor' | 'bin', string>;
+    typeCounts: Record<'hook' | 'code' | 'mcp' | 'lsp' | 'monitor' | 'bin', (n: number) => string>;
+    full: string;
+    fullPending: (latest: string) => string;
+    pending: string;
+    unpinned: string;
+    releases: string;
+    added: string;
+    updated: string;
+    removed: string;
+    notes: string;
+    elsewhere: string;
+  };
   item: {
     by: string;
     version: string;
@@ -190,6 +223,9 @@ const runtimes = {
   zh: { node: 'Node.js', python: 'Python', remote: '远程', docker: 'Docker', shell: 'Shell', none: '无代码', bundle: 'MCP 包', dotnet: '.NET', rust: 'Rust' },
 };
 
+/** Hosts by the names plugin manifests are filed under (api/harness/plugin.ts). */
+const HOSTS: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', cursor: 'Cursor', gemini: 'Gemini CLI', copilot: 'GitHub Copilot', pi: 'Pi', kimi: 'Kimi Code', antigravity: 'Antigravity', devin: 'Devin', hermes: 'Hermes', muse: 'Muse', 'agent-plugins': 'Agent Plugins' };
+
 export const harnessDicts: Record<Lang, HarnessDict> = {
   en: {
     lang: 'en',
@@ -213,8 +249,8 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       noneHint: 'Try fewer words, another language, or a name such as anthropics/pdf.',
       clear: 'Clear',
     },
-    kinds: { all: 'All', skill: 'Skills', mcp: 'MCP servers', prompt: 'Prompts', assistant: 'Assistants', connector: 'Connectors' },
-    kind: { skill: 'Skill', mcp: 'MCP', prompt: 'Prompt', assistant: 'Assistant', connector: 'Connector' },
+    kinds: { all: 'All', skill: 'Skills', mcp: 'MCP servers', prompt: 'Prompts', assistant: 'Assistants', connector: 'Connectors', plugin: 'Plugins' },
+    kind: { skill: 'Skill', mcp: 'MCP', prompt: 'Prompt', assistant: 'Assistant', connector: 'Connector', plugin: 'Plugin' },
     sort: { label: 'Sort', popular: 'Popular', new: 'New', updated: 'Updated' },
     runtime: { label: 'Runs on', any: 'Any', apply: 'Apply', names: runtimes.en },
     tags: { label: 'Tags', all: 'All tags' },
@@ -251,6 +287,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       copyAddress: 'Copy address',
       none: 'No Codeg yet?',
       download: 'Download',
+      noPlugins: 'Codeg cannot install plugins yet',
     },
     card: { stars: 'GitHub stars', unclaimed: 'Unclaimed', listed: 'Listed only' },
     prompt: {
@@ -328,6 +365,47 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       note: 'Put it in ~/.claude/agents/ to use it in Claude Code. Codeg can show it; installing it from there comes later.',
       glance: 'At a glance',
       needs: 'Needs',
+    },
+    plugin: {
+      has: (name) => `Has ${name}`,
+      skills: (n) => `${n} skill${n === 1 ? '' : 's'}`,
+      assistants: (n) => `${n} assistant${n === 1 ? '' : 's'}`,
+      hosts: 'Hosts',
+      host: 'Host',
+      gets: 'Installs',
+      parts: {
+        skills: (n) => `${n} skill${n === 1 ? '' : 's'}`,
+        agents: (n) => `${n} assistant${n === 1 ? '' : 's'}`,
+        commands: (n) => `${n} command${n === 1 ? '' : 's'}`,
+        hooks: (n) => `${n} hook${n === 1 ? '' : 's'}`,
+        mcp: (n) => `${n} MCP server${n === 1 ? '' : 's'}`,
+        code: (n) => `${n} code plugin${n === 1 ? '' : 's'}`,
+      },
+      skillsOnly: 'Skills only',
+      hostNames: HOSTS,
+      members: 'Members',
+      download: (file) => `Download ${file}`,
+      failed: 'Could not load it.',
+      autorun: 'Runs on its own',
+      types: { hook: 'Hook', code: 'Code plugin', mcp: 'MCP server', lsp: 'Language server', monitor: 'Monitor', bin: 'Command' },
+      typeCounts: {
+        hook: (n) => `${n} hook${n === 1 ? '' : 's'}`,
+        code: (n) => `${n} code plugin${n === 1 ? '' : 's'}`,
+        mcp: (n) => `${n} MCP server${n === 1 ? '' : 's'}`,
+        lsp: (n) => `${n} language server${n === 1 ? '' : 's'}`,
+        monitor: (n) => `${n} monitor${n === 1 ? '' : 's'}`,
+        bin: (n) => `${n} command${n === 1 ? '' : 's'}`,
+      },
+      full: 'Full install',
+      fullPending: (latest) => `${latest} pending review`,
+      pending: 'Pending review',
+      unpinned: 'MCP servers not pinned to a version',
+      releases: 'Releases',
+      added: 'Added',
+      updated: 'Updated',
+      removed: 'Removed',
+      notes: 'Release notes',
+      elsewhere: 'Other ways to install',
     },
     item: {
       by: 'by',
@@ -460,8 +538,8 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       noneHint: '试试少几个词、换种语言，或者直接输入名字，例如 anthropics/pdf。',
       clear: '清除',
     },
-    kinds: { all: '全部', skill: '技能', mcp: 'MCP 服务', prompt: '提示词', assistant: '助手', connector: '连接器' },
-    kind: { skill: '技能', mcp: 'MCP', prompt: '提示词', assistant: '助手', connector: '连接器' },
+    kinds: { all: '全部', skill: '技能', mcp: 'MCP 服务', prompt: '提示词', assistant: '助手', connector: '连接器', plugin: '插件' },
+    kind: { skill: '技能', mcp: 'MCP', prompt: '提示词', assistant: '助手', connector: '连接器', plugin: '插件' },
     sort: { label: '排序', popular: '热门', new: '最新', updated: '最近更新' },
     runtime: { label: '运行环境', any: '不限', apply: '应用', names: runtimes.zh },
     tags: { label: '标签', all: '全部标签' },
@@ -498,6 +576,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       copyAddress: '复制地址',
       none: '还没有 Codeg？',
       download: '下载',
+      noPlugins: 'Codeg 暂不能安装插件',
     },
     card: { stars: 'GitHub 星标', unclaimed: '未认领', listed: '仅收录' },
     prompt: {
@@ -574,6 +653,47 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
       note: '放进 ~/.claude/agents/ 就能在 Claude Code 里用。在 Codeg 里可以查看，安装稍后上线。',
       glance: '概要',
       needs: '依赖',
+    },
+    plugin: {
+      has: (name) => `含 ${name}`,
+      skills: (n) => `${n} 个技能`,
+      assistants: (n) => `${n} 个助手`,
+      hosts: '宿主',
+      host: '宿主',
+      gets: '装上后有',
+      parts: {
+        skills: (n) => `技能 ${n}`,
+        agents: (n) => `助手 ${n}`,
+        commands: (n) => `命令 ${n}`,
+        hooks: (n) => `钩子 ${n}`,
+        mcp: (n) => `MCP 服务 ${n}`,
+        code: (n) => `代码插件 ${n}`,
+      },
+      skillsOnly: '只装技能',
+      hostNames: HOSTS,
+      members: '成员',
+      download: (file) => `下载 ${file}`,
+      failed: '读取失败。',
+      autorun: '自动运行',
+      types: { hook: '钩子', code: '代码插件', mcp: 'MCP 服务', lsp: '语言服务', monitor: '监视器', bin: '命令' },
+      typeCounts: {
+        hook: (n) => `钩子 ${n}`,
+        code: (n) => `代码插件 ${n}`,
+        mcp: (n) => `MCP 服务 ${n}`,
+        lsp: (n) => `语言服务 ${n}`,
+        monitor: (n) => `监视器 ${n}`,
+        bin: (n) => `命令 ${n}`,
+      },
+      full: '完整安装',
+      fullPending: (latest) => `${latest} 待审核`,
+      pending: '待审核',
+      unpinned: '没有钉死版本的 MCP 服务',
+      releases: '发布记录',
+      added: '新增',
+      updated: '更新',
+      removed: '移除',
+      notes: '发布说明',
+      elsewhere: '其他安装方式',
     },
     item: {
       by: '发布者',

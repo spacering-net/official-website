@@ -20,5 +20,5 @@ const paths = { en: `/harness/${item.ref}`, zh: `/zh/harness/${item.ref}` };
 const description = pick(item.summary, lang) ?? item.prompt?.excerpt.slice(0, 200) ?? h.description;
 ---
 <Layout lang={lang} title={`${title} · ${item.publisher.handle} · Harness`} description={description} paths={paths} noindex={item.status !== 'public'}>
-  <ItemPage lang={lang} item={item} readme={data.readme} versions={data.versions} />
+  <ItemPage lang={lang} item={item} readme={data.readme} versions={data.versions} plugin={data.plugin} />
 </Layout>

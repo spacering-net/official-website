@@ -180,6 +180,14 @@ export interface StoredAssistantCard {
   alsoIn: string[];
 }
 
+/** What a plugin's card shows (items.card). */
+export interface StoredPluginCard {
+  skills: number;
+  assistants: number;
+  hosts: string[];
+  autorun: boolean;
+}
+
 export const listingOf = (title: Localized, summary: Localized, tags: string[]): Listing => ({
   title,
   summary,

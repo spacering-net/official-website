@@ -6,7 +6,10 @@
  * checks found, its files and versions, with a bar to move between them.
  * A prompt shows itself instead (with a button that copies it) and the
  * results made with it, and is used rather than installed. An assistant shows
- * its seal, its instructions, what to say to it and what it may use.
+ * its seal, its instructions, what to say to it and what it may use. A
+ * plugin shows the hosts it has manifests for and what each gets, its members
+ * (each one's file opens in place), what runs on its own and whether it may
+ * be installed whole, and its releases.
  * "Open in Codeg" is a codeg:// link everywhere; with scripts it opens the
  * ways to get there instead (OpenInCodeg.astro).
  */
@@ -18,7 +21,7 @@ import Access from './Access.astro';
 import OpenInCodeg from './OpenInCodeg.astro';
 import { harnessDicts, pick } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
-import { modelName, withoutAgentWord, type ItemDetail, type VersionSummary } from '../../lib/harness';
+import { modelName, withoutAgentWord, type ItemDetail, type PluginPage, type VersionSummary } from '../../lib/harness';
 import { compact } from '../../lib/github';
 
 interface Props {
@@ -27,8 +30,10 @@ interface Props {
   /** the description, rendered and made safe when the version was made */
   readme: string | null;
   versions: VersionSummary[];
+  /** a plugin's releases and other ways to install it */
+  plugin?: PluginPage | null;
 }
-const { lang, item, readme, versions } = Astro.props;
+const { lang, item, readme, versions, plugin: pluginPage } = Astro.props;
 const h = harnessDicts[lang];
 const t = h.item;
 const title = pick(item.title, lang) ?? item.name;
@@ -94,6 +99,51 @@ const reach = assistant
         .join(' · ')
   : '';
 
+// a plugin: the hosts it has manifests for (Codeg's first ones first, and those of them it has none for,
+// which take its skills only), its members, what runs on its own, and which revision may be installed whole
+const hp = h.plugin;
+const plugin = item.kind === 'plugin' ? install.plugin : undefined;
+const FIRST_HOSTS = ['claude', 'codex', 'opencode'];
+const hostRank = (host: string) => (FIRST_HOSTS.includes(host) ? FIRST_HOSTS.indexOf(host) : FIRST_HOSTS.length);
+const hostRows = plugin
+  ? [
+      ...[...plugin.hosts].sort((a, b) => hostRank(a.host) - hostRank(b.host)).map((x) => ({
+        host: x.host,
+        parts: (['skills', 'agents', 'commands', 'hooks', 'mcp', 'code'] as const).filter((k) => x[k] > 0).map((k) => hp.parts[k](x[k])),
+      })),
+      ...FIRST_HOSTS.filter((f) => !plugin.hosts.some((x) => x.host === f)).map((host) => ({ host, parts: [] as string[] })),
+    ]
+  : [];
+const hostName = (host: string) => hp.hostNames[host] ?? host;
+const memberFile = (c: { kind: string; path: string }) => (c.kind === 'skill' ? [c.path, 'SKILL.md'].filter(Boolean).join('/') : c.path);
+const members = plugin
+  ? [...plugin.components]
+      .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'skill' ? -1 : 1))
+      .map((c) => {
+        const file = memberFile(c);
+        const blob = install.archive ? install.files.find((f) => f.path === file) : undefined;
+        const at = install.source ? `https://github.com/${install.source.repository}/blob/${install.source.commit}/${[install.source.path, file].filter(Boolean).join('/')}` : null;
+        return { ...c, file, src: blob ? `/api/harness/v1/blobs/${blob.sha256}` : null, at };
+      })
+  : [];
+const memberCounts = plugin
+  ? [members.some((m) => m.kind === 'skill') && hp.skills(members.filter((m) => m.kind === 'skill').length), members.some((m) => m.kind === 'assistant') && hp.assistants(members.filter((m) => m.kind === 'assistant').length)].filter(Boolean).join(' · ')
+  : '';
+const label = (v: { revision: number; version: string | null }) => v.version ?? `#${v.revision}`;
+const aside = (text: string) => (lang === 'zh' ? `（${text}）` : ` (${text})`);
+const full = plugin
+  ? plugin.full
+    ? `${label(plugin.full)}${plugin.full.revision !== item.latest.revision ? aside(plugin.notFull === 'mcp_unpinned' ? hp.unpinned : hp.fullPending(label(item.latest))) : ''}`
+    : plugin.notFull === 'mcp_unpinned'
+      ? hp.unpinned
+      : hp.pending
+  : '';
+const autorunKinds = plugin ? [...new Set(plugin.autorun.map((a) => a.type))].map((k) => hp.typeCounts[k](plugin.autorun.filter((a) => a.type === k).length)).join(' · ') : '';
+const releases = pluginPage?.releases ?? [];
+const claudeCommand = pluginPage?.claude && item.repositoryUrl?.startsWith('https://github.com/')
+  ? `claude plugin marketplace add ${item.repositoryUrl.replace('https://github.com/', '')} && claude plugin install ${pluginPage.claude}`
+  : null;
+
 // files by folder, the top level first
 const folders = new Map<string, typeof install.files>();
 for (const f of install.files) {
@@ -119,6 +169,17 @@ const sections = (
         { id: 'prompt', label: h.prompt.text, show: true },
         { id: 'results', label: h.prompt.showcases, show: showcases.length > 0 },
         { id: 'checks', label: t.checks, show: true },
+        { id: 'versions', label: t.versions, show: versions.length > 0 },
+      ]
+    : plugin
+    ? [
+        { id: 'readme', label: t.description, show: !!readme || !!install.source },
+        { id: 'hosts', label: hp.hosts, show: hostRows.length > 0 },
+        { id: 'members', label: hp.members, show: members.length > 0 },
+        { id: 'permissions', label: t.permissions, show: true },
+        { id: 'releases', label: hp.releases, show: releases.length > 0 },
+        { id: 'checks', label: t.checks, show: true },
+        { id: 'files', label: t.files, show: install.files.length > 0 },
         { id: 'versions', label: t.versions, show: versions.length > 0 },
       ]
     : [
@@ -195,6 +256,7 @@ const usage = {
           </span>
           {item.repoStars !== null && item.repoStars > 0 && <span class="head__meta" title={t.stars}>★ {compact(item.repoStars)}</span>}
           {assistant?.plugin && <span class="head__meta">{h.assistant.plugin} · {assistant.plugin}</span>}
+          {plugin && item.latest.version && <span class="head__meta">{t.version} {item.latest.version}</span>}
           <span class="head__meta">{t.updated} {h.date(item.latest.publishedAt)}</span>
         </p>
       </header>
@@ -398,6 +460,59 @@ const usage = {
         </section>
       )}
 
+      {plugin && hostRows.length > 0 && (
+        <section class="section" id="hosts" data-section>
+          <h2 class="eyebrow section__title">{hp.hosts}</h2>
+          <div class="hosts" role="table" aria-label={hp.hosts}>
+            <div class="hosts__row hosts__row--head" role="row">
+              <span role="columnheader">{hp.host}</span>
+              <span role="columnheader">{hp.gets}</span>
+            </div>
+            {hostRows.map((r) => (
+              <div class="hosts__row" role="row">
+                <span class="hosts__name" role="rowheader">{hostName(r.host)}</span>
+                <span class:list={['hosts__parts', !r.parts.length && 'muted']} role="cell">{r.parts.length ? r.parts.map((x) => <span>{x}</span>) : hp.skillsOnly}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {plugin && members.length > 0 && (
+        <section class="section" id="members" data-section>
+          <h2 class="eyebrow section__title">
+            {hp.members}
+            <span class="section__aside">{memberCounts}</span>
+          </h2>
+          <ul class="members">
+            {members.map((m) => (
+              <li class="member">
+                {m.src ? (
+                  <details class="member__box" data-member data-src={m.src} data-failed={hp.failed}>
+                    <summary class="member__head">
+                      <span class="member__name">{m.name}</span>
+                      {m.kind === 'assistant' && <span class="badge badge--kind">{h.kind.assistant}</span>}
+                      {m.summary && <span class="member__summary">{m.summary}</span>}
+                    </summary>
+                    <div class="member__body">
+                      <pre class="member__text" data-member-text data-loading={h.browse.loading} hidden></pre>
+                      <a class="member__raw" href={m.src} download={m.file.split('/').pop()}>{hp.download(m.file.split('/').pop()!)}</a>
+                    </div>
+                  </details>
+                ) : (
+                  <div class="member__head">
+                    <span class="member__name">{m.name}</span>
+                    {m.kind === 'assistant' && <span class="badge badge--kind">{h.kind.assistant}</span>}
+                    {m.summary && <span class="member__summary">{m.summary}</span>}
+                    {m.at && <a class="member__raw" href={m.at} rel="nofollow ugc noopener" target="_blank">{m.file.split('/').pop()} ↗</a>}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {install.server && (
         <section class="section" id="server" data-section>
           <h2 class="eyebrow section__title">{t.server}</h2>
@@ -411,6 +526,38 @@ const usage = {
       {!prompt && (
       <section class="section" id="permissions" data-section>
         <h2 class="eyebrow section__title">{t.permissions}</h2>
+        {plugin && (
+          <div class="whole">
+            <dl class="whole__state">
+              <div>
+                <dt>{hp.full}</dt>
+                <dd class:list={[!plugin.full && 'whole__pending']}>{full}</dd>
+              </div>
+              {plugin.mcpUnpinned.length > 0 && (
+                <div>
+                  <dt>{hp.unpinned}</dt>
+                  <dd class="perms__values">{plugin.mcpUnpinned.map((n) => <code>{n}</code>)}</dd>
+                </div>
+              )}
+            </dl>
+            {plugin.autorun.length > 0 && (
+              <>
+                <h3 class="sub">{hp.autorun}</h3>
+                <ul class="autorun">
+                  {plugin.autorun.map((a) => (
+                    <li>
+                      <span class="badge badge--kind">{hp.types[a.type]}</span>
+                      <span class="autorun__host">{hostName(a.host)}</span>
+                      {a.event && <span class="autorun__event">{a.event}</span>}
+                      {a.name && <span class="autorun__event">{a.name}</span>}
+                      <code class="autorun__what">{a.command ?? a.path}</code>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
         <div class="perms" role="table" aria-label={t.permissions}>
           <div class="perms__row perms__row--head" role="row">
             <span role="columnheader"></span>
@@ -435,6 +582,45 @@ const usage = {
           })}
         </div>
       </section>
+      )}
+
+      {releases.length > 0 && (
+        <section class="section" id="releases" data-section>
+          <h2 class="eyebrow section__title">{hp.releases}</h2>
+          <ol class="releases">
+            {releases.map((r) => (
+              <li class="release">
+                <p class="release__head">
+                  {r.url ? (
+                    <a class="release__v" href={r.url} rel="nofollow ugc noopener" target="_blank">{r.version} ↗</a>
+                  ) : (
+                    <span class="release__v">{r.version}</span>
+                  )}
+                  {r.revision !== null && <span class="versions__rev">#{r.revision}</span>}
+                  {r.publishedAt && <span class="versions__date">{h.date(r.publishedAt)}</span>}
+                </p>
+                {r.changed && (r.changed.added.length > 0 || r.changed.updated.length > 0 || r.changed.removed.length > 0) && (
+                  <dl class="release__changed">
+                    {([['added', r.changed.added], ['updated', r.changed.updated], ['removed', r.changed.removed]] as const).map(([k, names]) =>
+                      names.length > 0 && (
+                        <div>
+                          <dt>{hp[k]}</dt>
+                          <dd>{names.map((n) => <code>{n}</code>)}</dd>
+                        </div>
+                      ),
+                    )}
+                  </dl>
+                )}
+                {r.html && (
+                  <div class="setting release__notes" data-fold>
+                    <div class="readme setting__text" data-fold-text set:html={r.html} />
+                    <button class="setting__more" type="button" data-fold-toggle data-less={t.collapse} hidden>{t.expand}</button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
 
       <section class="section" id="checks" data-section>
@@ -622,6 +808,15 @@ const usage = {
               <Copy lang={lang} text={r.url!} />
             </div>
           ))}
+          {claudeCommand && (
+            <>
+              <h3 class="install__sub">{hp.elsewhere}</h3>
+              <div class="cmd cmd--wrap">
+                <code>{claudeCommand}</code>
+                <Copy lang={lang} text={claudeCommand} />
+              </div>
+            </>
+          )}
           <p class="install__note">
             {install.source ? (
               <>
@@ -698,10 +893,23 @@ const usage = {
               <dt>{t.checks}</dt>
               <dd><span class={`badge badge--risk-${item.risk}`}><span class={`risk-dot risk-dot--${item.risk}`}></span>{t.risk[item.risk]}</span></dd>
             </div>
-            <div>
-              <dt>{t.perms.runsCode}</dt>
-              <dd>{usage.runs.length ? <code>{usage.runs.join(', ')}</code> : <span class="muted">{t.nothing}</span>}</dd>
-            </div>
+            {plugin ? (
+              <>
+                <div>
+                  <dt>{hp.autorun}</dt>
+                  <dd>{autorunKinds || <span class="muted">{t.nothing}</span>}</dd>
+                </div>
+                <div>
+                  <dt>{hp.full}</dt>
+                  <dd>{full}</dd>
+                </div>
+              </>
+            ) : (
+              <div>
+                <dt>{t.perms.runsCode}</dt>
+                <dd>{usage.runs.length ? <code>{usage.runs.join(', ')}</code> : <span class="muted">{t.nothing}</span>}</dd>
+              </div>
+            )}
             <div>
               <dt>{t.perms.network}</dt>
               <dd>{usage.hosts ? t.hosts(usage.hosts) : <span class="muted">{t.nothing}</span>}</dd>
@@ -754,7 +962,7 @@ const usage = {
                 </dd>
               </div>
             )}
-            {!prompt && !assistant && (
+            {!prompt && !assistant && !plugin && (
               <div>
                 <dt>{t.runtime}</dt>
                 <dd>{h.runtime.names[item.runtime] ?? item.runtime}</dd>
@@ -795,7 +1003,7 @@ const usage = {
     )}
   </div>
 
-  <OpenInCodeg lang={lang} itemRef={item.ref} href={codeg} />
+  <OpenInCodeg lang={lang} itemRef={item.ref} href={codeg} plugin={!!plugin} />
 </div>
 
 <style>
@@ -1846,6 +2054,337 @@ const usage = {
   .versions__date {
     margin-left: auto;
     color: var(--graphite);
+  }
+
+  /* --------------------------------------------------------------- a plugin */
+
+  /* the hosts it has manifests for, and what each gets */
+  .hosts {
+    display: grid;
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    overflow: hidden;
+  }
+
+  .hosts__row {
+    display: grid;
+    grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr);
+    align-items: baseline;
+    gap: var(--s-4);
+    padding: 11px var(--s-5);
+    font-size: 14px;
+  }
+
+  .hosts__row + .hosts__row {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .hosts__row--head {
+    background: rgb(var(--corona-rgb) / 0.03);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--graphite);
+  }
+
+  .hosts__name {
+    color: var(--corona);
+  }
+
+  .hosts__parts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 0;
+    color: var(--corona-80);
+  }
+
+  /* each part whole, a dot after all but the last (a wrapped line starts with a part) */
+  .hosts__parts > span {
+    white-space: nowrap;
+  }
+
+  .hosts__parts > span:not(:last-child)::after {
+    content: '·';
+    margin: 0 0.5em;
+    color: var(--graphite);
+  }
+
+  /* its members, each opening its file in place (client/harness.ts) */
+  .members {
+    display: grid;
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    overflow: hidden;
+  }
+
+  .member + .member {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .member__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px var(--s-3);
+    padding: 11px var(--s-5);
+    font-size: 14px;
+  }
+
+  summary.member__head {
+    cursor: pointer;
+    list-style: none;
+    transition: background 0.2s;
+  }
+
+  summary.member__head::-webkit-details-marker {
+    display: none;
+  }
+
+  summary.member__head:hover {
+    background: rgb(var(--corona-rgb) / 0.03);
+  }
+
+  summary.member__head::before {
+    content: '';
+    flex: none;
+    align-self: center;
+    width: 5px;
+    height: 5px;
+    margin-right: 2px;
+    border-right: 1.3px solid var(--graphite);
+    border-bottom: 1.3px solid var(--graphite);
+    rotate: -45deg;
+    transition: rotate 0.2s;
+  }
+
+  .member__box[open] > summary.member__head::before {
+    rotate: 45deg;
+  }
+
+  .member__name {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    color: var(--corona);
+  }
+
+  .member__summary {
+    flex-basis: 100%;
+    min-width: 0;
+    padding-left: 13px;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--corona-64);
+  }
+
+  div.member__head .member__summary {
+    padding-left: 0;
+  }
+
+  .member__body {
+    padding: 0 var(--s-5) var(--s-4);
+  }
+
+  .member__text {
+    max-height: 28rem;
+    overflow: auto;
+    padding: var(--s-4);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    background: var(--well);
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--corona-80);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .member__raw {
+    display: inline-block;
+    margin-top: var(--s-3);
+    font-size: 13px;
+    color: var(--bead);
+  }
+
+  div.member__head .member__raw {
+    margin-top: 0;
+    margin-left: auto;
+  }
+
+  .member__raw:hover {
+    color: var(--bead-hot);
+  }
+
+  /* whether it may be installed whole, and what runs on its own */
+  .whole {
+    margin-bottom: var(--s-5);
+  }
+
+  .whole__state {
+    display: grid;
+    gap: var(--s-2);
+    font-size: 14px;
+  }
+
+  .whole__state > div {
+    display: grid;
+    grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr);
+    gap: var(--s-4);
+    align-items: baseline;
+  }
+
+  .whole__state dt {
+    color: var(--corona-64);
+  }
+
+  .whole__state dd {
+    color: var(--corona);
+  }
+
+  .whole__pending {
+    color: var(--bead) !important;
+  }
+
+  .whole .sub {
+    margin-top: var(--s-5);
+  }
+
+  .autorun {
+    display: grid;
+    border: 1px solid var(--hairline);
+    border-radius: 13px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+
+  .autorun li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-3);
+    padding: 10px var(--s-5);
+  }
+
+  .autorun li + li {
+    border-top: 1px solid var(--hairline);
+  }
+
+  .autorun__host {
+    color: var(--corona);
+  }
+
+  .autorun__event {
+    font-family: var(--f-mono);
+    font-size: 12.5px;
+    color: var(--corona-64);
+  }
+
+  .autorun__what {
+    flex-basis: 100%;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--corona-80);
+    overflow-wrap: anywhere;
+  }
+
+  /* its releases, newest first */
+  .releases {
+    display: grid;
+    gap: var(--s-5);
+  }
+
+  .release + .release {
+    padding-top: var(--s-5);
+    border-top: 1px solid var(--hairline);
+  }
+
+  .release__head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s-4);
+  }
+
+  .release__v {
+    font-family: var(--f-mono);
+    font-size: 14px;
+    color: var(--corona);
+  }
+
+  a.release__v:hover {
+    color: var(--bead-hot);
+  }
+
+  .release__changed {
+    display: grid;
+    gap: var(--s-2);
+    margin-top: var(--s-3);
+    font-size: 13.5px;
+  }
+
+  .release__changed > div {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px var(--s-3);
+  }
+
+  .release__changed dt {
+    color: var(--corona-64);
+  }
+
+  .release__changed dd {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .release__changed code {
+    padding: 1px 7px;
+    border-radius: 5px;
+    background: rgb(var(--corona-rgb) / 0.06);
+    font-size: 12px;
+    color: var(--corona-80);
+  }
+
+  .release__notes {
+    margin-top: var(--s-4);
+  }
+
+  .release__notes.is-folded .setting__text {
+    max-height: calc(8 * 1.75em);
+  }
+
+  /* a command too long for the panel's width wraps, to be read whole before it is copied */
+  .cmd--wrap {
+    align-items: flex-start;
+    height: auto;
+    padding-block: 10px;
+  }
+
+  .cmd--wrap code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.55;
+  }
+
+  @media (max-width: 760px) {
+    .hosts__row,
+    .whole__state > div {
+      grid-template-columns: minmax(0, 7.5rem) minmax(0, 1fr);
+      gap: var(--s-3);
+    }
+
+    .hosts__row {
+      padding-inline: var(--s-4);
+    }
+  }
+
+  .install__sub {
+    margin-top: var(--s-5);
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--corona-64);
   }
 
   /* ------------------------------------------------------------- the side */

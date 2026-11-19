@@ -1,7 +1,7 @@
 import { hex } from '../ids';
 import { accessOf } from './assistant';
 import { mediaPath } from './importers/media';
-import type { AssistantMeta, Checks, ItemKind, ItemStatus, PinnedPackage, PromptMeta, Risk, Showcase, StoredAssistantCard, StoredPromptCard } from './model';
+import type { AssistantMeta, Checks, ItemKind, ItemStatus, PinnedPackage, PromptMeta, Risk, Showcase, StoredAssistantCard, StoredPluginCard, StoredPromptCard } from './model';
 import type { PluginDescriptor } from './plugin';
 import type { PermissionProfile } from './scan/permissions';
 import type {
@@ -34,8 +34,8 @@ export type { AssistantCard, AssistantInfo, InstallInfo, ItemDetail, ItemList, I
  * by its address or its exact name.
  */
 
-/** The kinds the shelves browse. Plugins join them with their pages (docs/harness-plugins.md, phase P2). */
-export const KINDS = ['skill', 'mcp', 'prompt', 'assistant', 'connector'] as const satisfies readonly ItemKind[];
+/** The kinds the shelves browse. */
+export const KINDS = ['skill', 'mcp', 'prompt', 'assistant', 'connector', 'plugin'] as const satisfies readonly ItemKind[];
 export const SORTS = ['popular', 'new', 'updated'] as const;
 export type Sort = (typeof SORTS)[number];
 export const PAGE_SIZE = 24;
@@ -120,6 +120,7 @@ const pictureAt = (pictures: Map<string, Picture>, url: string | null) => {
 
 const storedCard = (r: Row): StoredPromptCard | null => (r.kind === 'prompt' && r.card ? (JSON.parse(r.card) as StoredPromptCard) : null);
 const assistantCard = (r: Row): StoredAssistantCard | null => (r.kind === 'assistant' && r.card ? (JSON.parse(r.card) as StoredAssistantCard) : null);
+const pluginCard = (r: Row): StoredPluginCard | null => (r.kind === 'plugin' && r.card ? (JSON.parse(r.card) as StoredPluginCard) : null);
 
 /** A prompt's card: the first of its pictures that moves (and is kept here), else the first still one. */
 function promptCard(card: StoredPromptCard, pictures: Map<string, Picture>): PromptCard {
@@ -137,9 +138,10 @@ function promptCard(card: StoredPromptCard, pictures: Map<string, Picture>): Pro
   };
 }
 
-function summarize(r: Row, tags: string[], pictures: Map<string, Picture>): ItemSummary {
+function summarize(r: Row, tags: string[], pictures: Map<string, Picture>, has: string | null): ItemSummary {
   const card = storedCard(r);
   const assistant = assistantCard(r);
+  const plugin = pluginCard(r);
   return {
     id: r.id,
     ref: `${r.handle}/${r.name}`,
@@ -161,6 +163,7 @@ function summarize(r: Row, tags: string[], pictures: Map<string, Picture>): Item
     latest: { revision: r.latest_revision, version: r.version, publishedAt: r.version_at },
     ...(card ? { prompt: promptCard(card, pictures) } : {}),
     ...(assistant ? { assistant } : {}),
+    ...(plugin ? { plugin: { skills: plugin.skills, assistants: plugin.assistants, hosts: plugin.hosts, autorun: plugin.autorun, has } } : {}),
   };
 }
 
@@ -177,10 +180,33 @@ async function tagsOf(db: D1Database, ids: string[]): Promise<Map<string, string
   return out;
 }
 
-async function summaries(db: D1Database, rows: Row[]): Promise<ItemSummary[]> {
+async function summaries(db: D1Database, rows: Row[], q?: string): Promise<ItemSummary[]> {
   const urls = rows.flatMap((r) => storedCard(r)?.faces?.flatMap((f) => [f.cover, f.motion]) ?? []);
-  const [tags, pictures] = await Promise.all([tagsOf(db, rows.map((r) => r.id)), picturesOf(db, urls)]);
-  return rows.map((r) => summarize(r, tags.get(r.id) ?? [], pictures));
+  const [tags, pictures, has] = await Promise.all([tagsOf(db, rows.map((r) => r.id)), picturesOf(db, urls), q ? membersMatched(db, rows, q) : new Map<string, string>()]);
+  return rows.map((r) => summarize(r, tags.get(r.id) ?? [], pictures, has.get(r.id) ?? null));
+}
+
+/**
+ * In a search, each plugin's member the query names (its card says the plugin
+ * has it): a member called what was searched for, else one whose name holds
+ * every word of it. None when the plugin's own name already does.
+ */
+async function membersMatched(db: D1Database, rows: Row[], q: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const words = q.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const plugins = rows.filter((r) => r.kind === 'plugin' && r.latest_version_id && words.length && !words.every((w) => r.name.includes(w)));
+  if (!plugins.length) return out;
+  const whole = words.join('-');
+  const { results } = await db
+    .prepare(`SELECT version_id, name FROM plugin_components WHERE version_id IN (${marks(plugins.length)}) ORDER BY kind = 'skill' DESC, name`)
+    .bind(...plugins.map((r) => r.latest_version_id))
+    .all<{ version_id: string; name: string }>();
+  for (const r of plugins) {
+    const names = results.filter((c) => c.version_id === r.latest_version_id).map((c) => c.name.toLowerCase());
+    const hit = names.find((n) => n === whole) ?? names.find((n) => words.every((w) => n.includes(w)));
+    if (hit) out.set(r.id, hit);
+  }
+  return out;
 }
 
 // cursors: base64url JSON, opaque to clients
@@ -226,24 +252,27 @@ export async function listItems(db: D1Database, query: ListQuery): Promise<ItemL
 
 async function browse(db: D1Database, query: ListQuery, publisherId: string | undefined, limit: number): Promise<ItemList> {
   const sort = ORDER[query.sort ?? 'popular'];
+  // a publisher's page lists its plugins first (what their skills and assistants come in)
+  const first = publisherId && !query.kind ? "(i.kind = 'plugin')" : null;
   const where = ["i.status = 'public'", "i.visibility = 'public'"];
   const binds: unknown[] = [];
   if (query.kind) where.push(`i.kind = ?${binds.push(query.kind)}`);
   if (query.runtime) where.push(`i.runtime = ?${binds.push(query.runtime)}`);
   if (publisherId) where.push(`i.publisher_id = ?${binds.push(publisherId)}`);
   if (query.tag) where.push(`EXISTS (SELECT 1 FROM item_tags t WHERE t.item_id = i.id AND t.tag_id = ?${binds.push(query.tag)})`);
-  const after = decodeCursor<{ v: number | string; i: string }>(query.cursor);
+  const after = decodeCursor<{ v: number | string; i: string; p?: number }>(query.cursor);
   if (after && (typeof after.v === 'number' || typeof after.v === 'string') && typeof after.i === 'string') {
     // the next page starts after the last row of this one, in index order: no OFFSET
-    where.push(`(${sort.column}, i.id) < (?${binds.push(after.v)}, ?${binds.push(after.i)})`);
+    if (first) where.push(`(${first}, ${sort.column}, i.id) < (?${binds.push(after.p === 1 ? 1 : 0)}, ?${binds.push(after.v)}, ?${binds.push(after.i)})`);
+    else where.push(`(${sort.column}, i.id) < (?${binds.push(after.v)}, ?${binds.push(after.i)})`);
   }
   const { results } = await db
-    .prepare(`SELECT ${COLUMNS} FROM ${FROM} WHERE ${where.join(' AND ')} ORDER BY ${sort.column} DESC, i.id DESC LIMIT ?${binds.push(limit + 1)}`)
+    .prepare(`SELECT ${COLUMNS} FROM ${FROM} WHERE ${where.join(' AND ')} ORDER BY ${first ? `${first} DESC, ` : ''}${sort.column} DESC, i.id DESC LIMIT ?${binds.push(limit + 1)}`)
     .bind(...binds)
     .all<Row>();
   const page = results.slice(0, limit);
   const last = page[page.length - 1];
-  const next = results.length > limit && last ? encodeCursor({ v: last[sort.key], i: last.id }) : null;
+  const next = results.length > limit && last ? encodeCursor({ v: last[sort.key], i: last.id, ...(first ? { p: last.kind === 'plugin' ? 1 : 0 } : {}) }) : null;
   return { items: await summaries(db, page), next, approxTotal: await facetCount(db, query, publisherId) };
 }
 
@@ -299,7 +328,7 @@ async function search(db: D1Database, q: string, query: ListQuery, publisherId: 
   const offset = Math.max(0, decodeCursor<{ o: number }>(query.cursor)?.o ?? 0);
   const page = ranked.slice(offset, offset + limit).map((id) => rows.get(id)!);
   const next = offset + limit < ranked.length ? encodeCursor({ o: offset + limit }) : null;
-  return { items: await summaries(db, page), next, approxTotal: ranked.length };
+  return { items: await summaries(db, page, q), next, approxTotal: ranked.length };
 }
 
 /**
@@ -308,8 +337,9 @@ async function search(db: D1Database, q: string, query: ListQuery, publisherId: 
  * a single word that could be a name matches items of that name.
  */
 async function exactMatches(db: D1Database, q: string, query: ListQuery, publisherId: string | undefined): Promise<string[]> {
-  // plugins are found by address only until their pages are out (phase P2)
-  const shown = "i.status IN ('public', 'listed') AND i.visibility = 'public' AND i.kind != 'plugin'";
+  // a plugin only listed is not found by its name: its members are items of their own then (the switch is
+  // off, or it is not used whole), and they are what a search shows
+  const shown = "(i.status = 'public' OR (i.status = 'listed' AND i.kind != 'plugin')) AND i.visibility = 'public'";
   const extra: string[] = [];
   const binds: unknown[] = [];
   if (query.kind) extra.push(`i.kind = ?${binds.push(query.kind)}`);
@@ -332,7 +362,16 @@ async function exactMatches(db: D1Database, q: string, query: ListQuery, publish
     .prepare(`SELECT i.id FROM ${FROM} WHERE i.name = ?${binds.length + 1} AND ${shown}${more} ORDER BY i.status = 'public' DESC, i.popularity DESC LIMIT 5`)
     .bind(...binds, word)
     .all<{ id: string }>();
-  return results.map((r) => r.id);
+  // then the plugins on the shelves that have a member of that name (its own item no longer is one)
+  const { results: holders } = await db
+    .prepare(
+      `SELECT i.id FROM ${FROM} WHERE i.kind = 'plugin' AND i.status = 'public' AND i.visibility = 'public'${more}
+          AND EXISTS (SELECT 1 FROM plugin_components c WHERE c.version_id = i.latest_version_id AND c.name = ?${binds.length + 1})
+        ORDER BY i.popularity DESC LIMIT 5`,
+    )
+    .bind(...binds, word)
+    .all<{ id: string }>();
+  return [...new Set([...results, ...holders].map((r) => r.id))];
 }
 
 // ---------------------------------------------------------------------------
@@ -441,6 +480,7 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
       components: d.components.map((c) => ({ kind: c.kind, name: c.name, path: c.path, summary: c.summary })),
       autorun: d.autorun,
       autorunFiles: d.autorunFiles,
+      mcpUnpinned: d.mcpUnpinned ?? [],
       execSha256: d.execSha256,
       approved: whole.approved.has(v.revision),
       full: whole.full,

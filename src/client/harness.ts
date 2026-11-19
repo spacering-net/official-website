@@ -369,6 +369,27 @@ function initItem() {
     .querySelectorAll<HTMLElement>('[data-fold]')
     .forEach((box) => fold(box, box.querySelector<HTMLElement>('[data-fold-text]'), box.querySelector<HTMLButtonElement>('[data-fold-toggle]'), 'is-folded'));
 
+  // a plugin's member, opened: its file, read when first wanted (shown as text, never as markup)
+  document.querySelectorAll<HTMLDetailsElement>('details[data-member]').forEach((box) => {
+    const text = box.querySelector<HTMLElement>('[data-member-text]');
+    if (!text || !box.dataset.src) return;
+    box.addEventListener('toggle', async () => {
+      if (!box.open || box.dataset.state) return;
+      box.dataset.state = 'loading';
+      text.hidden = false;
+      text.textContent = text.dataset.loading ?? '';
+      try {
+        const res = await fetch(box.dataset.src!);
+        if (!res.ok) throw new Error(String(res.status));
+        text.textContent = await res.text();
+        box.dataset.state = 'done';
+      } catch {
+        text.textContent = box.dataset.failed ?? '';
+        delete box.dataset.state;
+      }
+    });
+  });
+
   // the section bar marks the section being read, and moves to a section smoothly
   const toc = document.querySelector<HTMLElement>('[data-toc]');
   if (toc) {
