@@ -144,7 +144,7 @@ const top = (page, selector) => page.evaluate((s) => Math.round(document.querySe
   await page.click('.kinds a:has-text("全部")');
   await page.waitForFunction(() => !new URL(location.href).searchParams.has('kind'), null, { timeout: 8000 }).catch(() => {});
   const tag = page.locator('.browse__side .tags .chip').nth(1);
-  const tagName = (await tag.textContent()).replace(/\d+/g, '').trim();
+  const tagName = (await tag.textContent()).replace(/[\d,]+/g, '').trim();
   await tag.click();
   await page.waitForFunction(() => new URL(location.href).searchParams.has('tag'), null, { timeout: 8000 }).catch(() => {});
   await page.waitForTimeout(300);
