@@ -2,6 +2,7 @@ import { hex } from '../ids';
 import { accessOf } from './assistant';
 import { mediaPath } from './importers/media';
 import type { AssistantMeta, Checks, ItemKind, ItemStatus, PinnedPackage, PromptMeta, Risk, Showcase, StoredAssistantCard, StoredPromptCard } from './model';
+import type { PluginDescriptor } from './plugin';
 import type { PermissionProfile } from './scan/permissions';
 import type {
   AssistantCard,
@@ -10,9 +11,11 @@ import type {
   ItemDetail,
   ItemList,
   ItemSummary,
+  PluginInfo,
   PromptCard,
   PublisherInfo,
   PublisherSummary,
+  Release,
   Resolved,
   TagInfo,
   VersionState,
@@ -22,7 +25,7 @@ import { facetKey, searchIds } from './search';
 import type { SkillMeta } from './skill';
 import { NAME_RE, type Localized } from './text';
 
-export type { AssistantCard, AssistantInfo, InstallInfo, ItemDetail, ItemList, ItemSummary, PromptCard, PublisherInfo, Resolved, TagInfo, VersionState, VersionSummary };
+export type { AssistantCard, AssistantInfo, InstallInfo, ItemDetail, ItemList, ItemSummary, PluginInfo, PromptCard, PublisherInfo, Release, Resolved, TagInfo, VersionState, VersionSummary };
 
 /**
  * Reading the catalog: browsing, search, an item and its versions. The API
@@ -31,7 +34,8 @@ export type { AssistantCard, AssistantInfo, InstallInfo, ItemDetail, ItemList, I
  * by its address or its exact name.
  */
 
-export const KINDS: ItemKind[] = ['skill', 'mcp', 'prompt', 'assistant', 'connector'];
+/** The kinds the shelves browse. Plugins join them with their pages (docs/harness-plugins.md, phase P2). */
+export const KINDS = ['skill', 'mcp', 'prompt', 'assistant', 'connector'] as const satisfies readonly ItemKind[];
 export const SORTS = ['popular', 'new', 'updated'] as const;
 export type Sort = (typeof SORTS)[number];
 export const PAGE_SIZE = 24;
@@ -259,7 +263,11 @@ async function search(db: D1Database, q: string, query: ListQuery, publisherId: 
   const rows = new Map<string, Row>();
   for (let i = 0; i < ids.length; i += 90) {
     const chunk = ids.slice(i, i + 90);
-    const { results } = await db.prepare(`SELECT ${COLUMNS} FROM ${FROM} WHERE i.id IN (${marks(chunk.length)})`).bind(...chunk).all<Row>();
+    // what is shown, whatever the index still holds (a row may outlive its item's leaving the shelves by a moment)
+    const { results } = await db
+      .prepare(`SELECT ${COLUMNS} FROM ${FROM} WHERE i.id IN (${marks(chunk.length)}) AND i.status IN ('public', 'listed') AND i.visibility = 'public'`)
+      .bind(...chunk)
+      .all<Row>();
     for (const r of results) rows.set(r.id, r);
   }
   // relevance first, then trust and popularity: stars, a careful description, a pick or a verified publisher
@@ -300,7 +308,8 @@ async function search(db: D1Database, q: string, query: ListQuery, publisherId: 
  * a single word that could be a name matches items of that name.
  */
 async function exactMatches(db: D1Database, q: string, query: ListQuery, publisherId: string | undefined): Promise<string[]> {
-  const shown = "i.status IN ('public', 'listed') AND i.visibility = 'public'";
+  // plugins are found by address only until their pages are out (phase P2)
+  const shown = "i.status IN ('public', 'listed') AND i.visibility = 'public' AND i.kind != 'plugin'";
   const extra: string[] = [];
   const binds: unknown[] = [];
   if (query.kind) extra.push(`i.kind = ?${binds.push(query.kind)}`);
@@ -333,6 +342,8 @@ interface VersionRow {
   revision: number;
   version: string | null;
   status: 'ok' | 'yanked' | 'blocked';
+  content_sha256: string;
+  committed_at: string | null;
   risk: Risk;
   archive_sha256: string | null;
   archive_size: number | null;
@@ -357,10 +368,11 @@ async function itemRow(db: D1Database, handle: string, name: string): Promise<Ro
 }
 
 async function versionRow(db: D1Database, itemId: string, revision?: number): Promise<VersionRow | null> {
-  const where = revision === undefined ? 'v.id = (SELECT latest_version_id FROM items WHERE id = ?1)' : 'v.item_id = ?1 AND v.revision = ?2';
+  // a staged version (a plugin's, not yet made current) is no version to anyone
+  const where = revision === undefined ? 'v.id = (SELECT latest_version_id FROM items WHERE id = ?1)' : "v.item_id = ?1 AND v.revision = ?2 AND v.status != 'staged'";
   const stmt = db.prepare(
     `SELECT v.id, v.revision, v.version, v.status, v.risk, v.archive_sha256, v.archive_size, v.hosted, v.source_commit, v.source_url,
-            v.metadata, v.permissions, v.checks, v.listing, v.packages, v.readme, v.created_at
+            v.metadata, v.permissions, v.checks, v.listing, v.packages, v.readme, v.created_at, v.content_sha256, v.committed_at
        FROM item_versions v WHERE ${where}`,
   );
   return (revision === undefined ? stmt.bind(itemId) : stmt.bind(itemId, revision)).first<VersionRow>();
@@ -379,11 +391,12 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
     prompt?: PromptMeta;
     showcases?: Showcase[];
     assistant?: AssistantMeta;
+    plugin?: PluginDescriptor;
   };
   const perms = JSON.parse(v.permissions) as PermissionProfile;
   const info: InstallInfo = {
     item: { id: item.id, ref: item.ref, kind: item.kind, title: item.title },
-    version: { revision: v.revision, version: v.version, publishedAt: v.created_at, status: v.status },
+    version: { revision: v.revision, version: v.version, publishedAt: v.committed_at ?? v.created_at, status: v.status },
     archive: v.hosted && v.archive_sha256 ? { url: `${API}/archives/${v.archive_sha256}.zip`, sha256: v.archive_sha256, size: v.archive_size ?? 0 } : null,
     files: files.map((f) => ({ ...f, executable: !!f.executable })),
     source: !v.hosted && metadata.repository && v.source_commit ? { repository: metadata.repository, commit: v.source_commit, path: metadata.path ?? '' } : null,
@@ -416,6 +429,22 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
         const cover = pictureAt(pictures, s.cover);
         return { ...s, cover, motion: cover ? pictureAt(pictures, s.motion) : null };
       }),
+    };
+  }
+  if (item.kind === 'plugin' && metadata.plugin) {
+    const d = metadata.plugin;
+    const whole = await wholeOf(db, item.id);
+    info.plugin = {
+      name: d.name,
+      hosts: d.hosts,
+      unknownManifests: d.unknownManifests,
+      components: d.components.map((c) => ({ kind: c.kind, name: c.name, path: c.path, summary: c.summary })),
+      autorun: d.autorun,
+      autorunFiles: d.autorunFiles,
+      execSha256: d.execSha256,
+      approved: whole.approved.has(v.revision),
+      full: whole.full,
+      notFull: whole.notFull,
     };
   }
   if (item.kind === 'assistant' && metadata.assistant) {
@@ -511,10 +540,11 @@ export async function getVersions(db: D1Database, handle: string, name: string):
   const row = await itemRow(db, handle, name);
   if (!row) return null;
   const { results } = await db
-    .prepare('SELECT revision, version, status, risk, created_at FROM item_versions WHERE item_id = ?1 ORDER BY revision DESC LIMIT 100')
+    .prepare("SELECT revision, version, status, risk, created_at, committed_at FROM item_versions WHERE item_id = ?1 AND status != 'staged' ORDER BY revision DESC LIMIT 100")
     .bind(row.id)
-    .all<{ revision: number; version: string | null; status: VersionSummary['status']; risk: Risk; created_at: string }>();
-  return results.map((r) => ({ revision: r.revision, version: r.version, status: r.status, risk: r.risk, publishedAt: r.created_at }));
+    .all<{ revision: number; version: string | null; status: VersionSummary['status']; risk: Risk; created_at: string; committed_at: string | null }>();
+  // when its source committed it (section 5 of docs/harness-plugins.md), else when it was imported
+  return results.map((r) => ({ revision: r.revision, version: r.version, status: r.status, risk: r.risk, publishedAt: r.committed_at ?? r.created_at }));
 }
 
 export async function getVersion(db: D1Database, handle: string, name: string, revision: number): Promise<InstallInfo | null> {
@@ -551,12 +581,20 @@ interface ResolveRow {
   permissions: string;
   checks: string;
   packages: string;
+  metadata: string | null;
 }
 
 /** A version as it stands now: what may change after it is published, and a hash that tells when any of it has. */
-async function versionState(r: ResolveRow): Promise<VersionState> {
+async function versionState(db: D1Database, r: ResolveRow): Promise<VersionState> {
   const checks = JSON.parse(r.checks) as Checks;
   const count = (severity: Risk) => checks.findings.filter((f) => f.severity === severity).length;
+  // a plugin's: whether this revision may be installed whole, and which may now (an approval given or taken back changes the hash)
+  let plugin: VersionState['plugin'];
+  if (r.kind === 'plugin' && r.id) {
+    const d = (JSON.parse(r.metadata ?? '{}') as { plugin?: PluginDescriptor }).plugin;
+    const whole = await wholeOf(db, r.id);
+    plugin = { approved: whole.approved.has(r.revision!), full: whole.full, execSha256: d?.execSha256 ?? '' };
+  }
   const state = {
     revision: r.revision!,
     status: r.v_status,
@@ -571,6 +609,7 @@ async function versionState(r: ResolveRow): Promise<VersionState> {
       verified: p.verified,
       hasInstallScript: !!p.hasInstallScript,
     })),
+    ...(plugin ? { plugin } : {}),
   };
   return { ...state, stateSha256: hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical(state)))) };
 }
@@ -592,11 +631,11 @@ export async function resolveInstalled(db: D1Database, installed: { id: string; 
     .prepare(
       `SELECT j.key AS n, i.id, i.kind, i.status, i.visibility, i.name, i.reviewed, i.latest_revision, i.version_at, p.handle,
               (SELECT l.version FROM item_versions l WHERE l.id = i.latest_version_id) AS latest_version,
-              v.revision, v.status AS v_status, v.risk AS v_risk, v.permissions, v.checks, v.packages
+              v.revision, v.status AS v_status, v.risk AS v_risk, v.permissions, v.checks, v.packages, v.metadata
          FROM json_each(?1) j
          LEFT JOIN items i ON i.id = json_extract(j.value, '$.id')
          LEFT JOIN publishers p ON p.id = i.publisher_id
-         LEFT JOIN item_versions v ON v.item_id = i.id AND v.revision = json_extract(j.value, '$.revision')
+         LEFT JOIN item_versions v ON v.item_id = i.id AND v.revision = json_extract(j.value, '$.revision') AND v.status != 'staged'
         ORDER BY j.key`,
     )
     .bind(JSON.stringify(installed))
@@ -617,10 +656,101 @@ export async function resolveInstalled(db: D1Database, installed: { id: string; 
         kind: r.kind,
         latest: { revision: r.latest_revision, version: r.latest_version, publishedAt: r.version_at },
         advisories: [],
-        installed: r.revision === null ? null : await versionState(r),
+        installed: r.revision === null ? null : await versionState(db, r),
       };
     }),
   );
+}
+
+/**
+ * Which of a plugin's revisions may be installed whole (docs/harness-plugins.md,
+ * section 6): one that is out (not yanked, blocked or staged), whose MCP
+ * servers are all pinned, and that runs nothing on its own or has its whole
+ * package approved. `full`: the latest such; `notFull`: why the latest
+ * revision is not it.
+ */
+export async function wholeOf(
+  db: D1Database,
+  itemId: string,
+): Promise<{ approved: Set<number>; full: { revision: number; version: string | null } | null; notFull: 'pending_review' | 'mcp_unpinned' | null }> {
+  const { results } = await db
+    .prepare(
+      `SELECT v.revision, v.version, v.status, json_array_length(v.metadata, '$.plugin.autorun') AS autorun,
+              json_array_length(v.metadata, '$.plugin.mcpUnpinned') AS unpinned, a.content_sha256 IS NOT NULL AS approved
+         FROM item_versions v LEFT JOIN exec_approvals a ON a.content_sha256 = v.content_sha256
+        WHERE v.item_id = ?1 AND v.status != 'staged' ORDER BY v.revision DESC`,
+    )
+    .bind(itemId)
+    .all<{ revision: number; version: string | null; status: string; autorun: number | null; unpinned: number | null; approved: number }>();
+  const approved = new Set(results.filter((r) => !!r.approved || !r.autorun).map((r) => r.revision));
+  const ok = results.filter((r) => r.status === 'ok' && !r.unpinned && approved.has(r.revision));
+  const full = ok[0] ? { revision: ok[0].revision, version: ok[0].version } : null;
+  const latest = results[0];
+  const notFull = !latest || full?.revision === latest.revision ? null : latest.unpinned ? 'mcp_unpinned' : 'pending_review';
+  return { approved, full, notFull };
+}
+
+/**
+ * A plugin's releases (section 5): as its repository published them, newest
+ * first, each with the revision here that has its version and the members
+ * that changed since the one before.
+ */
+export async function getReleases(db: D1Database, handle: string, name: string): Promise<Release[] | null> {
+  const row = await itemRow(db, handle, name);
+  if (!row || row.kind !== 'plugin') return null;
+  const [{ results: releases }, { results: revisions }] = await Promise.all([
+    db
+      .prepare('SELECT version, tag, url, notes_key, published_at FROM releases WHERE item_id = ?1 ORDER BY published_at DESC, version DESC LIMIT 50')
+      .bind(row.id)
+      .all<{ version: string; tag: string | null; url: string | null; notes_key: string | null; published_at: string | null }>(),
+    db
+      .prepare("SELECT id, revision, version FROM item_versions WHERE item_id = ?1 AND status = 'ok' ORDER BY revision")
+      .bind(row.id)
+      .all<{ id: string; revision: number; version: string | null }>(),
+  ]);
+  const components = new Map<string, Map<string, string>>();
+  for (let i = 0; i < revisions.length; i += 90) {
+    const chunk = revisions.slice(i, i + 90).map((r) => r.id);
+    const { results } = await db
+      .prepare(`SELECT version_id, kind, name, tree_sha256 FROM plugin_components WHERE version_id IN (${marks(chunk.length)})`)
+      .bind(...chunk)
+      .all<{ version_id: string; kind: string; name: string; tree_sha256: string }>();
+    for (const c of results) {
+      if (!components.has(c.version_id)) components.set(c.version_id, new Map());
+      components.get(c.version_id)!.set(`${c.kind}:${c.name}`, c.tree_sha256);
+    }
+  }
+  return releases.map((r) => {
+    const at = revisions.map((v, n) => ({ v, n })).filter((x) => x.v.version === r.version).pop();
+    let changed: Release['changed'] = null;
+    if (at && at.n > 0) {
+      const now = components.get(at.v.id) ?? new Map<string, string>();
+      const before = components.get(revisions[at.n - 1].id) ?? new Map<string, string>();
+      const label = (k: string) => k.slice(k.indexOf(':') + 1);
+      changed = {
+        added: [...now.keys()].filter((k) => !before.has(k)).map(label).sort(),
+        updated: [...now.keys()].filter((k) => before.has(k) && before.get(k) !== now.get(k)).map(label).sort(),
+        removed: [...before.keys()].filter((k) => !now.has(k)).map(label).sort(),
+      };
+    }
+    return {
+      version: r.version,
+      tag: r.tag,
+      url: r.url,
+      notes: r.notes_key ? `${API}/items/${row.handle}/${row.name}/releases/${encodeURIComponent(r.version)}/notes` : null,
+      publishedAt: r.published_at,
+      revision: at?.v.revision ?? null,
+      changed,
+    };
+  });
+}
+
+/** The R2 key of a release's notes, by its plugin's address and version; null if there is none. */
+export async function releaseNotesKey(db: D1Database, handle: string, name: string, version: string): Promise<string | null> {
+  const row = await itemRow(db, handle, name);
+  if (!row || row.kind !== 'plugin') return null;
+  const r = await db.prepare('SELECT notes_key FROM releases WHERE item_id = ?1 AND version = ?2').bind(row.id, version).first<{ notes_key: string | null }>();
+  return r?.notes_key ?? null;
 }
 
 /** The R2 key of an item's rendered description (latest version), or null. */

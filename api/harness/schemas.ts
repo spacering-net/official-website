@@ -8,7 +8,9 @@ import { z } from '@hono/zod-openapi';
  * server.json's.
  */
 
-export const Kind = z.enum(['skill', 'mcp', 'prompt', 'assistant', 'connector']).openapi('Kind');
+export const Kind = z
+  .enum(['skill', 'mcp', 'prompt', 'assistant', 'connector', 'plugin'])
+  .openapi('Kind', { description: 'More kinds may come: treat one you do not know as something you cannot install.' });
 export const Risk = z.enum(['low', 'medium', 'high']).openapi('Risk');
 export const Localized = z
   .object({ en: z.string().optional(), zh: z.string().optional() })
@@ -106,6 +108,8 @@ export const Permissions = z
     secrets: z.array(z.string()),
     paths: z.array(z.string()),
     tools: z.array(z.string()).openapi({ description: "Agent tools it asks for; an assistant that lists none may use all of them, given as ['*']." }),
+    hooks: z.array(z.string()).optional().openapi({ description: "Plugins: the hooks it brings, as 'host · event · command'." }),
+    code: z.array(z.string()).optional().openapi({ description: 'Plugins: files a host loads and runs with the agent (code plugins, extensions, bin/).' }),
   })
   .openapi('Permissions');
 
@@ -194,6 +198,60 @@ export const AssistantInfo = z
   })
   .openapi('AssistantInfo');
 
+export const PluginComponent = z
+  .object({
+    kind: z.enum(['skill', 'assistant']),
+    name: z.string(),
+    path: z.string().openapi({ description: "Its folder (a skill) or file (an assistant), from the plugin's root." }),
+    summary: z.string().nullable(),
+  })
+  .openapi('PluginComponent');
+
+export const PluginHost = z
+  .object({
+    host: z.string().openapi({ example: 'claude', description: 'claude, codex, cursor, gemini, copilot, opencode, pi, kimi, antigravity, devin, hermes, muse or agent-plugins; more may come.' }),
+    manifest: z.string().openapi({ description: "Its manifest, from the plugin's root; empty when the marketplace's entry is all there is of it." }),
+    skills: z.number().int(),
+    agents: z.number().int(),
+    commands: z.number().int(),
+    hooks: z.number().int(),
+    mcp: z.number().int(),
+    code: z.number().int(),
+  })
+  .openapi('PluginHost');
+
+export const AutorunPart = z
+  .object({
+    host: z.string(),
+    type: z.enum(['hook', 'code', 'mcp', 'lsp', 'monitor', 'bin']),
+    path: z.string().openapi({ description: 'The file that declares it, or is it.' }),
+    event: z.string().optional(),
+    name: z.string().optional(),
+    command: z.string().optional(),
+  })
+  .openapi('AutorunPart', { description: 'Something that runs once the plugin is installed, without the user or the agent calling it.' });
+
+export const PluginInfo = z
+  .object({
+    name: z.string().openapi({ description: "As its manifests name it: what hosts call it once installed." }),
+    hosts: z.array(PluginHost).openapi({ description: 'The hosts it has a manifest for, and what each gets. Others take its skills only.' }),
+    unknownManifests: z.array(z.string()),
+    components: z.array(PluginComponent).openapi({ description: 'Its skills and assistants. They are installed with it, never one by one.' }),
+    autorun: z.array(AutorunPart),
+    autorunFiles: z.array(z.string()).openapi({ description: 'What runs on its own, with the manifests and the files its commands name.' }),
+    execSha256: z.string().openapi({ description: 'Changes when anything but its Markdown, plain text and pictures does: ask the user again before updating.' }),
+    approved: z.boolean().openapi({ description: 'This revision is installed whole (hooks and all) on the strength of a person having looked at it.' }),
+    full: z
+      .object({ revision: z.number().int(), version: z.string().nullable() })
+      .nullable()
+      .openapi({ description: 'The revision to install whole: the latest that may be. Null: none may; install its skills only.' }),
+    notFull: z
+      .enum(['pending_review', 'mcp_unpinned'])
+      .nullable()
+      .openapi({ description: 'Why the latest revision is not the one to install whole: it waits for review, or an MCP server it brings is not pinned.' }),
+  })
+  .openapi('PluginInfo');
+
 export const FileEntry = z.object({ path: z.string(), sha256: z.string(), size: z.number().int(), executable: z.boolean() }).openapi('FileEntry');
 
 export const InstallInfo = z
@@ -221,6 +279,7 @@ export const InstallInfo = z
     server: z.looseObject({ name: z.string() }).optional().openapi({ description: "The registry's server.json, as published." }),
     prompt: PromptInfo.optional().openapi({ description: 'Prompts only. The package is PROMPT.md: this text, with frontmatter.' }),
     assistant: AssistantInfo.optional().openapi({ description: 'Assistants only. The package is the definition (`file`), a Claude Code subagent as written.' }),
+    plugin: PluginInfo.optional().openapi({ description: "Plugins only. The package is the plugin's folder as its author wrote it, to install with each host's own plugin system." }),
     packages: z.array(PinnedPackage).optional(),
     permissions: Permissions,
     risk: Risk,
@@ -263,6 +322,21 @@ export const ItemDetail = ItemSummary.extend({
 export const VersionSummary = z
   .object({ revision: z.number().int(), version: z.string().nullable(), status: z.enum(['ok', 'yanked', 'blocked']), risk: Risk, publishedAt: z.string() })
   .openapi('VersionSummary');
+
+export const Release = z
+  .object({
+    version: z.string(),
+    tag: z.string().nullable(),
+    url: z.string().nullable().openapi({ description: 'The release on GitHub.' }),
+    notes: z.string().nullable().openapi({ description: 'Address of its notes, rendered to safe HTML, as its author wrote them.' }),
+    publishedAt: z.string().nullable(),
+    revision: z.number().int().nullable().openapi({ description: 'The revision here that has this version; null when Harness has none.' }),
+    changed: z
+      .object({ added: z.array(z.string()), updated: z.array(z.string()), removed: z.array(z.string()) })
+      .nullable()
+      .openapi({ description: 'Members changed since the revision before it, by name; null when unknown.' }),
+  })
+  .openapi('Release');
 
 export const PublisherInfo = Publisher.extend({ githubLogin: z.string().nullable(), domain: z.string().nullable(), items: z.number().int() }).openapi('PublisherInfo');
 
@@ -324,6 +398,14 @@ export const VersionState = z
         hasInstallScript: z.boolean(),
       }),
     ),
+    plugin: z
+      .object({
+        approved: z.boolean(),
+        full: z.object({ revision: z.number().int(), version: z.string().nullable() }).nullable(),
+        execSha256: z.string(),
+      })
+      .optional()
+      .openapi({ description: 'Plugins only: whether this revision may be installed whole, and which one may now.' }),
     stateSha256: z.string().openapi({
       description:
         'SHA-256 of the fields above as JSON with sorted keys. Equal on two answers means nothing a person agreed to has changed in between.',
@@ -377,3 +459,5 @@ export type AssistantCard = z.infer<typeof AssistantCard>;
 export type AssistantInfo = z.infer<typeof AssistantInfo>;
 export type VersionState = z.infer<typeof VersionState>;
 export type Resolved = z.infer<typeof Resolved>;
+export type PluginInfo = z.infer<typeof PluginInfo>;
+export type Release = z.infer<typeof Release>;

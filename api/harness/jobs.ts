@@ -1,10 +1,12 @@
 import { uuidv7 } from '../ids';
-import { importRepo, type RepoConfig } from './importers/github';
+import { backfillVersions } from './importers/backfill';
+import { importRepo, type RepoConfig, type RepoResult } from './importers/github';
 import { refreshAvatars } from './importers/avatars';
 import { fetchMedia, MEDIA_BATCH } from './importers/media';
 import { importPrompts, type PromptSourceConfig } from './importers/prompts';
 import { importRegistryPage, recheckPackages } from './importers/registry';
 import { refreshStars } from './importers/stars';
+import { reconcile } from './reconcile';
 import { rescan } from './rescan';
 import { recountFacets, repairIndex } from './search';
 
@@ -17,7 +19,11 @@ import { recountFacets, repairIndex } from './search';
  */
 export type Job =
   | { type: 'registry.page'; run: string; cursor: string | null }
-  | { type: 'github.repo'; source: string; force?: boolean; part?: number }
+  | { type: 'github.repo'; source: string; force?: boolean; part?: number; pin?: boolean; attempt?: number }
+  /** make a source's last complete import current: its plugins, and where their members are (reconcile.ts) */
+  | { type: 'github.reconcile'; source: string; run?: string; attempt?: number }
+  /** fill in versions' labels and commit dates from their commits (importers/backfill.ts) */
+  | { type: 'github.backfill'; source: string; after?: string }
   | { type: 'stars' }
   | { type: 'packages'; after?: number }
   | { type: 'rescan'; after?: number }
@@ -51,6 +57,7 @@ interface SourceRow {
   synced_at: string | null;
   synced_ref: string | null;
   stats: string | null;
+  staged_run: string | null;
 }
 
 const source = (db: D1Database, id: string) => db.prepare('SELECT * FROM import_sources WHERE id = ?1').bind(id).first<SourceRow>();
@@ -60,7 +67,26 @@ export async function runJob(env: Env, job: Job): Promise<void> {
     case 'registry.page':
       return registryPage(env, job);
     case 'github.repo':
-      return githubRepo(env, job.source, !!job.force, job.part ?? 1);
+      return githubRepo(env, job);
+    case 'github.reconcile': {
+      const r = await reconcile(env, job.source, job.run);
+      if (r.status === 'busy' && (job.attempt ?? 0) < 10) {
+        // another reconcile holds the source: this one comes again after it
+        await env.HARNESS_JOBS.send({ ...job, attempt: (job.attempt ?? 0) + 1 } satisfies Job, { delaySeconds: 60 });
+        return;
+      }
+      if (r.skipped.length) console.warn(`[harness] reconcile ${job.source}: left as they were: ${r.skipped.join(', ')}`);
+      if (r.changed) {
+        console.info(`[harness] reconcile ${job.source}: ${r.changed} items moved`);
+        await env.HARNESS_JOBS.send({ type: 'facets' } satisfies Job);
+      }
+      return;
+    }
+    case 'github.backfill': {
+      const next = await backfillVersions(env, job.source, job.after ?? '');
+      if (next) await env.HARNESS_JOBS.send({ type: 'github.backfill', source: job.source, after: next } satisfies Job);
+      return;
+    }
     case 'stars': {
       const limit = 2000;
       const n = await refreshStars(env, limit);
@@ -179,19 +205,56 @@ async function registryPage(env: Env, job: Extract<Job, { type: 'registry.page' 
 const SAVE_MS = 7 * 60 * 1000;
 const PARTS = 20;
 
-async function githubRepo(env: Env, id: string, force: boolean, part: number): Promise<void> {
+/** Complete imports kept per source (import_runs): the reconcile reads the last. */
+const RUNS_KEPT = 5;
+
+/**
+ * How long an import holds its source. An import and a reconcile of the same source never run at once
+ * (reconcile.ts takes the same lease): a save that read an item before a reconcile moved it, or a
+ * sweep that read a member before a reconcile took it, would otherwise undo the move.
+ */
+const IMPORT_LEASE_MS = 20 * 60 * 1000;
+
+async function githubRepo(env: Env, job: Extract<Job, { type: 'github.repo' }>): Promise<void> {
+  const { source: id } = job;
+  const force = !!job.force;
+  const part = job.part ?? 1;
+  const pin = !!job.pin;
   const db = env.HARNESS_DB;
   const row = await source(db, id);
   if (!row?.enabled) return;
   const now = new Date().toISOString();
+  const lease = uuidv7();
+  const took = await db
+    .prepare('UPDATE import_sources SET lease = ?1, lease_until = ?2 WHERE id = ?3 AND (lease IS NULL OR lease_until IS NULL OR lease_until < ?4)')
+    .bind(lease, new Date(Date.now() + IMPORT_LEASE_MS).toISOString(), id, now)
+    .run();
+  if (took.meta.changes !== 1) {
+    // a reconcile (or another import) holds the source: this one comes again after it
+    if ((job.attempt ?? 0) < 20) await env.HARNESS_JOBS.send({ ...job, attempt: (job.attempt ?? 0) + 1 } satisfies Job, { delaySeconds: 60 });
+    return;
+  }
+  const then: Job[] = [];
+  try {
+    await importHeld(env, row, id, force, part, pin, now, then);
+  } finally {
+    await db.prepare('UPDATE import_sources SET lease = NULL, lease_until = NULL WHERE id = ?1 AND lease = ?2').bind(id, lease).run();
+  }
+  for (const next of then) await env.HARNESS_JOBS.send(next);
+}
+
+/** The import itself, with the source held; the jobs it leads to are queued once the source is let go (`then`). */
+async function importHeld(env: Env, row: SourceRow, id: string, force: boolean, part: number, pin: boolean, now: string, then: Job[]): Promise<void> {
+  const db = env.HARNESS_DB;
   try {
     const fullName = row.url.replace(/^https:\/\/github\.com\//, '');
     // a repository of skills, or a collection of prompts (its config says which)
     const config = JSON.parse(row.config) as RepoConfig | PromptSourceConfig;
     const prompts = 'kind' in config && config.kind === 'prompt';
+    const lastTrack = (row.stats ? (JSON.parse(row.stats) as { track?: 'head' | 'release' }) : {}).track;
     const result = prompts
       ? await importPrompts(env, fullName, config, row.synced_ref, force, Date.now() + SAVE_MS)
-      : await importRepo(env, fullName, config as RepoConfig, row.synced_ref, force, Date.now() + SAVE_MS);
+      : await importRepo(env, fullName, config as RepoConfig, row.synced_ref, force, Date.now() + SAVE_MS, { lastTrack, pin, plugins: env.HARNESS_PLUGINS === 'on' });
     if (result.remaining) {
       // not finished: the commit is not marked as imported, so the next job carries on with it
       const left = `${result.remaining} of ${result.skills + (result.assistants ?? 0)} ${prompts ? 'prompts' : 'skills and assistants'} left after part ${part}`;
@@ -200,20 +263,41 @@ async function githubRepo(env: Env, id: string, force: boolean, part: number): P
         .bind(JSON.stringify(result), part < PARTS ? null : `stopped: ${left}`, now, id)
         .run();
       console.info(`[harness] ${fullName}@${result.commit.slice(0, 7)}: ${result.created} new, ${result.updated} updated, ${left}`);
-      if (part < PARTS) await env.HARNESS_JOBS.send({ type: 'github.repo', source: id, force, part: part + 1 } satisfies Job);
+      if (part < PARTS) then.push({ type: 'github.repo', source: id, force, part: part + 1, pin } satisfies Job);
       return;
     }
-    await db
-      .prepare('UPDATE import_sources SET synced_ref = ?1, synced_at = ?2, stats = ?3, last_error = NULL, updated_at = ?2 WHERE id = ?4')
-      .bind(result.commit, now, JSON.stringify(result), id)
-      .run();
+    const run = 'run' in result ? (result as RepoResult).run : undefined;
+    const stats = JSON.stringify({ ...result, run: undefined });
+    if (run) {
+      // a complete import: what the reconcile commits, recorded with the commit it marks imported
+      const runId = uuidv7();
+      await db.batch([
+        db.prepare('INSERT INTO import_runs (run_id, source, "commit", completed_at, plugins) VALUES (?1, ?2, ?3, ?4, ?5)').bind(runId, id, result.commit, now, JSON.stringify(run)),
+        db
+          .prepare('UPDATE import_sources SET synced_ref = ?1, synced_at = ?2, stats = ?3, last_error = NULL, updated_at = ?2, staged_run = ?4 WHERE id = ?5')
+          .bind(result.commit, now, stats, runId, id),
+        db
+          .prepare('DELETE FROM import_runs WHERE source = ?1 AND run_id NOT IN (SELECT run_id FROM import_runs WHERE source = ?1 ORDER BY completed_at DESC, run_id DESC LIMIT ?2)')
+          .bind(id, RUNS_KEPT),
+      ]);
+      then.push({ type: 'github.reconcile', source: id, run: runId } satisfies Job);
+    } else {
+      await db
+        .prepare('UPDATE import_sources SET synced_ref = ?1, synced_at = ?2, stats = ?3, last_error = NULL, updated_at = ?2 WHERE id = ?4')
+        .bind(result.commit, now, stats, id)
+        .run();
+      // Nothing new: the last run is reconciled again (only the database is read). This catches what moved
+      // since (a rescan, a publisher marked as bulk, an approval), and a reconcile that was never queued
+      // (a send that failed after the run was recorded: the job was retried and found the commit imported).
+      if (row.staged_run) then.push({ type: 'github.reconcile', source: id } satisfies Job);
+    }
     if (result.changed) {
       console.info(
         `[harness] ${fullName}@${result.commit.slice(0, 7)}: ${result.skills} ${prompts ? 'prompts' : 'skills'}${result.assistants ? `, ${result.assistants} assistants` : ''}, ${result.created} new, ${result.updated} updated, ${result.retired} retired, ${result.rejected.length} rejected`,
       );
-      await env.HARNESS_JOBS.send({ type: 'facets' } satisfies Job);
+      then.push({ type: 'facets' } satisfies Job);
       // the pictures it named, for the cards
-      if (prompts) await env.HARNESS_JOBS.send({ type: 'media' } satisfies Job);
+      if (prompts) then.push({ type: 'media' } satisfies Job);
     }
   } catch (err) {
     await db.prepare('UPDATE import_sources SET last_error = ?1, updated_at = ?2 WHERE id = ?3').bind(String(err).slice(0, 500), now, id).run();

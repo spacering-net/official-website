@@ -4,8 +4,15 @@ import type { Finding, Severity } from './scan/content';
 import type { SecretFinding } from './scan/secrets';
 import type { Lang, Localized } from './text';
 
-export type ItemKind = 'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector';
-export type ItemStatus = 'draft' | 'pending' | 'listed' | 'public' | 'retired' | 'removed';
+export type ItemKind = 'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector' | 'plugin';
+/**
+ * deleted: Harness no longer offers it as an item (a member of a plugin, or one
+ * gone from its plugin's repository): every reader takes it for no item at all.
+ * Its rows stay, so that it can come back at the same address and revision.
+ */
+export type ItemStatus = 'draft' | 'pending' | 'listed' | 'public' | 'retired' | 'removed' | 'deleted';
+/** staged: a plugin's version saved by an import and not yet made current by its reconcile; no reader sees it */
+export type VersionStatus = 'ok' | 'yanked' | 'blocked' | 'staged';
 export type Risk = Severity;
 
 /** What the checks found, kept per version (item_versions.checks). */

@@ -33,6 +33,10 @@ test('scanSecrets leaves placeholders and references alone', () => {
     `Example: debug token: "${randomish}"`,
   ].join('\n');
   assert.deepEqual(scanSecrets('x.py', text), []);
+  // what a test suite makes up for itself, in its own folder; the same anywhere else counts
+  const made = ["const TOKEN = 'testtoken-0123456789abcdef0123456789abcdef';", "const TOKEN = 'k9Qz-0123456789abcdef';"].join('\n');
+  assert.deepEqual(scanSecrets('tests/server/auth.test.js', made), []);
+  assert.equal(scanSecrets('server/auth.js', made).length, 2);
 });
 
 test('redactSecrets keeps the text but not the value', () => {

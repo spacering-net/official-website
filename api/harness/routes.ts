@@ -3,7 +3,7 @@ import type { Context, Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { etag } from 'hono/etag';
 import { cacheKey, edgeCache, forCache, fromCache } from './cache';
-import { facetCounts, getItem, getPublisher, getVersion, getVersions, KINDS, listItems, listTags, promptText, readmeKey, resolveInstalled, SORTS } from './catalog';
+import { facetCounts, getItem, getPublisher, getReleases, getVersion, getVersions, KINDS, listItems, listTags, promptText, readmeKey, releaseNotesKey, resolveInstalled, SORTS } from './catalog';
 import { MEDIA_TYPES } from './importers/media';
 import { LIMITS } from './limits';
 import * as S from './schemas';
@@ -79,7 +79,7 @@ harnessApi.openapi(
       .map(([k, count]) => ({ id: k.slice('runtime:'.length), count }))
       .sort((a, b) => b.count - a.count);
     return c.json(
-      { limits: LIMITS, kinds: KINDS, sorts: [...SORTS], runtimes, tags, review: c.env.HARNESS_REVIEW === 'on' ? ('on' as const) : ('off' as const) },
+      { limits: LIMITS, kinds: [...KINDS], sorts: [...SORTS], runtimes, tags, review: c.env.HARNESS_REVIEW === 'on' ? ('on' as const) : ('off' as const) },
       200,
     );
   },
@@ -214,6 +214,43 @@ harnessApi.openapi(
 harnessApi.openapi(
   createRoute({
     method: 'get',
+    path: '/items/{publisher}/{name}/releases',
+    summary: "A plugin's releases",
+    description: 'Plugins only: its releases as its repository published them, newest first, with the members each changed.',
+    request: { params: Ref },
+    responses: { 200: json(z.object({ releases: z.array(S.Release) }), 'Newest first'), 404: notFound },
+  }),
+  async (c) => {
+    const { publisher, name } = c.req.valid('param');
+    const releases = await getReleases(c.env.HARNESS_DB, publisher, name);
+    return releases ? c.json({ releases }, 200) : c.json({ error: 'not_found' }, 404);
+  },
+);
+
+harnessApi.openapi(
+  createRoute({
+    method: 'get',
+    path: '/items/{publisher}/{name}/releases/{version}/notes',
+    summary: "A release's notes, as HTML",
+    description: 'Rendered from its Markdown when it was read: no raw HTML, scripts, frames, forms or images; links marked as user content.',
+    request: { params: Ref.extend({ version: z.string().max(64).openapi({ param: { name: 'version', in: 'path' }, example: '7.0.2' }) }) },
+    responses: { 200: { content: { 'text/html': { schema: z.string() } }, description: 'An HTML fragment' }, 404: notFound },
+  }),
+  async (c) => {
+    const { publisher, name, version } = c.req.valid('param');
+    const key = await releaseNotesKey(c.env.HARNESS_DB, publisher, name, version);
+    const object = key ? await c.env.HARNESS_FILES.get(key) : null;
+    if (!object) return c.json({ error: 'not_found' }, 404);
+    return c.body(await object.text(), 200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+    });
+  },
+);
+
+harnessApi.openapi(
+  createRoute({
+    method: 'get',
     path: '/items/{publisher}/{name}/prompt',
     summary: "A prompt's text",
     description: 'Prompts only: the text to use, as plain text (what copying it gives).',
@@ -269,7 +306,12 @@ harnessApi.openapi(
     request: { params: z.object({ file: z.string().regex(/^[0-9a-f]{64}\.zip$/).openapi({ param: { name: 'file', in: 'path' } }) }) },
     responses: { 200: { content: { 'application/zip': { schema: z.string().openapi({ format: 'binary' }) } }, description: 'The zip' }, 404: notFound },
   }),
-  (c) => serveFile(c, `archives/${c.req.valid('param').file}`, 'application/zip', c.req.valid('param').file),
+  async (c) => {
+    const { file } = c.req.valid('param');
+    // a staged version's (a plugin's, not yet made current) is no package to anyone yet
+    const out = await c.env.HARNESS_DB.prepare("SELECT 1 AS ok FROM item_versions WHERE archive_sha256 = ?1 AND status != 'staged' LIMIT 1").bind(file.slice(0, 64)).first();
+    return out ? serveFile(c, `archives/${file}`, 'application/zip', file) : c.json({ error: 'not_found' }, 404);
+  },
 );
 
 harnessApi.openapi(
@@ -280,7 +322,14 @@ harnessApi.openapi(
     request: { params: z.object({ sha256: Sha.openapi({ param: { name: 'sha256', in: 'path' } }) }) },
     responses: { 200: { content: { 'application/octet-stream': { schema: z.string().openapi({ format: 'binary' }) } }, description: 'The bytes' }, 404: notFound },
   }),
-  (c) => serveFile(c, `blobs/${c.req.valid('param').sha256}`, 'application/octet-stream'),
+  async (c) => {
+    const { sha256 } = c.req.valid('param');
+    const out = await c.env.HARNESS_DB
+      .prepare("SELECT 1 AS ok FROM version_files f JOIN item_versions v ON v.id = f.version_id WHERE f.sha256 = ?1 AND v.status != 'staged' LIMIT 1")
+      .bind(sha256)
+      .first();
+    return out ? serveFile(c, `blobs/${sha256}`, 'application/octet-stream') : c.json({ error: 'not_found' }, 404);
+  },
 );
 
 harnessApi.openapi(
@@ -311,7 +360,7 @@ harnessApi.doc31('/openapi.json', {
   info: {
     title: 'Harness API',
     version: '1',
-    description: 'Skills, MCP servers, prompts, assistants and connectors: browse, search and install. https://spacering.net/harness/',
+    description: 'Skills, MCP servers, prompts, assistants, connectors and plugins: browse, search and install. https://spacering.net/harness/',
   },
   servers: [{ url: '/api/harness/v1' }],
 });

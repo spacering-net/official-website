@@ -2,6 +2,7 @@ import { uuidv7 } from '../ids';
 import { buildZip, putArchive, putBlob, sha256, type PackageFile } from './files';
 import { renderMarkdown } from './markdown';
 import type { Checks, ItemKind, ItemStatus, Listing, PinnedPackage, Risk } from './model';
+import type { PluginComponent } from './plugin';
 import type { PermissionProfile } from './scan/permissions';
 import { docsFor, searchDoc, searchStatements, type SearchDoc } from './search';
 import { loadTags } from './tags';
@@ -60,6 +61,22 @@ export interface VersionInput {
   boost?: number;
   /** where it stands among its collection's items of its kind, from 1 (rankInputs): its share of their stars */
   rank?: number;
+  /** names to try, in turn, when `name` is taken (a plugin's `<name>-plugin`); numbered after the last */
+  altNames?: string[];
+  /**
+   * a plugin's version (docs/harness-plugins.md, section 4): saved as 'staged',
+   * seen by no reader, and its item left as it is (a new one as a draft) until
+   * the reconcile of the complete import makes it current
+   */
+  staged?: boolean;
+  /** a plugin's skills and assistants, kept with a staged version (plugin_components) */
+  components?: PluginComponent[];
+  /**
+   * a member of a plugin used whole, while plugins take their members off the
+   * shelves: a new one is made deleted, and a deleted one stays deleted; which
+   * are on the shelves is the reconcile's to change
+   */
+  member?: boolean;
 }
 
 export interface SaveResult {
@@ -68,7 +85,7 @@ export interface SaveResult {
   unchanged: number;
   /** inputs not reached before the deadline, left for the next run */
   remaining: number;
-  /** new versions, by source key */
+  /** new versions, by source key; for staged inputs, the version each stands for, new or not */
   versions: Map<string, string>;
 }
 
@@ -136,7 +153,9 @@ export async function runGroups(db: D1Database, groups: D1PreparedStatement[][])
 
 interface ItemRow {
   id: string;
-  latest_version_id: string;
+  kind: string;
+  latest_version_id: string | null;
+  covered_by: string | null;
   publisher_id: string;
   name: string;
   status: ItemStatus;
@@ -204,7 +223,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
   const keys = inputs.map((i) => i.sourceKey);
   const { results: itemRows } = await db
     .prepare(
-      `SELECT i.id, i.latest_version_id, i.publisher_id, i.name, i.status, i.listed_reasons, i.latest_revision, i.source_key, i.published_at,
+      `SELECT i.id, i.kind, i.latest_version_id, i.covered_by, i.publisher_id, i.name, i.status, i.listed_reasons, i.latest_revision, i.source_key, i.published_at,
               i.quality, i.repo_stars, i.popularity, i.featured, i.card, i.boost, i.dedupe_key, v.content_sha256
          FROM items i LEFT JOIN item_versions v ON v.id = i.latest_version_id
         WHERE i.source_key IN (${marks(keys.length)})`,
@@ -224,9 +243,23 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
       .all<{ publisher_id: string; name: string }>();
     for (const r of results) taken.add(`${r.publisher_id}/${r.name}`);
   }
-  /** a free name under the publisher: the one asked for, or it with -2, -3, ... (cut short enough for the number, never on a hyphen) */
-  const freeName = async (pubId: string, name: string) => {
-    if (!taken.has(`${pubId}/${name}`)) return name;
+  /**
+   * a free name under the publisher: the one asked for, else the first free of
+   * `alts`, else the last of them with -2, -3, ... (cut short enough for the
+   * number, never on a hyphen). Deleted items keep their names: they may come back.
+   */
+  const freeName = async (pubId: string, asked: string, alts: string[] = []) => {
+    const all = [asked, ...alts];
+    if (alts.length) {
+      const { results } = await db
+        .prepare(`SELECT name FROM items WHERE publisher_id = ?1 AND name IN (${marks(alts.length, 2)})`)
+        .bind(pubId, ...alts)
+        .all<{ name: string }>();
+      for (const r of results) taken.add(`${pubId}/${r.name}`);
+    }
+    const free = all.find((n) => !taken.has(`${pubId}/${n}`));
+    if (free) return free;
+    const name = all[all.length - 1];
     const stem = (n: number) => name.slice(0, 63 - String(n).length).replace(/-+$/, '');
     const { results } = await db
       .prepare("SELECT name FROM items WHERE publisher_id = ?1 AND name LIKE ?2 || '%'")
@@ -245,7 +278,11 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
   const keptByDb = new Set<string>();
   if (dedupe.length) {
     const { results } = await db
-      .prepare(`SELECT dedupe_key, source_key FROM items WHERE dedupe_key IN (${marks(dedupe.length)}) AND status IN ('public', 'pending') ORDER BY seq`)
+      // a plugin's member that was public when the plugin took it keeps its key (docs/harness-plugins.md, section 4)
+      .prepare(
+        `SELECT dedupe_key, source_key FROM items WHERE dedupe_key IN (${marks(dedupe.length)})
+            AND (status IN ('public', 'pending') OR (status = 'deleted' AND covered_by IS NOT NULL AND covered_status = 'public')) ORDER BY seq`,
+      )
       .bind(...dedupe)
       .all<{ dedupe_key: string; source_key: string }>();
     for (const r of results) {
@@ -255,12 +292,23 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
     }
   }
   for (const i of inputs) {
-    if (!i.dedupeKey || keptByDb.has(i.dedupeKey)) continue;
+    if (!i.dedupeKey || keptByDb.has(i.dedupeKey) || i.staged || (i.member && !existing.has(i.sourceKey))) continue;
     const held = holders.get(i.dedupeKey);
     if (!held) holders.set(i.dedupeKey, i.sourceKey);
     else if (i.owns && !inputs.find((x) => x.sourceKey === held)?.owns) holders.set(i.dedupeKey, i.sourceKey);
   }
   const tagNames = new Map((await loadTags(db)).map((t) => [t.id, t]));
+
+  // a staged input's item: its newest version, staged or not (revisions only grow)
+  const newest = new Map<string, { id: string; revision: number; status: string; content_sha256: string; source_commit: string | null }>();
+  const stagedIds = inputs.filter((i) => i.staged).map((i) => existing.get(i.sourceKey)?.id).filter((x): x is string => !!x);
+  if (stagedIds.length) {
+    const { results } = await db
+      .prepare(`SELECT item_id, id, revision, status, content_sha256, source_commit FROM item_versions WHERE item_id IN (${marks(stagedIds.length)}) ORDER BY revision`)
+      .bind(...stagedIds)
+      .all<{ item_id: string; id: string; revision: number; status: string; content_sha256: string; source_commit: string | null }>();
+    for (const r of results) newest.set(r.item_id, r);
+  }
 
   const groups: D1PreparedStatement[][] = [];
   /** unchanged items coming on or off the shelves, whose search rows are written from what is stored of them */
@@ -288,12 +336,95 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
     }
 
     const old = existing.get(input.sourceKey);
+    if (input.staged) {
+      // a plugin's version: compared with the one readers see, and with the newest staged one (the same
+      // import, run again after a deadline), never with an older one; it goes in as the next revision
+      const last = old ? newest.get(old.id) : undefined;
+      // (the newest staged one only from the same commit: this import's own, saved before a deadline cut it short)
+      const same =
+        old?.content_sha256 === input.contentSha256
+          ? old.latest_version_id
+          : last?.status === 'staged' && last.content_sha256 === input.contentSha256 && last.source_commit === (input.sourceCommit ?? null)
+            ? last.id
+            : null;
+      if (same) {
+        result.unchanged++;
+        result.versions.set(input.sourceKey, same);
+        if (group.length) groups.push(group);
+        continue;
+      }
+      const versionId = uuidv7();
+      const fileRows = await fileRowsOf(env, input, writes);
+      const archive = await archiveOf(env, input, writes);
+      let itemId = old?.id;
+      if (!itemId) {
+        itemId = uuidv7();
+        const name = await freeName(pub.id, input.name, input.altNames);
+        taken.add(`${pub.id}/${name}`);
+        group.push(
+          db
+            .prepare(
+              `INSERT INTO items (id, publisher_id, name, kind, status, listed_reasons, title_en, title_zh, summary_en, summary_zh,
+                                  source, source_key, repository_url, website_url, license, runtime, risk, latest_version_id, latest_revision,
+                                  repo_stars, quality, popularity, created_at, updated_at, version_at)
+               VALUES (?1, ?2, ?3, ?4, 'draft', '[]', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, NULL, 0, ?16, ?17, 0, ?18, ?18, ?19)`,
+            )
+            .bind(
+              itemId, pub.id, name, input.kind, input.listing.title.en ?? null, input.listing.title.zh ?? null, input.listing.summary.en ?? null,
+              input.listing.summary.zh ?? null, input.source, input.sourceKey, input.repositoryUrl ?? null, input.websiteUrl ?? null,
+              input.license ?? null, input.runtime, input.risk, input.repoStars ?? null, input.checks.quality.score, now, input.versionAt,
+            ),
+        );
+        result.created++;
+      } else result.updated++;
+      const revision = Math.max(last?.revision ?? 0, old?.latest_revision ?? 0) + 1;
+      group.push(versionStatement(db, input, versionId, itemId, revision, 'staged', fileRows, archive, null, null, now));
+      group.push(...fileStatements(db, versionId, fileRows));
+      for (const c of input.components ?? []) {
+        group.push(
+          db
+            .prepare(
+              `INSERT INTO plugin_components (version_id, kind, name, path, tree_sha256, dedupe_key, title, summary) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+               ON CONFLICT DO NOTHING`,
+            )
+            .bind(versionId, c.kind, c.name, c.path, c.treeSha256, null, c.title, c.summary),
+        );
+      }
+      groups.push(group);
+      result.versions.set(input.sourceKey, versionId);
+      continue;
+    }
     const reasons = [...input.checks.quality.reasons];
     if (input.checks.secrets.length) reasons.push('secrets');
     if (input.checks.format.errors.length) reasons.push('format');
     if (input.dedupeKey && holders.get(input.dedupeKey) !== input.sourceKey) reasons.push('duplicate');
     if (pub.bulk && !pub.bulk_exempt) reasons.push('bulk_publisher');
-    const status = decideStatus(old?.status, input.risk, reasons);
+    let status = decideStatus(old?.status, input.risk, reasons);
+    let reasonsJson = json(reasons);
+    // A plugin's member stays deleted: the reconcile alone takes it off the shelves or brings it back. One
+    // gone from its repository and back on its own, held by no plugin, comes back now, as any item would;
+    // back as a member (or still held), it is a member again, for the reconcile to place. A new member is
+    // made deleted, for the reconcile to place.
+    const gone = old?.status === 'deleted' && (JSON.parse(old.listed_reasons) as string[]).includes('gone');
+    const revive = gone && !old!.covered_by && !input.member;
+    if (old?.status === 'deleted' && !revive) {
+      status = 'deleted';
+      reasonsJson = gone ? json(['in_plugin']) : old.listed_reasons;
+    } else if (!old && input.member) {
+      status = 'deleted';
+      reasonsJson = json(['in_plugin']);
+    }
+    // What is written goes by the row as it is then, not as it was read: a reconcile may have moved it in
+    // between. A row deleted then stays deleted (unless it is the gone one coming back, as read), and one
+    // this save meant to keep deleted keeps whatever the reconcile made of it.
+    const keep = status === 'deleted' && old?.status === 'deleted';
+    const held = `(status = 'deleted' AND NOT (covered_by IS NULL AND listed_reasons LIKE '%"gone"%' AND ${revive ? 1 : 0}))`;
+    const statusSql = keep ? 'status' : `CASE WHEN ${held} THEN status ELSE ?1 END`;
+    const reasonsSql = keep
+      ? gone
+        ? `CASE WHEN status = 'deleted' AND listed_reasons LIKE '%"gone"%' THEN '["in_plugin"]' ELSE listed_reasons END`
+        : 'listed_reasons'
+      : `CASE WHEN ${held} THEN listed_reasons ELSE ?2 END`;
     const quality = input.checks.quality.score;
     const repoStars = input.repoStars ?? old?.repo_stars ?? null;
     const boost = input.boost ?? 0;
@@ -322,7 +453,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
       const dedupeKey = input.dedupeKey ?? null;
       if (
         old.status !== status ||
-        old.listed_reasons !== json(reasons) ||
+        old.listed_reasons !== reasonsJson ||
         old.repo_stars !== repoStars ||
         old.card !== card ||
         old.boost !== boost ||
@@ -331,16 +462,16 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
         group.push(
           db
             .prepare(
-              `UPDATE items SET status = ?1, listed_reasons = ?2, repo_stars = ?3, popularity = ?4, updated_at = ?5, card = ?7, boost = ?8,
+              `UPDATE items SET status = ${statusSql}, listed_reasons = ${reasonsSql}, repo_stars = ?3, popularity = ?4, updated_at = ?5, card = ?7, boost = ?8,
                       dedupe_key = ?9, published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN version_at END)
                 WHERE id = ?6`,
             )
-            .bind(status, json(reasons), repoStars, popularity, now, old.id, card, boost, dedupeKey),
+            .bind(status, reasonsJson, repoStars, popularity, now, old.id, card, boost, dedupeKey),
         );
         if (old.status !== status) {
           group.push(event(db, old.id, null, status, old.status, now));
           // on or off the shelves, its search row comes or goes (added to the group below)
-          restore.push({ group, id: old.id, version: old.latest_version_id, fallback: doc(old.name) });
+          restore.push({ group, id: old.id, version: old.latest_version_id!, fallback: doc(old.name) });
         }
       } else if (old.popularity !== popularity) {
         group.push(db.prepare('UPDATE items SET popularity = ?1 WHERE id = ?2').bind(popularity, old.id));
@@ -352,19 +483,8 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
     // a new version: files and the zip go into R2 before any row refers to them (by hash; a failed
     // write leaves the rows unwritten and only unreferenced objects behind)
     const versionId = uuidv7();
-    const fileRows: { path: string; sha: string; size: number; executable: boolean }[] = [];
-    for (const f of input.files) {
-      const sha = await sha256(f.data);
-      if (input.hosted) writes.set(`blob:${sha}`, () => putBlob(env.HARNESS_FILES, sha, f.data));
-      fileRows.push({ path: f.path, sha, size: f.data.length, executable: f.executable });
-    }
-    let archive: { sha: string; size: number } | null = null;
-    if (input.hosted && input.files.length) {
-      const zip = buildZip(input.files);
-      const sha = await sha256(zip);
-      archive = { sha, size: zip.length };
-      writes.set(`archive:${sha}`, () => putArchive(env.HARNESS_FILES, sha, zip));
-    }
+    const fileRows = await fileRowsOf(env, input, writes);
+    const archive = await archiveOf(env, input, writes);
     let readmeKey: string | null = null;
     if (input.hosted && input.readme?.trim()) {
       const key = `readme/${versionId}.html`;
@@ -378,7 +498,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
     const revision = (old?.latest_revision ?? 0) + 1;
     if (!old) {
       itemId = uuidv7();
-      name = await freeName(pub.id, input.name);
+      name = await freeName(pub.id, input.name, input.altNames);
       taken.add(`${pub.id}/${name}`);
       group.push(
         db
@@ -390,7 +510,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
                      CASE WHEN ?5 = 'public' THEN ?25 END, ?26, ?27)`,
           )
           .bind(
-            itemId, pub.id, name, input.kind, status, json(reasons), title.en ?? null, title.zh ?? null, summary.en ?? null, summary.zh ?? null,
+            itemId, pub.id, name, input.kind, status, reasonsJson, title.en ?? null, title.zh ?? null, summary.en ?? null, summary.zh ?? null,
             input.source, input.sourceKey, input.dedupeKey ?? null, input.repositoryUrl ?? null, input.websiteUrl ?? null, input.license ?? null,
             input.runtime, input.risk, versionId, revision, repoStars, quality, popularity, now, input.versionAt, card, boost,
           ),
@@ -403,7 +523,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
       group.push(
         db
           .prepare(
-            `UPDATE items SET status = ?1, listed_reasons = ?2, title_en = ?3, title_zh = ?4, summary_en = ?5, summary_zh = ?6,
+            `UPDATE items SET status = ${statusSql}, listed_reasons = ${reasonsSql}, title_en = ?3, title_zh = ?4, summary_en = ?5, summary_zh = ?6,
                     dedupe_key = ?7, repository_url = ?8, website_url = ?9, license = ?10, runtime = ?11, risk = ?12,
                     latest_version_id = ?13, latest_revision = ?14, repo_stars = ?15, quality = ?16, popularity = ?17,
                     updated_at = ?18, version_at = ?19, published_at = COALESCE(published_at, CASE WHEN ?1 = 'public' THEN ?19 END),
@@ -411,7 +531,7 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
               WHERE id = ?20`,
           )
           .bind(
-            status, json(reasons), title.en ?? null, title.zh ?? null, summary.en ?? null, summary.zh ?? null, input.dedupeKey ?? null,
+            status, reasonsJson, title.en ?? null, title.zh ?? null, summary.en ?? null, summary.zh ?? null, input.dedupeKey ?? null,
             input.repositoryUrl ?? null, input.websiteUrl ?? null, input.license ?? null, input.runtime, input.risk, versionId, revision,
             repoStars, quality, popularity, now, input.versionAt, itemId, card, boost,
           ),
@@ -420,27 +540,8 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
       result.updated++;
     }
 
-    group.push(
-      db
-        .prepare(
-          `INSERT INTO item_versions (id, item_id, revision, version, risk, content_sha256, archive_sha256, archive_size, file_count, files_size,
-                                      hosted, source_commit, source_url, metadata, permissions, checks, listing, packages, readme, excerpt, created_at)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21)`,
-        )
-        .bind(
-          versionId, itemId, revision, input.version ?? null, input.risk, input.contentSha256, archive?.sha ?? null, archive?.size ?? null,
-          fileRows.length, fileRows.reduce((n, f) => n + f.size, 0), input.hosted ? 1 : 0, input.sourceCommit ?? null, input.sourceUrl ?? null,
-          json(input.metadata), json(input.permissions), json(input.checks), json(input.listing), json(input.packages), readmeKey,
-          excerpt, now,
-        ),
-    );
-    for (const f of fileRows) {
-      group.push(
-        db
-          .prepare('INSERT INTO version_files (version_id, path, sha256, size, executable) VALUES (?1, ?2, ?3, ?4, ?5)')
-          .bind(versionId, f.path, f.sha, f.size, f.executable ? 1 : 0),
-      );
-    }
+    group.push(versionStatement(db, input, versionId, itemId, revision, 'ok', fileRows, archive, readmeKey, excerpt, now));
+    group.push(...fileStatements(db, versionId, fileRows));
     group.push(db.prepare('DELETE FROM item_tags WHERE item_id = ?1').bind(itemId));
     for (const tag of tags) group.push(db.prepare('INSERT OR IGNORE INTO item_tags (item_id, tag_id) VALUES (?1, ?2)').bind(itemId, tag));
     // the search row changes with the item, in the same batch
@@ -461,11 +562,70 @@ async function saveChunk(env: Env, inputs: VersionInput[], result: SaveResult, c
   await runGroups(db, groups);
 }
 
+type FileRow = { path: string; sha: string; size: number; executable: boolean };
+
+/** A version's files, hashed, each queued for R2 once when the license lets us keep it. */
+async function fileRowsOf(env: Env, input: VersionInput, writes: Map<string, () => Promise<unknown>>): Promise<FileRow[]> {
+  const rows: FileRow[] = [];
+  for (const f of input.files) {
+    const sha = await sha256(f.data);
+    if (input.hosted) writes.set(`blob:${sha}`, () => putBlob(env.HARNESS_FILES, sha, f.data));
+    rows.push({ path: f.path, sha, size: f.data.length, executable: f.executable });
+  }
+  return rows;
+}
+
+/** The package as one zip, queued for R2, when the license lets us hand it out. */
+async function archiveOf(env: Env, input: VersionInput, writes: Map<string, () => Promise<unknown>>): Promise<{ sha: string; size: number } | null> {
+  if (!input.hosted || !input.files.length) return null;
+  const zip = buildZip(input.files);
+  const sha = await sha256(zip);
+  writes.set(`archive:${sha}`, () => putArchive(env.HARNESS_FILES, sha, zip));
+  return { sha, size: zip.length };
+}
+
+function versionStatement(
+  db: D1Database,
+  input: VersionInput,
+  versionId: string,
+  itemId: string,
+  revision: number,
+  status: 'ok' | 'staged',
+  fileRows: FileRow[],
+  archive: { sha: string; size: number } | null,
+  readmeKey: string | null,
+  excerpt: string | null,
+  now: string,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO item_versions (id, item_id, revision, version, status, risk, content_sha256, archive_sha256, archive_size, file_count, files_size,
+                                  hosted, source_commit, source_url, metadata, permissions, checks, listing, packages, readme, excerpt, created_at, committed_at)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)`,
+    )
+    .bind(
+      versionId, itemId, revision, input.version ?? null, status, input.risk, input.contentSha256, archive?.sha ?? null, archive?.size ?? null,
+      fileRows.length, fileRows.reduce((n, f) => n + f.size, 0), input.hosted ? 1 : 0, input.sourceCommit ?? null, input.sourceUrl ?? null,
+      json(input.metadata), json(input.permissions), json(input.checks), json(input.listing), json(input.packages), readmeKey,
+      excerpt, now, input.versionAt,
+    );
+}
+
+function fileStatements(db: D1Database, versionId: string, fileRows: FileRow[]): D1PreparedStatement[] {
+  return fileRows.map((f) =>
+    db.prepare('INSERT INTO version_files (version_id, path, sha256, size, executable) VALUES (?1, ?2, ?3, ?4, ?5)').bind(versionId, f.path, f.sha, f.size, f.executable ? 1 : 0),
+  );
+}
+
 /** An entry in the moderation log: an item moved from one status to another. */
 function event(db: D1Database, itemId: string, versionId: string | null, to: ItemStatus, from: ItemStatus | null, now: string) {
   return db
-    .prepare("INSERT INTO moderation_events (id, item_id, version_id, actor, action, data, created_at) VALUES (?1, ?2, ?3, 'system', 'status', ?4, ?5)")
-    .bind(uuidv7(), itemId, versionId, json({ from, to }), now);
+    // only when the item did move there (a reconcile in between may have kept it where it was)
+    .prepare(
+      `INSERT INTO moderation_events (id, item_id, version_id, actor, action, data, created_at)
+       SELECT ?1, ?2, ?3, 'system', 'status', ?4, ?5 WHERE EXISTS (SELECT 1 FROM items WHERE id = ?2 AND status = ?6)`,
+    )
+    .bind(uuidv7(), itemId, versionId, json({ from, to }), now, to);
 }
 
 /** Retire items their source no longer has (deleted from the registry, gone from a repository), search rows and all. */
@@ -475,11 +635,12 @@ export async function retireItems(db: D1Database, sourceKeys: string[]): Promise
   let retired = 0;
   for (let i = 0; i < sourceKeys.length; i += 90) {
     const keys = sourceKeys.slice(i, i + 90);
-    const [, updated] = await db.batch([
-      db.prepare(`DELETE FROM item_search WHERE rowid IN (SELECT seq FROM items WHERE source_key IN (${marks(keys.length)}))`).bind(...keys),
+    const [updated] = await db.batch([
+      // a deleted one (a plugin's member) is the reconcile's
       db
-        .prepare(`UPDATE items SET status = 'retired', updated_at = ?1 WHERE source_key IN (${marks(keys.length, 2)}) AND status NOT IN ('retired', 'removed')`)
+        .prepare(`UPDATE items SET status = 'retired', updated_at = ?1 WHERE source_key IN (${marks(keys.length, 2)}) AND status NOT IN ('retired', 'removed', 'deleted')`)
         .bind(now, ...keys),
+      db.prepare(`DELETE FROM item_search WHERE rowid IN (SELECT seq FROM items WHERE source_key IN (${marks(keys.length)}) AND status != 'public')`).bind(...keys),
     ]);
     retired += updated.meta.changes ?? 0;
   }

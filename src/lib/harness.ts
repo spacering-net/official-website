@@ -45,7 +45,7 @@ export function browseState(url: URL): BrowseState {
   const sort = p.get('sort');
   return {
     q: (p.get('q') ?? '').trim().slice(0, 200),
-    kind: KINDS.includes(kind as ItemKind) ? (kind as ItemKind) : undefined,
+    kind: (KINDS as readonly string[]).includes(kind ?? '') ? (kind as ItemKind) : undefined,
     runtime: word(p.get('runtime'), 20),
     tag: word(p.get('tag'), 40),
     sort: SORTS.includes(sort as BrowseState['sort']) ? (sort as BrowseState['sort']) : 'popular',
@@ -71,7 +71,8 @@ export async function loadBrowse(state: BrowseState, publisher?: string): Promis
 export async function loadItem(publisher: string, name: string): Promise<{ item: ItemDetail; readme: string | null; versions: VersionSummary[] } | null> {
   const db = env.HARNESS_DB;
   const item = await getItem(db, publisher, name);
-  if (!item) return null;
+  // a plugin's page comes with phase P2 (docs/harness-plugins.md); until then it is not one
+  if (!item || item.kind === 'plugin') return null;
   const [versions, readme] = await Promise.all([
     getVersions(db, publisher, name),
     (async () => {

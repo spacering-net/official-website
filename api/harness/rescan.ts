@@ -2,11 +2,56 @@ import { uuidv7 } from '../ids';
 import { assistantFindings } from './assistant';
 import type { PackageFile } from './files';
 import type { AssistantMeta, Checks, ItemStatus, PromptMeta, Risk, Showcase } from './model';
+import { pluginFindings, type PluginDescriptor } from './plugin';
 import { promptFileOf } from './prompt';
-import { riskOf, scanStructure } from './scan/content';
-import { applyRules, loadRules } from './scan/rules';
+import { riskOf, scanStructure, type Finding } from './scan/content';
+import { applyRules, loadRules, type Rule } from './scan/rules';
 import { docsFor, searchStatements } from './search';
 import { decideStatus, runGroups } from './store';
+
+/** What rescanning a version reads of it and its item. */
+export interface RescanRow {
+  seq: number;
+  id: string;
+  kind: string;
+  status: ItemStatus;
+  risk: Risk;
+  listed_reasons: string;
+  covered_by: string | null;
+  source_key: string | null;
+  version_id: string;
+  hosted: number;
+  source_commit: string | null;
+  metadata: string;
+  checks: string;
+}
+
+/** A version's findings by today's rules, from its files (null when they cannot be read now). */
+export async function recheck(env: Env, r: RescanRow, rules: Rule[]): Promise<{ findings: Finding[]; risk: Risk } | null> {
+  let files: PackageFile[];
+  try {
+    files = await filesOf(env, r);
+  } catch (err) {
+    console.warn(`[harness] rescan: item ${r.id} skipped this time`, String(err));
+    return null;
+  }
+  // structural checks only make sense on a package's files (a registry entry is one server.json); an
+  // assistant's file is instructions whatever it is called, and its frontmatter has checks of its own;
+  // a plugin's rules run unscoped on what it runs on its own
+  const meta = JSON.parse(r.metadata) as { assistant?: AssistantMeta; plugin?: PluginDescriptor };
+  const findings =
+    r.kind === 'plugin' && meta.plugin
+      ? pluginFindings(files, meta.plugin, rules)
+      : [
+          ...(r.kind === 'mcp' ? [] : scanStructure(files, { instructions: r.kind === 'assistant' })),
+          ...applyRules(rules, files),
+          ...(meta.assistant ? assistantFindings(meta.assistant) : []),
+        ];
+  return { findings, risk: riskOf(findings) };
+}
+
+/** The import source of an item, by its source key ('github:owner/repo:…' → 'github:owner/repo'). */
+export const sourceOfKey = (key: string | null) => (key && key.startsWith('github:') ? key.split(':').slice(0, 2).join(':') : null);
 
 /**
  * Check items again when the rules change (docs: section 7): every latest
@@ -15,46 +60,54 @@ import { decideStatus, runGroups } from './store';
  * and its item's place follow. A batch at a time, in item order after
  * `after`; an item that cannot be read now is skipped until the next pass.
  * Returns how many items the batch held and the last one's position.
+ *
+ * Plugins and their members are not moved here (docs/harness-plugins.md,
+ * section 4): a member's version gets its new checks and stays deleted; a
+ * plugin whose place would change has its source reconciled, which moves it
+ * and its members together. A member gone from its repository is not read.
  */
 export async function rescan(env: Env, limit = 50, after = 0): Promise<{ count: number; last: number }> {
   const db = env.HARNESS_DB;
   const { rules, hash } = await loadRules(db);
   const { results } = await db
     .prepare(
-      `SELECT i.seq, i.id, i.kind, i.status, i.risk, i.listed_reasons, v.id AS version_id, v.hosted, v.source_commit, v.metadata, v.checks
+      `SELECT i.seq, i.id, i.kind, i.status, i.risk, i.listed_reasons, i.covered_by, i.source_key, v.id AS version_id, v.hosted, v.source_commit, v.metadata, v.checks
          FROM items i JOIN item_versions v ON v.id = i.latest_version_id
-        WHERE i.seq > ?1 AND i.status NOT IN ('retired', 'removed') AND json_extract(v.checks, '$.rules') IS NOT ?2
+        WHERE i.seq > ?1 AND i.status NOT IN ('retired', 'removed', 'draft') AND NOT (i.status = 'deleted' AND i.covered_by IS NULL)
+          AND json_extract(v.checks, '$.rules') IS NOT ?2
         ORDER BY i.seq LIMIT ?3`,
     )
     .bind(after, hash, limit)
-    .all<{ seq: number; id: string; kind: string; status: ItemStatus; risk: Risk; listed_reasons: string; version_id: string; hosted: number; source_commit: string | null; metadata: string; checks: string }>();
+    .all<RescanRow>();
 
   const now = new Date().toISOString();
   const groups: D1PreparedStatement[][] = [];
   const docs = await docsFor(db, results.map((r) => r.id));
+  const reconcile = new Set<string>();
   for (const r of results) {
-    let files: PackageFile[];
-    try {
-      files = await filesOf(env, r);
-    } catch (err) {
-      console.warn(`[harness] rescan: item ${r.id} skipped this time`, String(err));
+    const fresh = await recheck(env, r, rules);
+    if (!fresh) continue;
+    const { findings, risk } = fresh;
+    const checks = JSON.parse(r.checks) as Checks;
+    const status = decideStatus(r.status, risk, JSON.parse(r.listed_reasons) as string[]);
+    const group = [db.prepare('UPDATE item_versions SET checks = ?1, risk = ?2 WHERE id = ?3').bind(JSON.stringify({ ...checks, findings, rules: hash, checkedAt: now }), risk, r.version_id)];
+    if (r.status === 'deleted') {
+      // a member: its checks, for the day it comes back; where it stands is the reconcile's
+      groups.push(group);
       continue;
     }
-    const checks = JSON.parse(r.checks) as Checks;
-    // structural checks only make sense on a package's files (a registry entry is one server.json); an
-    // assistant's file is instructions whatever it is called, and its frontmatter has checks of its own
-    const assistant = r.kind === 'assistant' ? (JSON.parse(r.metadata) as { assistant?: AssistantMeta }).assistant : undefined;
-    const findings = [
-      ...(r.kind === 'mcp' ? [] : scanStructure(files, { instructions: r.kind === 'assistant' })),
-      ...applyRules(rules, files),
-      ...(assistant ? assistantFindings(assistant) : []),
-    ];
-    const risk = riskOf(findings);
-    const status = decideStatus(r.status, risk, JSON.parse(r.listed_reasons) as string[]);
+    if (r.kind === 'plugin') {
+      group.push(db.prepare('UPDATE items SET risk = ?1, updated_at = ?2 WHERE id = ?3 AND latest_version_id = ?4').bind(risk, now, r.id, r.version_id));
+      groups.push(group);
+      if (status !== r.status) {
+        const source = sourceOfKey(r.source_key);
+        if (source) reconcile.add(source);
+      }
+      continue;
+    }
     // The version's own checks always; the item only if it is still where it was read:
     // a newer version, or another change made meanwhile, wins. The search row follows the item.
-    const group = [
-      db.prepare('UPDATE item_versions SET checks = ?1, risk = ?2 WHERE id = ?3').bind(JSON.stringify({ ...checks, findings, rules: hash, checkedAt: now }), risk, r.version_id),
+    group.push(
       db
         .prepare(
           `UPDATE items SET risk = ?1, status = ?2, updated_at = ?3,
@@ -62,7 +115,7 @@ export async function rescan(env: Env, limit = 50, after = 0): Promise<{ count: 
             WHERE id = ?4 AND latest_version_id = ?5 AND status = ?6`,
         )
         .bind(risk, status, now, r.id, r.version_id, r.status),
-    ];
+    );
     if (status !== r.status) {
       group.push(
         db
@@ -77,7 +130,36 @@ export async function rescan(env: Env, limit = 50, after = 0): Promise<{ count: 
     groups.push(group);
   }
   await runGroups(db, groups);
+  for (const source of reconcile) await env.HARNESS_JOBS.send({ type: 'github.reconcile', source });
   return { count: results.length, last: results[results.length - 1]?.seq ?? after };
+}
+
+/**
+ * Bring these versions' checks up to today's rules where they were made with
+ * older ones, before their items come back on the shelves (the reconcile).
+ * Returns each one's risk and checks as they now stand; one that cannot be
+ * read now is left out.
+ */
+export async function freshChecks(env: Env, rows: RescanRow[]): Promise<Map<string, { risk: Risk; checks: Checks }>> {
+  const db = env.HARNESS_DB;
+  const { rules, hash } = await loadRules(db);
+  const out = new Map<string, { risk: Risk; checks: Checks }>();
+  const now = new Date().toISOString();
+  const writes: D1PreparedStatement[][] = [];
+  for (const r of rows) {
+    const checks = JSON.parse(r.checks) as Checks;
+    if (checks.rules === hash) {
+      out.set(r.version_id, { risk: r.risk, checks });
+      continue;
+    }
+    const fresh = await recheck(env, r, rules);
+    if (!fresh) continue;
+    const next = { ...checks, findings: fresh.findings, rules: hash, checkedAt: now };
+    out.set(r.version_id, { risk: fresh.risk, checks: next });
+    writes.push([db.prepare('UPDATE item_versions SET checks = ?1, risk = ?2 WHERE id = ?3').bind(JSON.stringify(next), fresh.risk, r.version_id)]);
+  }
+  await runGroups(db, writes);
+  return out;
 }
 
 async function filesOf(env: Env, r: { kind: string; version_id: string; hosted: number; source_commit: string | null; metadata: string }): Promise<PackageFile[]> {

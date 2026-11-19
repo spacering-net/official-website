@@ -13,6 +13,13 @@ export async function sha256(data: Uint8Array | string): Promise<string> {
   return hex(await crypto.subtle.digest('SHA-256', bytes));
 }
 
+/** One hash for a set of files: their paths, modes and contents. A re-import that changed nothing makes no new version. */
+export async function treeHash(files: PackageFile[]): Promise<string> {
+  const lines: string[] = [];
+  for (const f of [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0))) lines.push(`${f.executable ? 'x' : '-'} ${await sha256(f.data)} ${f.path}`);
+  return sha256(lines.join('\n'));
+}
+
 const strict = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false });
 
 /** The file as text if it is valid UTF-8 without NUL bytes; null for anything else (treated as binary). */

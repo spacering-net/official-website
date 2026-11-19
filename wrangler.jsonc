@@ -116,7 +116,11 @@
     "SITE_URL": "https://spacering.net",
     // The model review of Harness versions (docs: section 7). Off: versions are
     // listed on the strength of the rule checks alone.
-    "HARNESS_REVIEW": "off"
+    "HARNESS_REVIEW": "off",
+    // Plugins take their skills and assistants off the shelves (docs/harness-plugins.md,
+    // sections 10 and 11). Off: plugins are only reachable by their address, and
+    // their members stay items of their own. A switch also needs every source reconciled.
+    "HARNESS_PLUGINS": "off"
   },
   "triggers": {
     // daily: clear expired sign-in states and sessions, refresh Harness skill

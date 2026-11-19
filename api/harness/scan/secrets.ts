@@ -38,6 +38,9 @@ const ASSIGNED = new RegExp(`(?<![A-Za-z0-9_])(${CREDENTIAL_NAME})["']?\\s*[:=]\
 const CREDENTIAL_FIELD = new RegExp(`^${CREDENTIAL_NAME}$`, 'i');
 // what placeholders and references look like
 const PLACEHOLDER = /your|example|sample|dummy|fake|placeholder|changeme|xxxx|\*\*\*|redacted|replace|insert|todo|env\.|environ|getenv|config\.|settings\.|process|secrets\.|vault/i;
+// what a test suite makes up for itself ('testtoken-0123456789abcdef'), in its own folders only
+const TEST_PATH = /(^|\/)(tests?|__tests__|spec|specs|fixtures?|__fixtures__)\//i;
+const TEST_VALUE = /test|0123456789/i;
 
 function entropy(s: string): number {
   const counts = new Map<string, number>();
@@ -51,8 +54,8 @@ function entropy(s: string): number {
 const REFERENCE = /^[A-Za-z_][\w-]*(?:\.[A-Za-z_][\w-]*)+$/;
 // Placeholders and references are short and wordy; past 64 characters a value is judged on its randomness
 // alone, so a long token that happens to contain "your" or a dot is still a token.
-const looksRandom = (v: string) =>
-  (v.length > 64 || (!PLACEHOLDER.test(v) && !REFERENCE.test(v))) && /\d/.test(v) && /[A-Za-z]/.test(v) && entropy(v) >= 3.5;
+const looksRandom = (v: string, inTests = false) =>
+  (v.length > 64 || (!PLACEHOLDER.test(v) && !REFERENCE.test(v) && !(inTests && TEST_VALUE.test(v)))) && /\d/.test(v) && /[A-Za-z]/.test(v) && entropy(v) >= 3.5;
 // a line that says it shows an example ("Example: token ..."), judged on its other words: every
 // assignment (name and value) and every token-like run on the line is taken out first
 const EXAMPLE = /example|sample|dummy|fake|placeholder|xxxx|0{8}/i;
@@ -85,7 +88,7 @@ export function scanSecrets(path: string, text: string): SecretFinding[] {
   };
   for (const [kind, re] of FORMATS) for (const m of text.matchAll(re)) if (!MADE_UP.test(m[0])) add(kind, m.index ?? 0);
   for (const m of text.matchAll(ASSIGNED)) {
-    if (looksRandom(m[2]) && !EXAMPLE.test(lineOf(text, m.index ?? 0).replace(ASSIGNED, ' ').replace(TOKENS, ' '))) add('assigned_secret', m.index ?? 0);
+    if (looksRandom(m[2], TEST_PATH.test(path)) && !EXAMPLE.test(lineOf(text, m.index ?? 0).replace(ASSIGNED, ' ').replace(TOKENS, ' '))) add('assigned_secret', m.index ?? 0);
   }
   return out;
 }

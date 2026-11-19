@@ -201,11 +201,12 @@ async function markBulkPublishers(env: Env, handles: string[], fresh: string[]):
     const statements = [db.prepare('UPDATE publishers SET bulk = 1, updated_at = ?1 WHERE id = ?2').bind(now, p.id)];
     if (!p.bulk_exempt) {
       statements.push(
-        db.prepare("DELETE FROM item_search WHERE rowid IN (SELECT seq FROM items WHERE publisher_id = ?1 AND status = 'public')").bind(p.id),
+        // a plugin moves with its members, in its source's reconcile (reconcile.ts), which reads the mark
+        db.prepare("DELETE FROM item_search WHERE rowid IN (SELECT seq FROM items WHERE publisher_id = ?1 AND status = 'public' AND kind != 'plugin')").bind(p.id),
         db
           .prepare(
             `UPDATE items SET status = 'listed', listed_reasons = json_insert(listed_reasons, '$[#]', 'bulk_publisher'), updated_at = ?1
-              WHERE publisher_id = ?2 AND status = 'public'`,
+              WHERE publisher_id = ?2 AND status = 'public' AND kind != 'plugin'`,
           )
           .bind(now, p.id),
       );

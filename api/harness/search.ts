@@ -58,6 +58,32 @@ export function searchStatements(db: D1Database, itemId: string, version: string
   return out;
 }
 
+/**
+ * What a plugin's search row reads beside its own text: its members' names
+ * and descriptions, so that a search for one of them finds the plugin
+ * (docs/harness-plugins.md, section 9). The reconcile and the repairs build
+ * it the same way.
+ */
+export function withMembers(excerpt: string | null, members: { name: string; summary: string | null }[]): string {
+  const names = members.map((m) => `${m.name.replace(/-/g, ' ')} ${m.name}`).join(' ');
+  const summaries = members.map((m) => clip(m.summary ?? '', 200)).join(' ');
+  return [names, excerpt ?? '', summaries].filter(Boolean).join(' ').slice(0, 20_000);
+}
+
+/** The members of these plugin versions, by version. */
+export async function membersOf(db: D1Database, versionIds: string[]): Promise<Map<string, { name: string; summary: string | null }[]>> {
+  const out = new Map<string, { name: string; summary: string | null }[]>();
+  for (let i = 0; i < versionIds.length; i += 90) {
+    const ids = versionIds.slice(i, i + 90);
+    const { results } = await db
+      .prepare(`SELECT version_id, name, summary FROM plugin_components WHERE version_id IN (${marks(ids.length)}) ORDER BY kind DESC, name`)
+      .bind(...ids)
+      .all<{ version_id: string; name: string; summary: string | null }>();
+    for (const r of results) out.set(r.version_id, [...(out.get(r.version_id) ?? []), { name: r.name, summary: r.summary }]);
+  }
+  return out;
+}
+
 interface IndexRow {
   id: string;
   name: string;
@@ -91,6 +117,7 @@ export async function docsFor(db: D1Database, itemIds: string[]): Promise<Map<st
       .all<{ item_id: string; id: string; name_en: string; name_zh: string }>();
     const tags = new Map<string, { id: string; name_en: string; name_zh: string }[]>();
     for (const t of tagRows) tags.set(t.item_id, [...(tags.get(t.item_id) ?? []), t]);
+    const members = await membersOf(db, rows.filter((r) => r.kind === 'plugin' && r.latest_version_id).map((r) => r.latest_version_id));
     for (const r of rows) {
       out.set(r.id, {
         version: r.latest_version_id,
@@ -101,7 +128,7 @@ export async function docsFor(db: D1Database, itemIds: string[]): Promise<Map<st
           runtime: r.runtime,
           title: { ...(r.title_en ? { en: r.title_en } : {}), ...(r.title_zh ? { zh: r.title_zh } : {}) },
           summary: { ...(r.summary_en ? { en: r.summary_en } : {}), ...(r.summary_zh ? { zh: r.summary_zh } : {}) },
-          excerpt: r.excerpt,
+          excerpt: r.kind === 'plugin' ? withMembers(r.excerpt, members.get(r.latest_version_id) ?? []) : r.excerpt,
           tags: tags.get(r.id) ?? [],
         }),
       });

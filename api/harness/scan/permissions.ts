@@ -20,6 +20,10 @@ export interface Permissions {
   paths: string[];
   /** agent tools it asks for (allowed-tools) */
   tools: string[];
+  /** a plugin's hooks, as 'host · event · command' */
+  hooks?: string[];
+  /** files a host loads and runs with the agent: a plugin's code, extensions, bin/ */
+  code?: string[];
 }
 
 export interface PermissionProfile {
