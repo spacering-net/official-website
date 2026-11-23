@@ -120,7 +120,7 @@
     // Plugins take their skills and assistants off the shelves (docs/harness-plugins.md,
     // sections 10 and 11). Off: plugins are only reachable by their address, and
     // their members stay items of their own. A switch also needs every source reconciled.
-    "HARNESS_PLUGINS": "off"
+    "HARNESS_PLUGINS": "on"
   },
   "triggers": {
     // daily: clear expired sign-in states and sessions, refresh Harness skill
