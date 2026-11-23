@@ -14,8 +14,8 @@ export const SITE = {
     docs: 'https://docs.codeg.app',
     /** the first version that opens Harness links (codeg://harness/…, /workspace?harness=…); set when it ships */
     opensHarness: '0.46',
-    /** the first version that installs Harness plugins; null until one does (docs/harness-plugins.md, phase P3) */
-    installsPlugins: null as string | null,
+    /** the first version that installs Harness plugins; shown only while HARNESS_PLUGINS is on (docs/harness-plugins.md, phase P3) */
+    installsPlugins: '0.48' as string | null,
   },
 } as const;
 

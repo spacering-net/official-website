@@ -4,7 +4,7 @@ import Layout from '../../../../layouts/Harness.astro';
 import Browse from '../../../../components/harness/Browse.astro';
 import Avatar from '../../../../components/harness/Avatar.astro';
 import { harnessDicts } from '../../../../i18n/harness';
-import { browseState, cacheable, loadBrowse, loadPublisher, loadPublisherKinds, withQuery } from '../../../../lib/harness';
+import { browseState, cacheable, loadBrowse, loadPublisher, loadPublisherKinds, withQuery, pluginsOn } from '../../../../lib/harness';
 
 export const prerender = false;
 
@@ -24,7 +24,7 @@ const paths = {
 const filtered = !!(state.q || state.cursor || state.kind || state.sort !== 'popular');
 const home = publisher.kind === 'github' && publisher.githubLogin ? `https://github.com/${publisher.githubLogin}` : publisher.domain ? `https://${publisher.domain}` : null;
 ---
-<Layout lang={lang} title={`${publisher.name} · Harness`} description={h.description} paths={paths} noindex={filtered || publisher.items === 0}>
+<Layout lang={lang} title={`${publisher.name} · Harness`} description={pluginsOn() ? h.withPlugins : h.description} paths={paths} noindex={filtered || publisher.items === 0}>
   <header class="wrap who">
     <nav class="crumbs" aria-label="Breadcrumb">
       <a href={h.base}>Harness</a>

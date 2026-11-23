@@ -14,6 +14,8 @@ export interface HarnessDict {
   description: string;
   kicker: string;
   lede: string;
+  /** description and lede once plugins are on (HARNESS_PLUGINS) */
+  withPlugins: string;
   count: (n: number) => string;
   search: { label: string; placeholder: string; submit: string; results: (n: number, q: string) => string; none: string; noneHint: string; clear: string };
   kinds: Record<'all' | 'skill' | 'mcp' | 'prompt' | 'assistant' | 'connector' | 'plugin', string>;
@@ -239,6 +241,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     description: 'Skills, MCP servers, prompts, assistants and connectors. Every listing shows its author, version and the permissions it needs.',
     kicker: 'Put raw intelligence to work.',
     lede: 'Skills, MCP servers, prompts, assistants and connectors. Every listing shows its author, version and the permissions it needs.',
+    withPlugins: 'Skills, plugins, MCP servers, prompts, assistants and connectors. Every listing shows its author, version and the permissions it needs.',
     count: (n) => `${n.toLocaleString('en')} on the shelves`,
     search: {
       label: 'Search Harness',
@@ -528,6 +531,7 @@ export const harnessDicts: Record<Lang, HarnessDict> = {
     description: '技能、MCP 服务、提示词、助手与连接器。每一项都写明作者、版本和所需权限。',
     kicker: '让 AI 的能力，落到实处。',
     lede: '技能、MCP 服务、提示词、助手与连接器。每一项都写明作者、版本和所需权限。',
+    withPlugins: '技能、插件、MCP 服务、提示词、助手与连接器。每一项都写明作者、版本和所需权限。',
     count: (n) => `已上架 ${n.toLocaleString('zh-CN')} 项`,
     search: {
       label: '搜索 Harness',

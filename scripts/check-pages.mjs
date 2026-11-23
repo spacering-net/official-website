@@ -1083,7 +1083,11 @@ for (const [path, twin] of [
     'a plugin’s page: hosts, members read in place, what installs whole, releases, the Claude Code command',
     JSON.stringify({ ...one, read: read?.length }),
   );
-  report(on || /暂不能安装插件/.test(one.note), 'with Codeg not yet installing plugins, “Open in Codeg” says so', one.note);
+  report(
+    on ? /需要 Codeg [\d.]+ 或更新版本/.test(one.note) : /暂不能安装插件/.test(one.note),
+    on ? '“Open in Codeg” names the first Codeg that installs plugins' : 'with plugins off, “Open in Codeg” says Codeg cannot install them yet',
+    one.note,
+  );
 
   await page.goto(`${base}/zh/harness/?kind=plugin`, { waitUntil: 'networkidle' });
   const shelf = await page.evaluate(() => ({

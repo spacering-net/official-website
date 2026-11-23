@@ -30,6 +30,9 @@ export type { AssistantCard, AssistantInfo, ItemDetail, ItemList, ItemSummary, P
 export { modelName } from '../../api/harness/prompt';
 export { roleText, withoutAgentWord } from '../../api/harness/assistant';
 
+/** plugins are on the shelves and Codeg may install them (HARNESS_PLUGINS) */
+export const pluginsOn = (): boolean => env.HARNESS_PLUGINS === 'on';
+
 export interface BrowseState {
   q: string;
   kind?: ItemKind;
@@ -48,7 +51,7 @@ export function browseState(url: URL): BrowseState {
   return {
     q: (p.get('q') ?? '').trim().slice(0, 200),
     // plugins are a kind of the shelves once the switch puts them there (docs/harness-plugins.md, section 10)
-    kind: (KINDS as readonly string[]).includes(kind ?? '') && (kind !== 'plugin' || env.HARNESS_PLUGINS === 'on') ? (kind as ItemKind) : undefined,
+    kind: (KINDS as readonly string[]).includes(kind ?? '') && (kind !== 'plugin' || pluginsOn()) ? (kind as ItemKind) : undefined,
     runtime: word(p.get('runtime'), 20),
     tag: word(p.get('tag'), 40),
     sort: SORTS.includes(sort as BrowseState['sort']) ? (sort as BrowseState['sort']) : 'popular',

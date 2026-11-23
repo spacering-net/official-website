@@ -12,6 +12,7 @@ import Copy from './Copy.astro';
 import { harnessDicts } from '../../i18n/harness';
 import type { Lang } from '../../i18n';
 import { SITE, releasesUrl } from '../../config';
+import { pluginsOn } from '../../lib/harness';
 
 interface Props {
   lang: Lang;
@@ -25,7 +26,8 @@ interface Props {
 const { lang, itemRef, href, plugin = false } = Astro.props;
 const h = harnessDicts[lang];
 const o = h.opener;
-const plugins = SITE.codeg.installsPlugins;
+// the version is promised only once plugins are on: the switch is turned on after that Codeg ships
+const plugins = pluginsOn() ? SITE.codeg.installsPlugins : null;
 const needs = plugin ? (plugins ? o.needs(plugins) : o.noPlugins) : o.needs(SITE.codeg.opensHarness);
 ---
 <dialog class="opener" aria-labelledby="opener-title" data-opener data-ref={itemRef}>

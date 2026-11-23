@@ -3,7 +3,7 @@
 import Layout from '../../../layouts/Harness.astro';
 import Browse from '../../../components/harness/Browse.astro';
 import { harnessDicts } from '../../../i18n/harness';
-import { browseState, cacheable, loadBrowse, withQuery } from '../../../lib/harness';
+import { browseState, cacheable, loadBrowse, withQuery, pluginsOn } from '../../../lib/harness';
 
 export const prerender = false;
 
@@ -23,13 +23,13 @@ const shares = (['plugin', 'skill', 'mcp', 'prompt', 'assistant', 'connector'] a
   .sort((a, b) => b.n - a.n);
 const all = counts.all ?? 0;
 ---
-<Layout lang={lang} title={state.q ? `${state.q} · Harness` : `Harness · SpaceRing`} description={h.description} paths={paths} noindex={filtered}>
+<Layout lang={lang} title={state.q ? `${state.q} · Harness` : `Harness · SpaceRing`} description={pluginsOn() ? h.withPlugins : h.description} paths={paths} noindex={filtered}>
   <section class="wrap intro">
     <div class="intro__text">
       <p class="eyebrow">{h.browse.eyebrow}</p>
       <h1>Harness</h1>
       <p class="intro__kicker">{h.kicker}</p>
-      <p class="intro__lede">{h.lede}</p>
+      <p class="intro__lede">{pluginsOn() ? h.withPlugins : h.lede}</p>
     </div>
     {all > 0 && (
       <div class="intro__stats">
