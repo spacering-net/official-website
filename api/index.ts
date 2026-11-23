@@ -6,7 +6,7 @@ import { consoleRoutes } from './console/routes';
 import { authorizationPage } from './clients/pages';
 import { serveAvatar } from './avatars';
 import { withRequest } from './context';
-import { cacheKey, edgeCache, forCache, fromCache } from './harness/cache';
+import { cacheKey, edgeCache, forCache, fromCache, HARNESS_TAG } from './harness/cache';
 import { daily as harnessDaily, runJob, startRegistrySync, type Job } from './harness/jobs';
 import { harnessApi } from './harness/routes';
 import { ringRoutes, type SessionUser } from './rings/routes';
@@ -122,7 +122,11 @@ async function page(request: Request, env: Env, ctx: ExecutionContext): Promise<
   const rendered = await render(request, env, ctx);
   const res = new Response(rendered.body, rendered);
   for (const [k, v] of Object.entries(PAGE_HEADERS)) res.headers.set(k, v);
-  if (cache && res.status === 200 && /\bpublic\b/.test(res.headers.get('Cache-Control') ?? '')) ctx.waitUntil(cache.put(key, forCache(res)));
+  if (cache && res.status === 200 && /\bpublic\b/.test(res.headers.get('Cache-Control') ?? '')) {
+    // Harness's pages and the sitemap change with the plugin switch (scripts/harness-plugins.mjs)
+    const tag = /^\/(?:zh\/)?harness(?:\/|$)|^\/sitemap/.test(new URL(request.url).pathname) ? HARNESS_TAG : undefined;
+    ctx.waitUntil(cache.put(key, forCache(res, tag)));
+  }
   return res;
 }
 

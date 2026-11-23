@@ -226,6 +226,17 @@ export interface PluginDescriptor {
   execSha256: string;
 }
 
+/**
+ * The hosts clients may install plugins into natively (/config's plugins.adapters): those whose plugin
+ * systems were tried end to end (docs/harness-plugins.md, section 14), from the versions tried. A host taken
+ * off here (its format changed, say) is installed skills only until it is back.
+ */
+export const PLUGIN_ADAPTERS: Record<string, { enabled: boolean; minVersion: string | null; maxVersion: string | null }> = {
+  claude: { enabled: true, minVersion: '2.1.185', maxVersion: null },
+  codex: { enabled: true, minVersion: '0.149.1', maxVersion: null },
+  opencode: { enabled: true, minVersion: '2.3.2', maxVersion: null },
+};
+
 /** What a plugin's card shows (items.card), from its descriptor. */
 export const pluginCardOf = (d: PluginDescriptor): StoredPluginCard => ({
   skills: d.components.filter((c) => c.kind === 'skill').length,

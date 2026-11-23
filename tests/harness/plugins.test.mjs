@@ -1010,8 +1010,37 @@ test('a plugin saved without its description gets it at the next reconcile; /con
   const kinds = async (flag) => (await (await harnessApi.request('/config', {}, { ...env, HARNESS_PLUGINS: flag, HARNESS_LIMIT: { limit: async () => ({ success: true }) } })).json()).kinds;
   assert.ok((await kinds('on')).includes('plugin'));
   assert.ok(!(await kinds('off')).includes('plugin'));
+  // which hosts take plugins natively, with the switch on or off
+  const config = await (await harnessApi.request('/config', {}, { ...env, HARNESS_PLUGINS: 'off', HARNESS_LIMIT: { limit: async () => ({ success: true }) } })).json();
+  assert.deepEqual(Object.keys(config.plugins.adapters).sort(), ['claude', 'codex', 'opencode']);
+  assert.equal(config.plugins.adapters.claude.enabled, true);
+  // each member's tree hash, to tell which changed between two revisions
+  const info = await (await harnessApi.request(`/items/obra/superpowers/versions/${p.latest_revision}`, {}, { ...env, HARNESS_LIMIT: { limit: async () => ({ success: true }) } })).json();
+  assert.ok(info.plugin.components.length > 0 && info.plugin.components.every((c) => /^[0-9a-f]{64}$/.test(c.treeSha256)));
   // and the kind it lists is one the list takes
   const res = await harnessApi.request('/items?kind=plugin', {}, { ...env, HARNESS_LIMIT: { limit: async () => ({ success: true }) } });
   assert.equal(res.status, 200);
   assert.deepEqual((await res.json()).items.map((i) => i.ref), ['obra/superpowers']);
+});
+
+test('a reconcile job leaves a mark of when it ended and under which switch, beside the import stats', async (t) => {
+  const env = envWith('on');
+  const gh = fakeGithub(t);
+  gh.commit(superpowers());
+  await sync(env);
+  const stats = () => JSON.parse(env.HARNESS_DB.rows('SELECT stats FROM import_sources WHERE id = ?', SOURCE)[0].stats);
+  const before = stats();
+  assert.equal(before.reconciled.plugins, 'on');
+  assert.equal(before.reconciled.status, 'done');
+  await runJob({ ...env, HARNESS_PLUGINS: 'off' }, { type: 'github.reconcile', source: SOURCE });
+  const after = stats();
+  assert.equal(after.reconciled.plugins, 'off');
+  assert.ok(after.reconciled.at >= before.reconciled.at);
+  assert.deepEqual(after.reconciled.skipped, []);
+  // the import's own stats are still there
+  assert.equal(after.track, before.track);
+  // a reconcile turned away by a lease leaves no mark
+  env.HARNESS_DB.sqlite.prepare("UPDATE import_sources SET lease = 'import', lease_until = '2999-01-01T00:00:00.000Z' WHERE id = ?").run(SOURCE);
+  await runJob(env, { type: 'github.reconcile', source: SOURCE });
+  assert.equal(stats().reconciled.plugins, 'off');
 });

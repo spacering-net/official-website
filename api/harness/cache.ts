@@ -28,11 +28,19 @@ export function cacheKey(url: string, version: string | undefined): Request {
   return new Request(key, { method: 'GET' });
 }
 
-/** The copy of `res` to put in the cache. */
-export function forCache(res: Response): Response {
+/**
+ * What Harness's copies are tagged with: Cloudflare's purge by tag reaches
+ * Cache API copies everywhere (purge by prefix does not), and the plugin
+ * switch (scripts/harness-plugins.mjs) purges this tag.
+ */
+export const HARNESS_TAG = 'harness';
+
+/** The copy of `res` to put in the cache, tagged `tag` (for purging). */
+export function forCache(res: Response, tag?: string): Response {
   const copy = new Response(res.clone().body, res);
   const policy = res.headers.get('Cache-Control');
   if (policy) copy.headers.set(STORED, policy);
+  if (tag) copy.headers.set('Cache-Tag', tag);
   return copy;
 }
 
@@ -42,5 +50,6 @@ export function fromCache(hit: Response): Response {
   const policy = res.headers.get(STORED);
   if (policy) res.headers.set('Cache-Control', policy);
   res.headers.delete(STORED);
+  res.headers.delete('Cache-Tag');
   return res;
 }

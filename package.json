@@ -24,7 +24,8 @@
     "qa:pages": "node scripts/check-pages.mjs",
     "qa:perf": "node scripts/perf.mjs",
     "og": "node scripts/og.mjs",
-    "harness:approve-exec": "node scripts/harness-approve-exec.mjs"
+    "harness:approve-exec": "node scripts/harness-approve-exec.mjs",
+    "harness:plugins": "node scripts/harness-plugins.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.4",

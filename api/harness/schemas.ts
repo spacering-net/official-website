@@ -215,6 +215,7 @@ export const PluginComponent = z
     name: z.string(),
     path: z.string().openapi({ description: "Its folder (a skill) or file (an assistant), from the plugin's root." }),
     summary: z.string().nullable(),
+    treeSha256: z.string().openapi({ description: "Its files' tree hash: two revisions' tell which members changed." }),
   })
   .openapi('PluginComponent');
 
@@ -372,6 +373,23 @@ export const Config = z
     runtimes: z.array(z.object({ id: z.string(), count: z.number().int() })),
     tags: z.array(TagInfo),
     review: z.enum(['off', 'on']).openapi({ description: 'Whether versions get the model review.' }),
+    plugins: z
+      .object({
+        adapters: z
+          .record(
+            z.string(),
+            z.object({
+              enabled: z.boolean(),
+              minVersion: z.string().nullable().openapi({ description: "The host's oldest version to install plugins into natively." }),
+              maxVersion: z.string().nullable().openapi({ description: 'Its newest, when a later one changed its plugin format; null: no limit.' }),
+            }),
+          )
+          .openapi({
+            description:
+              "Hosts a client may install plugins into with the host's own plugin system, by `PluginHost.host`. A host missing here, or not enabled, or outside its versions, takes a plugin's skills only.",
+          }),
+      })
+      .openapi({ description: 'Plugins: what clients install natively, and where.' }),
   })
   .openapi('Config');
 

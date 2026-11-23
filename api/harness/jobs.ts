@@ -76,6 +76,11 @@ export async function runJob(env: Env, job: Job): Promise<void> {
         return;
       }
       if (r.skipped.length) console.warn(`[harness] reconcile ${job.source}: left as they were: ${r.skipped.join(', ')}`);
+      // when it ended and under which switch: what the plugin switch (scripts/harness-plugins.mjs) waits for
+      const mark = { at: new Date().toISOString(), plugins: env.HARNESS_PLUGINS === 'on' ? 'on' : 'off', status: r.status, skipped: r.skipped };
+      await env.HARNESS_DB.prepare("UPDATE import_sources SET stats = json_set(COALESCE(stats, '{}'), '$.reconciled', json(?1)) WHERE id = ?2")
+        .bind(JSON.stringify(mark), job.source)
+        .run();
       if (r.changed) {
         console.info(`[harness] reconcile ${job.source}: ${r.changed} items moved`);
         await env.HARNESS_JOBS.send({ type: 'facets' } satisfies Job);

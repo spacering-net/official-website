@@ -477,7 +477,7 @@ async function installInfo(db: D1Database, item: ItemSummary, v: VersionRow): Pr
       name: d.name,
       hosts: d.hosts,
       unknownManifests: d.unknownManifests,
-      components: d.components.map((c) => ({ kind: c.kind, name: c.name, path: c.path, summary: c.summary })),
+      components: d.components.map((c) => ({ kind: c.kind, name: c.name, path: c.path, summary: c.summary, treeSha256: c.treeSha256 })),
       autorun: d.autorun,
       autorunFiles: d.autorunFiles,
       mcpUnpinned: d.mcpUnpinned ?? [],

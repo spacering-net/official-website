@@ -2,7 +2,7 @@
 // and open source): the shared HUD, narrow screens' menu and account dialog, what stays in
 // view while scrolling, Harness's in-place browsing, the edges they share, the
 // light theme, the prompts' gallery, the assistants' shelf and pages, the
-// product pages' drawings and previews, and "Open in Codeg", all without a
+// product pages' drawings and previews, "Open in Codeg", and plugins, all without a
 // page error or a refused script.
 // Usage: node scripts/check-pages.mjs [baseUrl]
 import { chromium } from 'playwright';
@@ -1053,6 +1053,55 @@ for (const [path, twin] of [
     report(plain === link && hidden, 'without scripts the button is still the codeg:// link, and the ways stay away', `${plain} ${hidden}`);
     await ctx.close();
   }
+}
+
+// 13. plugins: a plugin's page (its hosts, members read in place, permissions, releases, the Claude Code
+// command, "Open in Codeg" saying whether Codeg installs plugins), and with the switch on (/config's kinds)
+// their shelf, a member's name finding its plugin and a member's own address gone; with it off, none of that
+{
+  const PLUGIN = 'obra/superpowers';
+  const MEMBER = 'obra/brainstorming';
+  const config = await (await fetch(`${base}/api/harness/v1/config`)).json();
+  const on = config.kinds.includes('plugin');
+  const { ctx, page, errors } = await open(`/zh/harness/${PLUGIN}/`);
+  const one = await page.evaluate(() => ({
+    sections: [...document.querySelectorAll('[data-section]')].map((s) => s.id).join(' '),
+    hosts: document.querySelectorAll('#hosts .hosts__row:not(.hosts__row--head)').length,
+    members: document.querySelectorAll('#members .member').length,
+    whole: !!document.querySelector('#permissions .whole'),
+    releases: document.querySelectorAll('#releases .releases > li').length,
+    claude: document.querySelector('.cmd--wrap code')?.textContent ?? '',
+    note: document.querySelector('[data-opener-note]')?.dataset.needs ?? '',
+  }));
+  const box = page.locator('details[data-member]').first();
+  await box.locator('summary').click();
+  await page.waitForFunction(() => document.querySelector('details[data-member]')?.dataset.state === 'done', null, { timeout: 8000 }).catch(() => {});
+  const read = await box.locator('[data-member-text]').textContent();
+  report(
+    /^readme hosts members permissions releases checks files versions$/.test(one.sections) && one.hosts >= 3 && one.members > 0 && one.whole && one.releases > 0 &&
+      /^claude plugin marketplace add \S+ && claude plugin install \S+@\S+$/.test(one.claude) && /^---/.test(read ?? '') && one.note.length > 0,
+    'a plugin’s page: hosts, members read in place, what installs whole, releases, the Claude Code command',
+    JSON.stringify({ ...one, read: read?.length }),
+  );
+  report(on || /暂不能安装插件/.test(one.note), 'with Codeg not yet installing plugins, “Open in Codeg” says so', one.note);
+
+  await page.goto(`${base}/zh/harness/?kind=plugin`, { waitUntil: 'networkidle' });
+  const shelf = await page.evaluate(() => ({
+    chip: document.querySelector('.kinds a[aria-current="page"]')?.textContent?.replace(/[\d,\s]+/g, '') ?? '',
+    cards: document.querySelectorAll('[data-grid] > li').length,
+    has: [...document.querySelectorAll('[data-grid] > li')].filter((li) => /\d+ 个(技能|助手)/.test(li.textContent ?? '')).length,
+  }));
+  report(on ? shelf.chip === '插件' && shelf.cards > 0 && shelf.has === shelf.cards : shelf.chip === '全部', on ? 'plugins: their shelf, each card saying what it has' : 'plugins off: ?kind=plugin is the whole shelf', JSON.stringify(shelf));
+
+  const { items } = await (await fetch(`${base}/api/harness/v1/items?q=brainstorming`)).json();
+  const member = await fetch(`${base}/api/harness/v1/items/${MEMBER}`);
+  report(
+    on ? items[0]?.ref === PLUGIN && items[0]?.plugin?.has === 'brainstorming' && member.status === 404 : !items.some((i) => i.kind === 'plugin') && member.status === 200,
+    on ? 'a member’s name finds its plugin, and the member’s own address is gone' : 'plugins off: a member is found as itself',
+    JSON.stringify({ first: items[0]?.ref, has: items[0]?.plugin?.has, member: member.status }),
+  );
+  report(!errors.length, 'plugins: no errors', errors.join(' | '));
+  await ctx.close();
 }
 
 await browser.close();

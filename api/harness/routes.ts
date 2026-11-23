@@ -2,10 +2,11 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context, Next } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { etag } from 'hono/etag';
-import { cacheKey, edgeCache, forCache, fromCache } from './cache';
+import { cacheKey, edgeCache, forCache, fromCache, HARNESS_TAG } from './cache';
 import { facetCounts, getItem, getPublisher, getReleases, getVersion, getVersions, KINDS, listItems, listTags, promptText, readmeKey, releaseNotesKey, resolveInstalled, SORTS } from './catalog';
 import { MEDIA_TYPES } from './importers/media';
 import { LIMITS } from './limits';
+import { PLUGIN_ADAPTERS } from './plugin';
 import * as S from './schemas';
 
 /**
@@ -42,7 +43,7 @@ const shared = async (c: C, next: Next) => {
   await next();
   if (c.res.status === 200) {
     if (!c.res.headers.has('Cache-Control')) c.res.headers.set('Cache-Control', 'public, max-age=60, s-maxage=300');
-    if (cache && c.req.method === 'GET') c.executionCtx.waitUntil(cache.put(key, forCache(c.res)));
+    if (cache && c.req.method === 'GET') c.executionCtx.waitUntil(cache.put(key, forCache(c.res, HARNESS_TAG)));
   }
 };
 harnessApi.use('*', async (c, next) => {
@@ -79,7 +80,7 @@ harnessApi.openapi(
       .map(([k, count]) => ({ id: k.slice('runtime:'.length), count }))
       .sort((a, b) => b.count - a.count);
     return c.json(
-      { limits: LIMITS, kinds: KINDS.filter((k) => k !== 'plugin' || c.env.HARNESS_PLUGINS === 'on'), sorts: [...SORTS], runtimes, tags, review: c.env.HARNESS_REVIEW === 'on' ? ('on' as const) : ('off' as const) },
+      { limits: LIMITS, kinds: KINDS.filter((k) => k !== 'plugin' || c.env.HARNESS_PLUGINS === 'on'), sorts: [...SORTS], runtimes, tags, review: c.env.HARNESS_REVIEW === 'on' ? ('on' as const) : ('off' as const), plugins: { adapters: PLUGIN_ADAPTERS } },
       200,
     );
   },
