@@ -141,17 +141,22 @@ check(
 );
 check('held members that are not deleted', "SELECT source_key, status FROM items WHERE covered_by IS NOT NULL AND status != 'deleted' LIMIT 20");
 if (want === 'off') check('members still held with plugins off', 'SELECT source_key, status FROM items WHERE covered_by IS NOT NULL LIMIT 20');
-else
-  check(
-    "public plugins' members still on the shelves",
-    `SELECT p.source_key AS plugin, m.source_key AS member
-       FROM import_sources s JOIN import_runs r ON r.run_id = s.staged_run
-       JOIN json_each(r.plugins, '$.plugins') pl
-       JOIN items p ON p.source_key = json_extract(pl.value, '$.key') AND p.kind = 'plugin' AND p.status = 'public' AND p.visibility = 'public'
-       JOIN json_each(pl.value, '$.members') mk
-       JOIN items m ON m.source_key = mk.value AND m.status = 'public'
-      WHERE s.id IN (${sources.map(quote).join(', ')}) LIMIT 20`,
+else {
+  // public plugins' members still on the shelves: the runs' plugin lists are read here and the items asked
+  // for in chunks (one query joining them all runs past D1's CPU limit on production)
+  const runs = d1(
+    `SELECT r.plugins FROM import_sources s JOIN import_runs r ON r.run_id = s.staged_run WHERE r.plugins IS NOT NULL AND s.id IN (${sources.map(quote).join(', ')})`,
   );
+  const pairs = runs.flatMap((r) => (JSON.parse(r.plugins).plugins ?? []).flatMap((p) => (p.members ?? []).map((m) => [p.key, m])));
+  const chunks = (list) => Array.from({ length: Math.ceil(list.length / 80) }, (_, i) => list.slice(i * 80, i * 80 + 80).map(quote).join(', '));
+  const pub = new Set();
+  for (const keys of chunks([...new Set(pairs.map(([p]) => p))]))
+    for (const r of d1(`SELECT source_key FROM items WHERE kind = 'plugin' AND status = 'public' AND visibility = 'public' AND source_key IN (${keys})`)) pub.add(r.source_key);
+  const stillPublic = [];
+  for (const keys of chunks([...new Set(pairs.filter(([p]) => pub.has(p)).map(([, m]) => m))]))
+    stillPublic.push(...d1(`SELECT source_key, status FROM items WHERE status = 'public' AND source_key IN (${keys})`));
+  if (stillPublic.length) problems.push(`public plugins' members still on the shelves:\n  ${stillPublic.slice(0, 20).map((r) => r.source_key).join('\n  ')}`);
+}
 if (problems.length) {
   console.error(`not as it should be (nothing purged; look, then run this again):\n${problems.join('\n')}`);
   process.exit(1);
